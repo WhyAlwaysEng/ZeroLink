@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
 
 from core.base_module import BaseModule
 from core.cam_server import CamServer
+from core.adb_helper import AdbManager
 from modules.zerocam.manifest import (
     MODULE_ID, MODULE_NAME, MODULE_ICON, MODULE_DESCRIPTION, MODULE_PORT
 )
@@ -27,6 +28,7 @@ class ZeroCamModule(BaseModule):
         super().__init__(parent)
         self.port = port
         self.local_ip = local_ip
+        self.adb_manager = AdbManager()
         self.server = CamServer(port=self.port, parent=self)
 
         self._widget: Optional[QWidget] = None
@@ -73,6 +75,8 @@ class ZeroCamModule(BaseModule):
         ok = self.server.start()
         if ok:
             self._is_active = True
+            if self.adb_manager.is_available():
+                self.adb_manager.reverse_port(self.port)
             if self.status_pill:
                 self.status_pill.setText("● WEBCAM SERVER ACTIVE")
                 self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
@@ -241,9 +245,9 @@ class ZeroCamModule(BaseModule):
         res_row = QHBoxLayout()
         res_row.addWidget(QLabel("Stream Resolution:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
         combo_res = QComboBox()
-        combo_res.addItem("1080p Full HD (1920x1080 • Sharp)", (1920, 1080))
-        combo_res.addItem("4K Ultra HD (3840x2160 • Extreme)", (3840, 2160))
-        combo_res.addItem("720p HD (1280x720 • Fast)", (1280, 720))
+        combo_res.addItem("720p HD (1280x720 • Smooth 30-60 FPS Recommended)", (1280, 720))
+        combo_res.addItem("1080p Full HD (1920x1080 • High Detail)", (1920, 1080))
+        combo_res.addItem("4K Ultra HD (3840x2160 • Studio / USB Cable)", (3840, 2160))
         combo_res.currentIndexChanged.connect(lambda idx: self._on_remote_res_changed(combo_res.currentData()))
         res_row.addWidget(combo_res)
         c_layout.addLayout(res_row)
@@ -252,9 +256,9 @@ class ZeroCamModule(BaseModule):
         q_row = QHBoxLayout()
         q_row.addWidget(QLabel("JPEG Quality:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
         combo_q = QComboBox()
-        combo_q.addItem("95% (Maximum Crystal Clarity)", 95)
+        combo_q.addItem("75% (Fast & Smooth Recommended)", 75)
         combo_q.addItem("85% (High Clarity)", 85)
-        combo_q.addItem("75% (Balanced)", 75)
+        combo_q.addItem("95% (Maximum Crystal Clarity • High Bandwidth)", 95)
         combo_q.currentIndexChanged.connect(lambda idx: self.server.send_control_command({"action": "SET_QUALITY", "quality": combo_q.currentData()}))
         q_row.addWidget(combo_q)
         c_layout.addLayout(q_row)
@@ -270,6 +274,52 @@ class ZeroCamModule(BaseModule):
         c_layout.addLayout(z_row)
 
         right_col.addWidget(ctrl_card)
+
+        # Card: USB Cable Direct Link (0ms Latency)
+        usb_card = QFrame()
+        usb_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px;")
+        u_layout = QVBoxLayout(usb_card)
+        u_layout.setSpacing(8)
+
+        u_title = QLabel("⚡ USB Cable High-Speed Mode")
+        u_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        u_title.setStyleSheet("color: #111827;")
+        u_layout.addWidget(u_title)
+
+        u_desc = QLabel("Plug phone via USB for rock-solid 60 FPS without Wi-Fi interference. Click button below to activate tunnel:")
+        u_desc.setFont(QFont("Segoe UI", 10))
+        u_desc.setStyleSheet("color: #6B7280;")
+        u_desc.setWordWrap(True)
+        u_layout.addWidget(u_desc)
+
+        btn_usb_tunnel = QPushButton("⚡ Activate USB Cable Tunnel (Port 8893)")
+        btn_usb_tunnel.setStyleSheet("""
+            QPushButton {
+                background-color: #0284C7; color: #FFFFFF; border-radius: 6px;
+                padding: 7px 12px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #0369A1; }
+        """)
+        lbl_usb_status = QLabel("Tip: After clicking, select '⚡ USB Cable (127.0.0.1)' on your phone.")
+        lbl_usb_status.setStyleSheet("color: #6B7280; font-size: 10px;")
+
+        def _on_usb_click():
+            if not self.adb_manager.is_available():
+                lbl_usb_status.setText("❌ ADB not detected. Please enable USB Debugging.")
+                lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px; font-weight: bold;")
+                return
+            ok, msg = self.adb_manager.reverse_port(self.port)
+            if ok:
+                lbl_usb_status.setText("✅ USB Tunnel Active! On your phone, connect to 127.0.0.1.")
+                lbl_usb_status.setStyleSheet("color: #059669; font-size: 10px; font-weight: bold;")
+            else:
+                lbl_usb_status.setText(f"❌ {msg}")
+                lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px;")
+
+        btn_usb_tunnel.clicked.connect(_on_usb_click)
+        u_layout.addWidget(btn_usb_tunnel)
+        u_layout.addWidget(lbl_usb_status)
+        right_col.addWidget(usb_card)
 
         # Card 3: Image Adjustments & Mirroring
         adj_card = QFrame()

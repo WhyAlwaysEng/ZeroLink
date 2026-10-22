@@ -44,9 +44,9 @@ class ZeroCamActivity : AppCompatActivity() {
     private var isTorchOn = false
     private var isStreaming = false
 
-    private var targetWidth = 1920
-    private var targetHeight = 1080
-    private var jpegQuality = 90
+    private var targetWidth = 1280
+    private var targetHeight = 720
+    private var jpegQuality = 75
 
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
@@ -100,6 +100,18 @@ class ZeroCamActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             useFrontCamera = !useFrontCamera
             bindCameraUseCases()
+        }
+
+        binding.btnCamUsbMode.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            binding.etCamHostIp.setText("127.0.0.1")
+            Toast.makeText(this, "⚡ USB Cable Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnCamAutoWifi.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            discovery?.startDiscovery()
+            Toast.makeText(this, "📡 Searching for PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnCamTorch.setOnClickListener {
@@ -179,7 +191,6 @@ class ZeroCamActivity : AppCompatActivity() {
         val imageAnalysis = ImageAnalysis.Builder()
             .setTargetResolution(targetSize)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
 
         imageAnalysis.setAnalyzer(cameraExecutor!!) { imageProxy ->
@@ -301,38 +312,10 @@ class ZeroCamActivity : AppCompatActivity() {
         }
 
         try {
-            val planes = imageProxy.planes
-            val buffer: ByteBuffer = planes[0].buffer
-            val pixelStride = planes[0].pixelStride
-            val rowStride = planes[0].rowStride
-            val rowPadding = rowStride - pixelStride * imageProxy.width
-
-            val bitmap = Bitmap.createBitmap(
-                imageProxy.width + rowPadding / pixelStride,
-                imageProxy.height,
-                Bitmap.Config.ARGB_8888
-            )
-            bitmap.copyPixelsFromBuffer(buffer)
-
-            val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-            val matrix = Matrix()
-            if (rotationDegrees != 0) {
-                matrix.postRotate(rotationDegrees.toFloat())
-            }
-
-            val finalBitmap = if (rotationDegrees != 0 || rowPadding > 0) {
-                Bitmap.createBitmap(bitmap, 0, 0, imageProxy.width, imageProxy.height, matrix, false)
-            } else {
-                bitmap
-            }
-
+            val bitmap = imageProxy.toBitmap()
             baos.reset()
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
             val jpegBytes = baos.toByteArray()
-
-            if (finalBitmap != bitmap) {
-                finalBitmap.recycle()
-            }
             bitmap.recycle()
 
             // Construct [ZCAM][Length (4B)][Timestamp (8B)][Bytes]

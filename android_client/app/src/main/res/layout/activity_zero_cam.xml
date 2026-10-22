@@ -144,6 +144,41 @@
                     android:textSize="13sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCamUsbMode"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginEnd="6dp"
+                    android:padding="0dp"
+                    android:text="⚡ USB Cable (127.0.0.1)"
+                    android:textColor="#38BDF8"
+                    android:textSize="11sp"
+                    app:cornerRadius="8dp"
+                    app:strokeColor="#38BDF8" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnCamAutoWifi"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="0dp"
+                    android:layout_height="36dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:padding="0dp"
+                    android:text="📡 Auto-Detect Wi-Fi"
+                    android:textColor="#94A3B8"
+                    android:textSize="11sp"
+                    app:cornerRadius="8dp"
+                    app:strokeColor="#475569" />
+            </LinearLayout>
+
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnCamStreamToggle"
                 android:layout_width="match_parent"
