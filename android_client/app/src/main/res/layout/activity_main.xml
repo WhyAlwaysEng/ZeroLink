@@ -542,23 +542,10 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Wireless Webcam (Beta • อยู่ระหว่างปรับปรุง)"
+                        android:text="Wireless Webcam for Discord &amp; OBS"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="@drawable/bg_badge_pill"
-                    android:paddingStart="8dp"
-                    android:paddingTop="3dp"
-                    android:paddingEnd="8dp"
-                    android:paddingBottom="3dp"
-                    android:text="BETA"
-                    android:textColor="#D97706"
-                    android:textSize="10sp"
-                    android:fontFamily="sans-serif-bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

@@ -112,15 +112,15 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:fontFamily="sans-serif-bold"
-                        android:text="ZeroCam [Beta / กำลังปรับปรุง]"
+                        android:text="ZeroCam: PC Wireless Webcam"
                         android:textColor="#FFFFFF"
                         android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🛠️ ใช้งานได้ตามปกติ (อยู่ระหว่างพัฒนาปรับปรุงคุณภาพ)"
-                        android:textColor="#F59E0B"
+                        android:text="Low-Latency Streaming to Discord &amp; OBS"
+                        android:textColor="#9CA3AF"
                         android:textSize="10sp" />
                 </LinearLayout>
 

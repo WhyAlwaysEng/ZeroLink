@@ -376,9 +376,9 @@ class DashboardView(QWidget):
         cam_active = mod_cam.is_active if mod_cam else False
         card_cam = ModuleCard(
             module_id="zerocam",
-            title="ZeroCam [Beta]",
+            title="ZeroCam",
             glyph="📷",
-            desc="Wireless mobile webcam & OBS/Discord Virtual Camera Feeder. [Status: Beta / อยู่ระหว่างปรับปรุงประสิทธิภาพและความคมชัด]",
+            desc="Wireless phone camera streaming into Virtual Webcam for Discord, OBS, and Zoom.",
             is_enabled=cam_active,
             is_available=True,
             port_info="Port 8893 (TCP)"
