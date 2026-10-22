@@ -56,9 +56,16 @@ class H264Decoder:
             packet = av.Packet(h264_data)
             frames = self.codec.decode(packet)
             for frame in frames:
-                rgb = frame.to_ndarray(format='rgb24')
-                h, w, ch = rgb.shape
-                qimg = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888).copy()
+                rgb = frame.reformat(format='rgb24')
+                plane = rgb.planes[0]
+
+                qimg = QImage(
+                    plane,
+                    rgb.width,
+                    rgb.height,
+                    plane.line_size,
+                    QImage.Format.Format_RGB888
+                ).copy()
                 images.append(qimg)
         except Exception:
             # Parameter sets (SPS/PPS) or incomplete slices can raise an error in avcodec_send_packet.

@@ -138,15 +138,15 @@ class ScreenCaptureH264Manager(
                         // Dropping encoded P-frames breaks the macroblock reference chain and causes severe artifacting.
                         // Framerate throttling is safely handled by KEY_MAX_FPS_TO_ENCODER at the input surface level.
 
-                        if (isConfig) {
-                            // Store SPS / PPS
-                            spsPpsBuffer = chunk
-                        }
-
                         // Ensure Annex B start code 0x00000001
                         val hasStartCode = chunk.size >= 4 && chunk[0] == 0.toByte() && chunk[1] == 0.toByte() &&
                                 ((chunk[2] == 1.toByte()) || (chunk[2] == 0.toByte() && chunk[3] == 1.toByte()))
                         val nalu = if (hasStartCode) chunk else byteArrayOf(0, 0, 0, 1) + chunk
+
+                        if (isConfig) {
+                            // Store SPS / PPS with guaranteed start code
+                            spsPpsBuffer = nalu
+                        }
 
                         // When sending a Keyframe, prepend SPS/PPS if available to guarantee instant decoding
                         val payload = if (isKeyframe && spsPpsBuffer != null && !isConfig) {

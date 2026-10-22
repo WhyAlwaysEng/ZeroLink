@@ -382,7 +382,11 @@ class MainWindow(QMainWindow):
         return page
 
     def _bind_events(self):
-        pass
+        # Auto-switch to active viewport when a mobile client connects
+        self.mod_zerocast.server.client_connected.connect(lambda _: self._on_navigate_to_module("zerocast"))
+        self.mod_zerocam.server.client_connected.connect(lambda _, __: self._on_navigate_to_module("zerocam"))
+        self.mod_zerodisplay.server.client_connected.connect(lambda _: self._on_navigate_to_module("zerodisplay"))
+        self.mod_zeropad.server.client_connected.connect(lambda _: self._on_navigate_to_module("zeropad"))
 
     def _on_navigate_to_module(self, module_id: str):
         if module_id == "zerocast":
