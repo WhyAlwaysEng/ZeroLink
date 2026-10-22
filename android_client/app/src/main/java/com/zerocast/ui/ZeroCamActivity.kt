@@ -44,6 +44,10 @@ class ZeroCamActivity : AppCompatActivity() {
     private var isTorchOn = false
     private var isStreaming = false
 
+    private var targetWidth = 1920
+    private var targetHeight = 1080
+    private var jpegQuality = 90
+
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
     private var streamJob: Job? = null
@@ -117,6 +121,19 @@ class ZeroCamActivity : AppCompatActivity() {
             }
         }
 
+        // Tap-to-focus on camera viewfinder
+        binding.cameraPreviewView.setOnTouchListener { _, event ->
+            if (event.action == android.view.MotionEvent.ACTION_UP) {
+                val factory = binding.cameraPreviewView.meteringPointFactory
+                val point = factory.createPoint(event.x, event.y)
+                val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF or FocusMeteringAction.FLAG_AE)
+                    .setAutoCancelDuration(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                camera?.cameraControl?.startFocusAndMetering(action)
+            }
+            true
+        }
+
         checkPermissionAndStart()
     }
 
@@ -148,13 +165,19 @@ class ZeroCamActivity : AppCompatActivity() {
             CameraSelector.DEFAULT_BACK_CAMERA
         }
 
+        val targetSize = android.util.Size(targetWidth, targetHeight)
+
+        @Suppress("DEPRECATION")
         val preview = Preview.Builder()
+            .setTargetResolution(targetSize)
             .build()
             .also {
                 it.setSurfaceProvider(binding.cameraPreviewView.surfaceProvider)
             }
 
+        @Suppress("DEPRECATION")
         val imageAnalysis = ImageAnalysis.Builder()
+            .setTargetResolution(targetSize)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888)
             .build()
@@ -244,6 +267,27 @@ class ZeroCamActivity : AppCompatActivity() {
                         toggleTorch()
                     }
                 }
+                "SET_RESOLUTION" -> {
+                    val w = json.optInt("width", 1920)
+                    val h = json.optInt("height", 1080)
+                    runOnUiThread {
+                        targetWidth = w
+                        targetHeight = h
+                        bindCameraUseCases()
+                    }
+                }
+                "SET_QUALITY" -> {
+                    val q = json.optInt("quality", 90)
+                    jpegQuality = q
+                }
+                "SET_ZOOM" -> {
+                    val zoom = json.optDouble("zoom", 0.0).toFloat()
+                    camera?.cameraControl?.setLinearZoom(zoom.coerceIn(0f, 1f))
+                }
+                "SET_EXPOSURE" -> {
+                    val exp = json.optInt("exposure", 0)
+                    camera?.cameraControl?.setExposureCompensationIndex(exp)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Command parsing error: ${e.message}")
@@ -283,7 +327,7 @@ class ZeroCamActivity : AppCompatActivity() {
             }
 
             baos.reset()
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, 75, baos)
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
             val jpegBytes = baos.toByteArray()
 
             if (finalBitmap != bitmap) {

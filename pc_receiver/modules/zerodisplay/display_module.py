@@ -147,12 +147,12 @@ class ZeroDisplayModule(BaseModule):
         banner_layout = QVBoxLayout(banner)
         banner_layout.setSpacing(6)
 
-        b_title = QLabel("🖥️ ZeroDisplay: Extended 2nd Monitor for PC")
+        b_title = QLabel("🖥️ ZeroDisplay: Wireless PC Screen Mirror & Remote Touch")
         b_title.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         b_title.setStyleSheet("color: #111827;")
         banner_layout.addWidget(b_title)
 
-        b_sub = QLabel("Stream your PC screen or secondary monitor to your Android tablet / phone with ultra-low latency. Put Discord, Spotify, or chat windows on your tablet beside your PC, and touch to click or drag!")
+        b_sub = QLabel("สตรีมและมิลเลอร์หน้าจอคอมพิวเตอร์ (เลือก Display 1, Display 2, หรือจอรวม) ไปยังหน้าจอมือถือหรือแท็บเล็ตแบบไร้สาย พร้อมระบบสัมผัสควบคุมเคอร์เซอร์เมาส์ (แตะคลิก, ลากหน้าต่าง, รูด 2 นิ้วเลื่อนลูกกลิ้งเมาส์)\n💡 ทริค: หากต้องการใช้เป็นจอแยกอิสระ (Extended Desktop) สามารถเสียบหัวแปลง HDMI Dummy Plug เข้าที่การ์ดจอ PC หรือใช้ Virtual Display Driver แล้วเลือกจอนั้นในช่อง Select PC Display ได้ทันที")
         b_sub.setFont(QFont("Segoe UI", 10))
         b_sub.setStyleSheet("color: #6B7280;")
         b_sub.setWordWrap(True)
@@ -165,7 +165,7 @@ class ZeroDisplayModule(BaseModule):
         cfg_layout = QVBoxLayout(cfg_card)
         cfg_layout.setSpacing(14)
 
-        card_title = QLabel("⚙️ Stream Configuration")
+        card_title = QLabel("⚙️ Advanced Quality & Display Settings")
         card_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         card_title.setStyleSheet("color: #111827;")
         cfg_layout.addWidget(card_title)
@@ -189,7 +189,7 @@ class ZeroDisplayModule(BaseModule):
         mon_row.addWidget(btn_refresh_mon)
         cfg_layout.addLayout(mon_row)
 
-        # Target Frame Rate Row
+        # Target Frame Rate Row (Up to 120 FPS)
         fps_row = QHBoxLayout()
         fps_row.setSpacing(12)
         lbl_fps = QLabel("Target Frame Rate:")
@@ -198,18 +198,18 @@ class ZeroDisplayModule(BaseModule):
         fps_row.addWidget(lbl_fps)
 
         self.slider_fps = QSlider(Qt.Orientation.Horizontal)
-        self.slider_fps.setRange(20, 60)
+        self.slider_fps.setRange(30, 120)
         self.slider_fps.setValue(self.server.target_fps)
         self.slider_fps.valueChanged.connect(self._on_fps_changed)
         fps_row.addWidget(self.slider_fps, 1)
 
         self.lbl_fps_val = QLabel(f"{self.server.target_fps} FPS")
-        self.lbl_fps_val.setFixedWidth(50)
+        self.lbl_fps_val.setFixedWidth(60)
         self.lbl_fps_val.setStyleSheet("font-weight: bold; color: #111827;")
         fps_row.addWidget(self.lbl_fps_val)
         cfg_layout.addLayout(fps_row)
 
-        # Quality Slider Row
+        # Quality Slider Row (Up to 100%)
         q_row = QHBoxLayout()
         q_row.setSpacing(12)
         lbl_q = QLabel("JPEG Quality:")
@@ -218,13 +218,13 @@ class ZeroDisplayModule(BaseModule):
         q_row.addWidget(lbl_q)
 
         self.slider_quality = QSlider(Qt.Orientation.Horizontal)
-        self.slider_quality.setRange(40, 95)
+        self.slider_quality.setRange(50, 100)
         self.slider_quality.setValue(self.server.quality)
         self.slider_quality.valueChanged.connect(self._on_quality_changed)
         q_row.addWidget(self.slider_quality, 1)
 
         self.lbl_quality_val = QLabel(f"{self.server.quality}%")
-        self.lbl_quality_val.setFixedWidth(50)
+        self.lbl_quality_val.setFixedWidth(60)
         self.lbl_quality_val.setStyleSheet("font-weight: bold; color: #111827;")
         q_row.addWidget(self.lbl_quality_val)
         cfg_layout.addLayout(q_row)
@@ -238,12 +238,35 @@ class ZeroDisplayModule(BaseModule):
         scale_row.addWidget(lbl_sc)
 
         self.combo_scale = QComboBox()
-        self.combo_scale.addItem("100% (Native Full Resolution)", 1.0)
+        self.combo_scale.addItem("100% (Native Full Resolution • Sharpest)", 1.0)
         self.combo_scale.addItem("75% (Balanced High Speed)", 0.75)
         self.combo_scale.addItem("50% (Ultra Low Bandwidth)", 0.50)
         self.combo_scale.currentIndexChanged.connect(self._on_scale_changed)
         scale_row.addWidget(self.combo_scale, 1)
         cfg_layout.addLayout(scale_row)
+
+        # 4:4:4 Chroma Subsampling Checkbox
+        chk_chroma = QCheckBox("🔤 Crystal-Clear Text (4:4:4 Full Chroma Subsampling - No fuzzy text artifacts)")
+        chk_chroma.setChecked(self.server.enable_444_chroma)
+        chk_chroma.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+        chk_chroma.setStyleSheet("color: #111827; margin-top: 4px;")
+        chk_chroma.toggled.connect(lambda on: setattr(self.server, "enable_444_chroma", on))
+        cfg_layout.addWidget(chk_chroma)
+
+        # Detail Enhancer / Sharpening Slider
+        sharp_row = QHBoxLayout()
+        sharp_row.setSpacing(12)
+        lbl_sh = QLabel("Detail Enhancer / Sharpness:")
+        lbl_sh.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
+        lbl_sh.setStyleSheet("color: #374151; min-width: 140px;")
+        sharp_row.addWidget(lbl_sh)
+
+        slider_sharp = QSlider(Qt.Orientation.Horizontal)
+        slider_sharp.setRange(0, 100)
+        slider_sharp.setValue(int(self.server.sharpen_amount * 100))
+        slider_sharp.valueChanged.connect(lambda val: setattr(self.server, "sharpen_amount", val / 100.0))
+        sharp_row.addWidget(slider_sharp, 1)
+        cfg_layout.addLayout(sharp_row)
 
         # Touch Control Toggle
         self.chk_touch = QCheckBox("👆 Enable Remote Touch & Stylus Control (Control PC cursor from mobile screen)")

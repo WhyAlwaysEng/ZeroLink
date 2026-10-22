@@ -38,11 +38,11 @@ class CamServer(QObject):
         self.port = port
         self.is_running = False
 
-        # Virtual Webcam Feeder
+        # Virtual Webcam Feeder (Default Full HD 1080p)
         self.enable_virtual_cam = False
         self._vcam: Optional[object] = None
-        self._vcam_w = 1280
-        self._vcam_h = 720
+        self._vcam_w = 1920
+        self._vcam_h = 1080
         self._vcam_fps = 30
 
         # Video adjustments
@@ -51,6 +51,8 @@ class CamServer(QObject):
         self.rotation_degrees = 0       # 0, 90, 180, 270
         self.brightness = 0             # -100 to 100
         self.contrast = 1.0             # 0.5 to 2.0
+        self.sharpness = 0.5            # 0.0 to 1.5 Detail enhancer / unsharp mask
+        self.saturation = 1.15          # 0.5 to 2.0 Color vibrancy booster
 
         # Sockets & threads
         self._server_sock: Optional[socket.socket] = None
@@ -284,6 +286,17 @@ class CamServer(QObject):
         # Brightness / Contrast
         if self.contrast != 1.0 or self.brightness != 0:
             bgr = cv2.convertScaleAbs(bgr, alpha=self.contrast, beta=self.brightness)
+
+        # Detail Enhancer & Sharpness Booster (Unsharp Mask)
+        if self.sharpness > 0:
+            gaussian = cv2.GaussianBlur(bgr, (0, 0), 2.0)
+            bgr = cv2.addWeighted(bgr, 1.0 + self.sharpness, gaussian, -self.sharpness, 0)
+
+        # Saturation Booster
+        if self.saturation != 1.0:
+            hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV).astype(np.float32)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * self.saturation, 0, 255)
+            bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
         # Feed Virtual Camera (Discord / OBS)
         if self.enable_virtual_cam and self._vcam:

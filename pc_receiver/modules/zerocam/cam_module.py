@@ -237,6 +237,38 @@ class ZeroCamModule(BaseModule):
         btn_row.addWidget(btn_torch)
         c_layout.addLayout(btn_row)
 
+        # Resolution dropdown
+        res_row = QHBoxLayout()
+        res_row.addWidget(QLabel("Stream Resolution:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        combo_res = QComboBox()
+        combo_res.addItem("1080p Full HD (1920x1080 • Sharp)", (1920, 1080))
+        combo_res.addItem("4K Ultra HD (3840x2160 • Extreme)", (3840, 2160))
+        combo_res.addItem("720p HD (1280x720 • Fast)", (1280, 720))
+        combo_res.currentIndexChanged.connect(lambda idx: self._on_remote_res_changed(combo_res.currentData()))
+        res_row.addWidget(combo_res)
+        c_layout.addLayout(res_row)
+
+        # Quality dropdown
+        q_row = QHBoxLayout()
+        q_row.addWidget(QLabel("JPEG Quality:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        combo_q = QComboBox()
+        combo_q.addItem("95% (Maximum Crystal Clarity)", 95)
+        combo_q.addItem("85% (High Clarity)", 85)
+        combo_q.addItem("75% (Balanced)", 75)
+        combo_q.currentIndexChanged.connect(lambda idx: self.server.send_control_command({"action": "SET_QUALITY", "quality": combo_q.currentData()}))
+        q_row.addWidget(combo_q)
+        c_layout.addLayout(q_row)
+
+        # Zoom slider
+        z_row = QHBoxLayout()
+        z_row.addWidget(QLabel("Camera Zoom:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        slider_zoom = QSlider(Qt.Orientation.Horizontal)
+        slider_zoom.setRange(0, 100)
+        slider_zoom.setValue(0)
+        slider_zoom.valueChanged.connect(lambda val: self.server.send_control_command({"action": "SET_ZOOM", "zoom": val / 100.0}))
+        z_row.addWidget(slider_zoom)
+        c_layout.addLayout(z_row)
+
         right_col.addWidget(ctrl_card)
 
         # Card 3: Image Adjustments & Mirroring
@@ -245,7 +277,7 @@ class ZeroCamModule(BaseModule):
         a_layout = QVBoxLayout(adj_card)
         a_layout.setSpacing(10)
 
-        a_title = QLabel("🎨 Video Adjustments")
+        a_title = QLabel("🎨 Video Adjustments & Enhancer")
         a_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         a_title.setStyleSheet("color: #111827;")
         a_layout.addWidget(a_title)
@@ -260,9 +292,29 @@ class ZeroCamModule(BaseModule):
         chk_flip_v.toggled.connect(lambda checked: setattr(self.server, "flip_vertical", checked))
         a_layout.addWidget(chk_flip_v)
 
+        # Detail Enhancer / Sharpness
+        sh_row = QHBoxLayout()
+        sh_row.addWidget(QLabel("Detail Sharpness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        slider_sharp = QSlider(Qt.Orientation.Horizontal)
+        slider_sharp.setRange(0, 150)
+        slider_sharp.setValue(int(self.server.sharpness * 100))
+        slider_sharp.valueChanged.connect(lambda val: setattr(self.server, "sharpness", val / 100.0))
+        sh_row.addWidget(slider_sharp)
+        a_layout.addLayout(sh_row)
+
+        # Saturation
+        sat_row = QHBoxLayout()
+        sat_row.addWidget(QLabel("Color Vibrancy:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        slider_sat = QSlider(Qt.Orientation.Horizontal)
+        slider_sat.setRange(50, 200)
+        slider_sat.setValue(int(self.server.saturation * 100))
+        slider_sat.valueChanged.connect(lambda val: setattr(self.server, "saturation", val / 100.0))
+        sat_row.addWidget(slider_sat)
+        a_layout.addLayout(sat_row)
+
         # Brightness
         b_row = QHBoxLayout()
-        b_row.addWidget(QLabel("Brightness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 70px;"))
+        b_row.addWidget(QLabel("Brightness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
         slider_bright = QSlider(Qt.Orientation.Horizontal)
         slider_bright.setRange(-50, 50)
         slider_bright.setValue(self.server.brightness)
@@ -272,12 +324,13 @@ class ZeroCamModule(BaseModule):
 
         # Contrast
         co_row = QHBoxLayout()
-        co_row.addWidget(QLabel("Contrast:", styleSheet="font-size: 11px; font-weight: bold; min-width: 70px;"))
+        co_row.addWidget(QLabel("Contrast:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
         slider_contrast = QSlider(Qt.Orientation.Horizontal)
         slider_contrast.setRange(50, 150)
         slider_contrast.setValue(int(self.server.contrast * 100))
         slider_contrast.valueChanged.connect(lambda val: setattr(self.server, "contrast", val / 100.0))
         co_row.addWidget(slider_contrast)
+        a_layout.addLayout(co_row)
         a_layout.addLayout(co_row)
 
         right_col.addWidget(adj_card)
@@ -320,13 +373,21 @@ class ZeroCamModule(BaseModule):
                 )
             )
 
+    def _on_remote_res_changed(self, res_tuple):
+        if not res_tuple:
+            return
+        w, h = res_tuple
+        self.server._vcam_w = w
+        self.server._vcam_h = h
+        self.server.send_control_command({"action": "SET_RESOLUTION", "width": w, "height": h})
+
     def _on_vcam_toggled(self, checked: bool):
         if checked:
-            ok = self.server.start_virtual_camera(width=1280, height=720, fps=30)
+            ok = self.server.start_virtual_camera(width=self.server._vcam_w, height=self.server._vcam_h, fps=30)
             if ok:
                 self.btn_vcam_toggle.setText("Stop Virtual Webcam")
                 self.btn_vcam_toggle.setStyleSheet("background-color: #DC2626; color: #FFFFFF; border-radius: 6px; padding: 8px 14px; font-weight: bold;")
-                self.lbl_vcam_status.setText("● Active: Broadcasting to Discord / Zoom / OBS")
+                self.lbl_vcam_status.setText(f"● Active: Broadcasting {self.server._vcam_w}x{self.server._vcam_h} to Discord / OBS")
                 self.lbl_vcam_status.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
             else:
                 self.btn_vcam_toggle.setChecked(False)

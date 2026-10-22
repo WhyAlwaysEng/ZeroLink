@@ -46,9 +46,11 @@ class DisplayServer(QObject):
         # Configuration
         self.selected_monitor_idx = 1  # 1-indexed for mss monitors list
         self.target_fps = 60
-        self.quality = 75
+        self.quality = 90              # High-clarity 90% default (adjustable 50-100%)
         self.enable_touch = True
         self.scale_factor = 1.0        # 1.0 = native, 0.75 = downscale for performance
+        self.enable_444_chroma = True  # Crystal-clear text clarity (4:4:4 JPEG chroma)
+        self.sharpen_amount = 0.0      # 0.0 to 1.0 detail enhancer
 
         # Server socket & threads
         self._server_sock: Optional[socket.socket] = None
@@ -360,8 +362,16 @@ class DisplayServer(QObject):
                 new_h = int(h * self.scale_factor)
                 frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
 
-            # Encode as high-efficiency JPEG
+            # Optional Detail Enhancer / Sharpening
+            if self.sharpen_amount > 0:
+                blurred = cv2.GaussianBlur(frame, (0, 0), 1.5)
+                frame = cv2.addWeighted(frame, 1.0 + self.sharpen_amount, blurred, -self.sharpen_amount, 0)
+
+            # Encode as high-efficiency JPEG with optional 4:4:4 crystal-clear text chroma
             encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.quality)]
+            if self.enable_444_chroma and hasattr(cv2, 'IMWRITE_JPEG_SAMPLING_FACTOR_444'):
+                encode_param.extend([int(cv2.IMWRITE_JPEG_SAMPLING_FACTOR), int(cv2.IMWRITE_JPEG_SAMPLING_FACTOR_444)])
+
             _, buf = cv2.imencode(".jpg", frame, encode_param)
             return buf.tobytes()
         except Exception:

@@ -44,7 +44,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:gravity="center"
-            android:text="Turn this screen into a wireless 2nd monitor for your PC.\nTouch screen to click, scroll, and drag windows."
+            android:text="Wireless PC Screen Mirror &amp; Touch Remote\nTouch screen to click, scroll, and drag windows."
             android:textColor="#94A3B8"
             android:textSize="13sp" />
 

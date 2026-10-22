@@ -55,11 +55,14 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private var prevY = 0f
     private var isTwoFingerScroll = false
 
-    // Frame stats
+    // Frame stats & rendering options
     private var frameCount = 0
     private var lastStatTime = System.currentTimeMillis()
-    private val paint = Paint(Paint.FILTER_BITMAP_FLAG)
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
     private val dstRect = Rect()
+    private val bmpOptions = BitmapFactory.Options().apply {
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -168,7 +171,7 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     val jpegData = ByteArray(payloadLen)
                     inStream!!.readFully(jpegData)
 
-                    val bmp = BitmapFactory.decodeByteArray(jpegData, 0, payloadLen)
+                    val bmp = BitmapFactory.decodeByteArray(jpegData, 0, payloadLen, bmpOptions)
                     if (bmp != null && isSurfaceReady && surfaceHolder != null) {
                         val canvas = surfaceHolder?.lockCanvas()
                         if (canvas != null) {
