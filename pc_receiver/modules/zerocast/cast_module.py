@@ -12,11 +12,12 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, pyqtSignal, QUrl
 from PyQt6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QFont, QMouseEvent, QKeyEvent,
-    QPen, QBrush, QKeySequence, QShortcut, QDesktopServices, QTransform
+    QPen, QBrush, QKeySequence, QShortcut, QDesktopServices, QTransform, QIcon
 )
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QMessageBox, QComboBox, QDialog, QSlider
+    QFrame, QMessageBox, QComboBox, QDialog, QSlider, QMainWindow,
+    QStackedWidget, QCheckBox, QGraphicsDropShadowEffect
 )
 
 from core.base_module import BaseModule
@@ -278,6 +279,61 @@ class ModernVideoCanvas(QWidget):
                 super().keyPressEvent(event)
 
 
+class ZeroCastPopoutWindow(QMainWindow):
+    """Independent floating window for ZeroCast streaming session."""
+
+    def __init__(self, cast_module, parent=None):
+        super().__init__(parent)
+        self.cast_module = cast_module
+        self.is_fullscreen = False
+        self.is_pinned = False
+
+        self.setWindowTitle("ZeroCast — Screen Mirror")
+        icon_path = os.path.join(os.path.dirname(__file__), "..", "..", "icon.png")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
+        self.resize(560, 880)
+        self.setMinimumSize(360, 500)
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #FFFFFF;
+            }
+        """)
+
+        # Shortcuts
+        self.shortcut_f11 = QShortcut(QKeySequence("F11"), self)
+        self.shortcut_f11.activated.connect(self._toggle_fullscreen)
+
+        self.shortcut_esc = QShortcut(QKeySequence("Esc"), self)
+        self.shortcut_esc.activated.connect(self._exit_fullscreen_on_esc)
+
+    def toggle_pin(self, checked: bool):
+        self.is_pinned = checked
+        flag = Qt.WindowType.WindowStaysOnTopHint
+        if checked:
+            self.setWindowFlags(self.windowFlags() | flag)
+        else:
+            self.setWindowFlags(self.windowFlags() & ~flag)
+        self.show()
+
+    def _toggle_fullscreen(self):
+        if not self.is_fullscreen:
+            self.showFullScreen()
+            self.is_fullscreen = True
+        else:
+            self.showNormal()
+            self.is_fullscreen = False
+
+    def _exit_fullscreen_on_esc(self):
+        if self.is_fullscreen:
+            self._toggle_fullscreen()
+
+    def closeEvent(self, event):
+        event.accept()
+        self.cast_module.dock_back()
+
+
 class ZeroCastModule(BaseModule):
     """Monochrome Minimalist ZeroCast Module."""
     toggle_fullscreen_requested = pyqtSignal()
@@ -311,6 +367,17 @@ class ZeroCastModule(BaseModule):
         self.lbl_volume: Optional[QLabel] = None
         self.combo_rotate: Optional[QComboBox] = None
         self._prev_volume: int = 100
+
+        # Detachable Popout State
+        self.is_popped_out: bool = False
+        self.popout_window: Optional[ZeroCastPopoutWindow] = None
+        self._stacked_container: Optional[QStackedWidget] = None
+        self._dock_container: Optional[QWidget] = None
+        self._dock_layout: Optional[QVBoxLayout] = None
+        self._content_widget: Optional[QWidget] = None
+        self._placeholder_widget: Optional[QWidget] = None
+        self.btn_popout: Optional[QPushButton] = None
+        self.chk_auto_popout: Optional[QCheckBox] = None
 
         self._bind_events()
         self._init_usb_tunnel()
@@ -432,8 +499,17 @@ class ZeroCastModule(BaseModule):
             self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
 
     def _setup_ui(self):
-        self._widget = QWidget()
-        layout = QVBoxLayout(self._widget)
+        self._stacked_container = QStackedWidget()
+
+        # Page 0: Embedded Dock Container
+        self._dock_container = QWidget()
+        self._dock_layout = QVBoxLayout(self._dock_container)
+        self._dock_layout.setContentsMargins(0, 0, 0, 0)
+        self._dock_layout.setSpacing(0)
+
+        # Content widget containing top bar, canvas, and bottom bar
+        self._content_widget = QWidget()
+        layout = QVBoxLayout(self._content_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
@@ -476,6 +552,32 @@ class ZeroCastModule(BaseModule):
         self.combo_rotate.currentIndexChanged.connect(self._on_rotation_changed)
         bar_layout.addWidget(self.combo_rotate)
 
+        # Auto Pop-out Checkbox
+        self.chk_auto_popout = QCheckBox("Auto Pop-out")
+        self.chk_auto_popout.setStyleSheet("color: #4B5563; font-size: 11px;")
+        self.chk_auto_popout.setToolTip("Automatically open in a floating window when phone connects")
+        bar_layout.addWidget(self.chk_auto_popout)
+
+        # Manual Pop-out Button
+        self.btn_popout = QPushButton("↗ Pop-out")
+        self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
+        self.btn_popout.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 5px 10px;
+                border-radius: 6px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+        """)
+        self.btn_popout.clicked.connect(self._toggle_popout)
+        bar_layout.addWidget(self.btn_popout)
+
         self.btn_snapshot = QPushButton("Snapshot")
         self.btn_snapshot.clicked.connect(self._take_snapshot)
         bar_layout.addWidget(self.btn_snapshot)
@@ -487,7 +589,7 @@ class ZeroCastModule(BaseModule):
         layout.addWidget(top_bar)
 
         # Video Canvas
-        self.canvas = ModernVideoCanvas(self._widget)
+        self.canvas = ModernVideoCanvas(self._content_widget)
         self.canvas.is_module_active = self.is_active
         self.canvas.on_touch_event = self._handle_reverse_input
         self.canvas.on_key_event = self._handle_key_input
@@ -572,6 +674,16 @@ class ZeroCastModule(BaseModule):
 
         layout.addWidget(bottom_bar)
 
+        # Add content into Dock Container
+        self._dock_layout.addWidget(self._content_widget)
+        self._stacked_container.addWidget(self._dock_container)
+
+        # Page 1: Detached Window Placeholder
+        self._placeholder_widget = self._create_popout_placeholder()
+        self._stacked_container.addWidget(self._placeholder_widget)
+
+        self._widget = self._stacked_container
+
     def _toggle_power(self):
         if self.is_active:
             self.stop_service()
@@ -588,6 +700,9 @@ class ZeroCastModule(BaseModule):
             self.log_label.setText(f"Connected: {client_info}")
         self.telemetry.reset()
         self.h264_decoder.reset()
+
+        if self.chk_auto_popout and self.chk_auto_popout.isChecked() and not self.is_popped_out:
+            QTimer.singleShot(150, self.pop_out)
 
     def _on_client_disconnected(self):
         if self.status_pill:
@@ -753,3 +868,116 @@ class ZeroCastModule(BaseModule):
         btn.clicked.connect(dlg.accept)
         l.addWidget(btn)
         dlg.exec()
+
+    def _create_popout_placeholder(self) -> QWidget:
+        container = QWidget()
+        container.setStyleSheet("background-color: #F9FAFB;")
+        layout = QVBoxLayout(container)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        card = QFrame()
+        card.setFixedSize(540, 270)
+        card.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 16px;
+            }
+        """)
+        shadow = QGraphicsDropShadowEffect(card)
+        shadow.setBlurRadius(24)
+        shadow.setColor(QColor(0, 0, 0, 18))
+        shadow.setOffset(0, 6)
+        card.setGraphicsEffect(shadow)
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(36, 32, 36, 32)
+        card_layout.setSpacing(12)
+        card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        icon_lbl = QLabel("📺")
+        icon_lbl.setFont(QFont("Segoe UI Emoji", 32))
+        icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(icon_lbl)
+
+        title_lbl = QLabel("ZeroCast is Running in a Detached Window")
+        title_lbl.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        title_lbl.setStyleSheet("color: #111827; border: none;")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(title_lbl)
+
+        desc_lbl = QLabel("Screen streaming and audio are active in an independent window.\nYou can freely use other modules in this Hub.")
+        desc_lbl.setFont(QFont("Segoe UI", 10))
+        desc_lbl.setStyleSheet("color: #6B7280; border: none;")
+        desc_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        card_layout.addWidget(desc_lbl)
+
+        card_layout.addSpacing(8)
+
+        btn_dock = QPushButton("↙ Dock Back to Hub")
+        btn_dock.setFixedSize(180, 38)
+        btn_dock.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                color: #FFFFFF;
+                font-weight: 700;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #1F2937;
+            }
+        """)
+        btn_dock.clicked.connect(self.dock_back)
+        card_layout.addWidget(btn_dock, 0, Qt.AlignmentFlag.AlignCenter)
+
+        layout.addWidget(card)
+        return container
+
+    def pop_out(self):
+        """Detaches the ZeroCast streaming viewport into an independent floating window."""
+        if self.is_popped_out or not self._content_widget:
+            return
+        self.is_popped_out = True
+        if not self.popout_window:
+            self.popout_window = ZeroCastPopoutWindow(self)
+
+        self._content_widget.setParent(None)
+        self.popout_window.setCentralWidget(self._content_widget)
+        self.popout_window.show()
+        self.popout_window.raise_()
+        self.popout_window.activateWindow()
+
+        if self._stacked_container:
+            self._stacked_container.setCurrentIndex(1)
+        if self.btn_popout:
+            self.btn_popout.setText("↙ Dock to Hub")
+            self.btn_popout.setToolTip("Dock ZeroCast back into the main Hub window")
+        if self.log_label:
+            self.log_label.setText("ZeroCast floating in standalone window")
+
+    def dock_back(self):
+        """Re-attaches the ZeroCast streaming viewport back into the main Hub."""
+        if not self.is_popped_out or not self._content_widget:
+            return
+        self.is_popped_out = False
+        if self.popout_window:
+            self.popout_window.hide()
+
+        self._content_widget.setParent(None)
+        if self._dock_layout:
+            self._dock_layout.addWidget(self._content_widget)
+        if self._stacked_container:
+            self._stacked_container.setCurrentIndex(0)
+
+        if self.btn_popout:
+            self.btn_popout.setText("↗ Pop-out")
+            self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
+        if self.log_label:
+            self.log_label.setText("ZeroCast docked back to Hub")
+
+    def _toggle_popout(self):
+        if self.is_popped_out:
+            self.dock_back()
+        else:
+            self.pop_out()
