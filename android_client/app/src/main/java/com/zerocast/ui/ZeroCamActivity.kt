@@ -46,7 +46,7 @@ class ZeroCamActivity : AppCompatActivity() {
 
     private var targetWidth = 1280
     private var targetHeight = 720
-    private var jpegQuality = 75
+    private var jpegQuality = 65
 
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
@@ -58,6 +58,7 @@ class ZeroCamActivity : AppCompatActivity() {
     private var discovery: NetworkDiscovery? = null
 
     private var frameCount = 0
+    private var bytesThisSec = 0L
     private var lastStatTime = System.currentTimeMillis()
     private val baos = ByteArrayOutputStream(64 * 1024)
 
@@ -260,9 +261,10 @@ class ZeroCamActivity : AppCompatActivity() {
                 outStream?.flush()
 
                 isStreaming = true
+                val isWired = hostIp == "127.0.0.1" || hostIp == "localhost"
                 withContext(Dispatchers.Main) {
                     binding.btnCamStreamToggle.text = "Stop Webcam Stream"
-                    binding.tvCamStatus.text = "● LIVE (Broadcasting to PC)"
+                    binding.tvCamStatus.text = if (isWired) "● LIVE (⚡ Wired USB Cable)" else "● LIVE (📡 Wi-Fi: $hostIp)"
                 }
 
                 // Launch dedicated non-blocking network frame sender
@@ -347,9 +349,23 @@ class ZeroCamActivity : AppCompatActivity() {
 
         try {
             val bitmap = imageProxy.toBitmap()
+            val finalBitmap = if (bitmap.width > targetWidth || bitmap.height > targetHeight) {
+                val scale = minOf(targetWidth.toFloat() / bitmap.width, targetHeight.toFloat() / bitmap.height)
+                val sw = (bitmap.width * scale).toInt()
+                val sh = (bitmap.height * scale).toInt()
+                Bitmap.createScaledBitmap(bitmap, sw, sh, true).also {
+                    if (it != bitmap) bitmap.recycle()
+                }
+            } else {
+                bitmap
+            }
+
             baos.reset()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
+            finalBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
             val jpegBytes = baos.toByteArray()
+            if (finalBitmap != bitmap) {
+                finalBitmap.recycle()
+            }
             bitmap.recycle()
 
             // Construct [ZCAM][Length (4B)][Timestamp (8B)][Rotation (2B)][Flags (2B)][Bytes]
@@ -369,13 +385,18 @@ class ZeroCamActivity : AppCompatActivity() {
             frameChannel.trySend(packet)
 
             frameCount++
+            bytesThisSec += packet.size
             val now = System.currentTimeMillis()
             if (now - lastStatTime >= 1000) {
-                val fps = frameCount * 1000f / (now - lastStatTime)
+                val dt = (now - lastStatTime) / 1000f
+                val fps = frameCount / dt
+                val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
+                val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
                 frameCount = 0
+                bytesThisSec = 0
                 lastStatTime = now
                 runOnUiThread {
-                    binding.tvCamFps.text = "${fps.toInt()} FPS"
+                    binding.tvCamFps.text = "${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
                 }
             }
 
