@@ -28,6 +28,21 @@ import com.zerocast.util.ZeroLinkConfig
 
 class ZeroCastActivity : AppCompatActivity() {
 
+    companion object {
+        val BITRATE_VALUES_KBPS = intArrayOf(
+            80000, // 80 Mbps
+            50000, // 50 Mbps
+            35000, // 35 Mbps
+            25000, // 25 Mbps
+            18000, // 18 Mbps (Default)
+            14000, // 14 Mbps
+            10000, // 10 Mbps
+            6000,  // 6 Mbps
+            3000,  // 3 Mbps
+            1500   // 1.5 Mbps
+        )
+    }
+
     private lateinit var binding: ActivityZerocastBinding
     private var isStreaming = false
 
@@ -116,6 +131,7 @@ class ZeroCastActivity : AppCompatActivity() {
 
         binding.chkAudio.isChecked = ZeroLinkConfig.getCastAudio(this)
         binding.switchDimScreen.isChecked = ZeroLinkConfig.getCastDimScreen(this)
+        updateConnectionHint()
     }
 
     private fun saveSettings() {
@@ -166,14 +182,35 @@ class ZeroCastActivity : AppCompatActivity() {
         binding.spinnerFps.adapter = adapterFps
 
         val bitrateOptions = listOf(
-            "20 Mbps (Ultra-High Quality • Local Wi-Fi / USB)",
-            "14 Mbps (Balanced • Default)",
-            "8 Mbps (Low Latency / Weak Wi-Fi)",
-            "4 Mbps (Ultra-Fast / Hotspot)"
+            "80 Mbps (⚡ Extreme USB 3.0 • Lossless Fidelity)",
+            "50 Mbps (🔥 Master Quality • USB / Wi-Fi 6)",
+            "35 Mbps (💎 Crystal Clear • Fast 5GHz / USB)",
+            "25 Mbps (🚀 High Performance • 5GHz Wi-Fi)",
+            "18 Mbps (✨ High Quality • Recommended)",
+            "14 Mbps (⚖️ Balanced • Standard)",
+            "10 Mbps (📶 Standard Wi-Fi)",
+            "6 Mbps (⚡ Low Latency • Fast Response)",
+            "3 Mbps (🍃 Ultra-Fast • Weak Wi-Fi / Hotspot)",
+            "1.5 Mbps (🔋 Battery Saver • Low Bandwidth)"
         )
         val adapterBitrate = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bitrateOptions)
         binding.spinnerBitrate.adapter = adapterBitrate
-        binding.spinnerBitrate.setSelection(1)
+        binding.spinnerBitrate.setSelection(4)
+    }
+
+    private fun updateConnectionHint() {
+        val ip = binding.etServerIp.text.toString().trim()
+        val isUsb = ip == "127.0.0.1" || ip == "localhost"
+        if (isUsb) {
+            binding.tvConnectionHint.text = "⚡ Connection Mode: USB Cable (Ultra-Low Latency via ADB 127.0.0.1)"
+            binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
+        } else if (ip.isNotEmpty()) {
+            binding.tvConnectionHint.text = "📡 Connection Mode: Wi-Fi LAN (Local Network: $ip)"
+            binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#059669"))
+        } else {
+            binding.tvConnectionHint.text = "⚠️ Please enter PC IP or tap 'USB Cable'"
+            binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
+        }
     }
 
     private fun setupListeners() {
@@ -181,18 +218,32 @@ class ZeroCastActivity : AppCompatActivity() {
             finish()
         }
 
+        binding.etServerIp.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                updateConnectionHint()
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+
         binding.btnModeUsb.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.etServerIp.setText("127.0.0.1")
             binding.etPort.setText("8888")
-            binding.tvConnectionHint.text = "⚡ USB Active: Zero-latency via 127.0.0.1:8888"
-            binding.tvConnectionHint.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+            updateConnectionHint()
         }
 
         binding.btnModeWifi.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.tvConnectionHint.text = "📡 Wi-Fi Mode: Ensure phone & PC are on the same Wi-Fi"
-            binding.tvConnectionHint.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            if (binding.etServerIp.text.toString().trim() == "127.0.0.1") {
+                val lastWifi = ZeroLinkConfig.getServerIp(this)
+                if (lastWifi != "127.0.0.1" && lastWifi.isNotEmpty()) {
+                    binding.etServerIp.setText(lastWifi)
+                } else {
+                    binding.etServerIp.setText("")
+                }
+            }
+            updateConnectionHint()
         }
 
         binding.btnAutoDiscover.setOnClickListener {
@@ -275,12 +326,7 @@ class ZeroCastActivity : AppCompatActivity() {
         val port = binding.etPort.text.toString().trim().toIntOrNull() ?: 8888
         val fps = if (binding.spinnerFps.selectedItemPosition == 0) 60 else 30
 
-        val bitrateKbps = when (binding.spinnerBitrate.selectedItemPosition) {
-            0 -> 20000
-            1 -> 14000
-            2 -> 8000
-            else -> 4000
-        }
+        val bitrateKbps = BITRATE_VALUES_KBPS.getOrElse(binding.spinnerBitrate.selectedItemPosition) { 18000 }
 
         val dimScreen = binding.switchDimScreen.isChecked
         val (w, h) = getTargetDimensions()
@@ -354,11 +400,13 @@ class ZeroCastActivity : AppCompatActivity() {
 
     private fun updateUiState(streaming: Boolean) {
         isStreaming = streaming
+        val host = binding.etServerIp.text.toString().trim()
+        val isUsb = host == "127.0.0.1" || host == "localhost"
         if (streaming) {
             binding.btnToggleStream.text = "STOP STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.status_red))
-            binding.tvStatusBadge.text = "● LIVE"
-            binding.tvMetricHint.text = "Streaming to ZeroLink Hub"
+            binding.tvStatusBadge.text = if (isUsb) "● LIVE (⚡ USB)" else "● LIVE (📡 Wi-Fi)"
+            binding.tvMetricHint.text = if (isUsb) "⚡ Live via USB Cable (Ultra-Low Latency ADB)" else "📡 Live via Wi-Fi LAN ($host)"
         } else {
             binding.btnToggleStream.text = "START STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))

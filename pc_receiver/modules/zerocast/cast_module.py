@@ -54,6 +54,7 @@ class ModernVideoCanvas(QWidget):
         self.stats: TelemetryStats = TelemetryStats()
         self.resolution_text = "Idle"
         self.codec_text = "None"
+        self.connection_mode = "STANDBY"
         self.input_enabled = True
         self.on_touch_event = None
         self.on_key_event = None
@@ -212,6 +213,7 @@ class ModernVideoCanvas(QWidget):
 
     def _draw_modern_hud(self, painter: QPainter):
         hud_items = [
+            ("MEDIA", getattr(self, "connection_mode", "STANDBY")),
             ("FPS", f"{self.stats.fps:.0f}"),
             ("LATENCY", f"{self.stats.latency_ms:.0f} ms"),
             ("BITRATE", f"{self.stats.bitrate_mbps:.1f} Mbps"),
@@ -853,11 +855,19 @@ class ZeroCastModule(BaseModule):
 
     def _on_client_connected(self, client_info: str):
         self.is_audio_only_stream = False
+        client_ip = client_info.split(":")[0].strip()
+        is_usb = client_ip in ("127.0.0.1", "localhost", "::1")
+        mode_desc = "⚡ USB CABLE" if is_usb else "📡 WI-FI LAN"
+        if self.canvas:
+            self.canvas.connection_mode = mode_desc
         if self.status_pill:
-            self.status_pill.setText("● STREAMING")
-            self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
+            self.status_pill.setText(f"● LIVE: {mode_desc}")
+            if is_usb:
+                self.status_pill.setStyleSheet("color: #38BDF8; background-color: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
+            else:
+                self.status_pill.setStyleSheet("color: #34D399; background-color: #064E3B; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
         if self.log_label:
-            self.log_label.setText(f"Connected: {client_info}")
+            self.log_label.setText(f"Connected: {client_info} [{mode_desc}]")
         self.telemetry.reset()
         self.h264_decoder.reset()
 
@@ -888,14 +898,15 @@ class ZeroCastModule(BaseModule):
 
     def _on_client_disconnected(self):
         self.is_audio_only_stream = False
+        if self.canvas:
+            self.canvas.connection_mode = "STANDBY"
+            self.canvas.current_pixmap = QPixmap()
+            self.canvas.update()
         if self.status_pill:
             self.status_pill.setText("● READY" if self.is_active else "○ INACTIVE")
             self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #141414; border: 1px solid #282828; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         if self.log_label:
             self.log_label.setText("Client disconnected")
-        if self.canvas:
-            self.canvas.current_pixmap = QPixmap()
-            self.canvas.update()
 
     def _on_frame_received(self, payload: bytes, frame_type: int, timestamp_us: int):
         if not self.is_active:

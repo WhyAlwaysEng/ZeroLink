@@ -82,6 +82,7 @@ class StreamForegroundService : LifecycleService() {
     private var streamFps = 60
     private var streamQuality = 75
     private var streamBitrateKbps = 14000
+    private var currentHost = "127.0.0.1"
     private var isH264Mode = true
     private var lastRotation = -1
     private var displayListener: DisplayManager.DisplayListener? = null
@@ -124,6 +125,7 @@ class StreamForegroundService : LifecycleService() {
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
         val port = intent.getIntExtra(EXTRA_PORT, 8888)
+        currentHost = host
 
         if (resultCode != Activity.RESULT_OK || resultData == null) {
             Log.e(TAG, "Invalid MediaProjection intent data for audio-only cast")
@@ -228,6 +230,7 @@ class StreamForegroundService : LifecycleService() {
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
         val port = intent.getIntExtra(EXTRA_PORT, 8888)
+        currentHost = host
         baseWidth = intent.getIntExtra(EXTRA_WIDTH, 1080)
         baseHeight = intent.getIntExtra(EXTRA_HEIGHT, 2400)
         streamDpi = intent.getIntExtra(EXTRA_DPI, 320)
@@ -450,8 +453,14 @@ class StreamForegroundService : LifecycleService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val title = if (isAudioOnly) "ZeroMix Audio Cast" else "ZeroLink Streaming"
-        val text = if (isAudioOnly) "Audio-only streaming to PC (0% Video / Battery Saver)" else "Screen mirroring is actively streaming to PC"
+        val isUsb = currentHost == "127.0.0.1" || currentHost == "localhost"
+        val modeText = if (isUsb) "⚡ USB Cable" else "📡 Wi-Fi ($currentHost)"
+        val title = if (isAudioOnly) "ZeroMix Audio Cast ($modeText)" else "ZeroLink Cast ($modeText)"
+        val text = if (isAudioOnly) {
+            "Audio-only streaming via $modeText (Battery Saver)"
+        } else {
+            "Mirroring screen at ${streamFps}fps (${streamBitrateKbps / 1000}Mbps) via $modeText"
+        }
 
         val notifBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)

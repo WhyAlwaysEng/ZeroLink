@@ -497,8 +497,13 @@ class ZeroCamModule(BaseModule):
 
     def _on_client_connected(self, ip: str, model: str):
         if self.client_pill:
-            self.client_pill.setText(f"📱 Camera: Connected ({model})")
-            self.client_pill.setStyleSheet("color: #059669; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            is_usb = ip.strip() in ("127.0.0.1", "localhost", "::1")
+            mode = "⚡ USB" if is_usb else "📡 Wi-Fi"
+            self.client_pill.setText(f"📱 Cam: Connected via {mode} ({model})")
+            if is_usb:
+                self.client_pill.setStyleSheet("color: #0284C7; background: #F0F9FF; border: 1px solid #BAE6FD; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            else:
+                self.client_pill.setStyleSheet("color: #059669; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
 
     def _on_client_disconnected(self, ip: str):
         if self.client_pill:
