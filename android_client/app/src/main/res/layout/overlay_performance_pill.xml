@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/llOverlayContainer"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingTop="7dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="7dp"
+    android:background="@drawable/bg_floating_pill"
+    android:elevation="12dp">
+
+    <!-- Active Icon -->
+    <TextView
+        android:id="@+id/tvOverlayIcon"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="⚡"
+        android:textSize="13sp"
+        android:layout_marginEnd="6dp" />
+
+    <!-- Performance Telemetry Text -->
+    <TextView
+        android:id="@+id/tvOverlayMetrics"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:fontFamily="sans-serif-medium"
+        android:text="CPU --% • RAM --%"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp" />
+
+    <!-- Dismiss button -->
+    <TextView
+        android:id="@+id/btnOverlayClose"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:paddingStart="6dp"
+        android:paddingEnd="4dp"
+        android:text="✕"
+        android:textColor="#94A3B8"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+</LinearLayout>

@@ -1,0 +1,16 @@
+<resources>
+    <string name="app_name">ZeroCast</string>
+    <string name="title_connection">Connection Mode</string>
+    <string name="title_stream_settings">Stream Configuration</string>
+    <string name="hint_server_ip">Target PC IP (e.g. 192.168.1.50)</string>
+    <string name="hint_port">Port</string>
+    <string name="btn_start_stream">START STREAMING</string>
+    <string name="btn_stop_stream">STOP STREAMING</string>
+    <string name="btn_mode_usb">⚡ USB Cable (127.0.0.1)</string>
+    <string name="btn_mode_wifi">📡 Wi-Fi LAN</string>
+    <string name="lbl_source">Capture Source</string>
+    <string name="lbl_resolution">Resolution</string>
+    <string name="lbl_quality">JPEG Quality (%):</string>
+    <string name="lbl_fps">FPS Cap</string>
+    <string name="lbl_preset">Quick Presets</string>
+</resources>

@@ -1,0 +1,64 @@
+# ==========================================
+# ZeroCast - Git Ignore Configuration
+# ==========================================
+
+# --- Python & PC Receiver ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# --- Android Gradle & Studio ---
+.gradle/
+**/build/
+!src/**/build/
+*.iml
+.idea/
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+local.properties
+.DS_Store
+Captures/
+output.json
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+bin/
+gen/
+.navigation/
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# NDK
+.cxx/
+default.properties
