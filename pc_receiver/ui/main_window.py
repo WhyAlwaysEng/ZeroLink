@@ -17,6 +17,7 @@ from core.module_manager import ModuleManager
 from core.updater import UpdateCheckWorker, CURRENT_VERSION
 from modules.zerocast.cast_module import ZeroCastModule
 from ui.dashboard_view import DashboardView
+from ui.theme import GLOBAL_APP_STYLESHEET
 
 
 def get_local_ip() -> str:
@@ -126,57 +127,7 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(2500, self._check_for_updates)
 
     def _setup_ui(self):
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #000000;
-            }
-            QWidget {
-                color: #FFFFFF;
-                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
-            }
-            QFrame#sidebar {
-                background-color: #050505;
-                border-right: 1px solid #161616;
-            }
-            QPushButton {
-                background-color: #111111;
-                color: #E0E0E0;
-                border: 1px solid #222222;
-                border-radius: 6px;
-                padding: 6px 12px;
-                font-size: 11px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background-color: #1A1A1A;
-                border-color: #333333;
-                color: #FFFFFF;
-            }
-            QPushButton:pressed {
-                background-color: #0A0A0A;
-            }
-            QComboBox {
-                background-color: #0F0F0F;
-                color: #CCCCCC;
-                border: 1px solid #222222;
-                border-radius: 6px;
-                padding: 4px 8px;
-                font-size: 11px;
-            }
-            QComboBox:hover {
-                border-color: #333333;
-            }
-            QComboBox::drop-down {
-                border: none;
-                width: 16px;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #0A0A0A;
-                color: #FFFFFF;
-                selection-background-color: #222222;
-                border: 1px solid #222222;
-            }
-        """)
+        self.setStyleSheet(GLOBAL_APP_STYLESHEET)
 
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)

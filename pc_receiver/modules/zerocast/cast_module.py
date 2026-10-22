@@ -29,6 +29,9 @@ from core.discovery import LanDiscoveryService
 from core.input_controller import InputController
 from core.virtual_cam import VirtualCameraManager
 from core.protocol import TYPE_VIDEO_MJPEG
+from modules.zerocast.manifest import (
+    MODULE_ID, MODULE_NAME, MODULE_ICON, MODULE_DESCRIPTION, DEFAULT_PORT
+)
 
 try:
     import qrcode
@@ -275,19 +278,19 @@ class ZeroCastModule(BaseModule):
 
     @property
     def module_id(self) -> str:
-        return "zerocast"
+        return MODULE_ID
 
     @property
     def display_name(self) -> str:
-        return "ZeroCast"
+        return MODULE_NAME
 
     @property
     def icon_glyph(self) -> str:
-        return "📺"
+        return MODULE_ICON
 
     @property
     def description(self) -> str:
-        return "Low-latency GPU H.264 screen & internal audio mirroring with OBS Virtual Camera."
+        return MODULE_DESCRIPTION
 
     def start_service(self) -> bool:
         self.server.start()
