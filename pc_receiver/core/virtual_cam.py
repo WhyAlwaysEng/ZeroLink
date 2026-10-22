@@ -56,6 +56,10 @@ class VirtualCameraManager:
             self.stop()
             return False
 
+    def send_qimage(self, image: QImage):
+        """Alias for push_frame."""
+        self.push_frame(image)
+
     def push_frame(self, image: QImage):
         """Pushes a QImage frame into the virtual camera queue asynchronously."""
         if not self.is_active or image.isNull():

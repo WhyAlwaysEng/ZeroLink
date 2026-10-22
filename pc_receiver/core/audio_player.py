@@ -91,6 +91,10 @@ class AudioPlayer:
         if self.sink:
             self.sink.setVolume(self.current_volume)
 
+    def play_chunk(self, pcm_data: bytes):
+        """Alias for write_pcm."""
+        self.write_pcm(pcm_data)
+
     def write_pcm(self, pcm_data: bytes):
         """Receives incoming PCM audio bytes from network and buffers them safely."""
         if not self.is_active or not pcm_data:

@@ -28,6 +28,11 @@ class TelemetryTracker:
         self.dropped_frames = 0
         self.last_frame_kb = 0.0
 
+    def update(self, frame_bytes: int, sender_timestamp_us: int) -> TelemetryStats:
+        """Records a frame and returns updated TelemetryStats."""
+        self.record_frame(frame_bytes, sender_timestamp_us)
+        return self.get_stats()
+
     def record_frame(self, frame_bytes: int, sender_timestamp_us: int):
         now = time.time()
         self.total_frames += 1

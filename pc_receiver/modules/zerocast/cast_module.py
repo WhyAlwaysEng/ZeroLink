@@ -268,6 +268,13 @@ class ZeroCastModule(BaseModule):
 
         self.current_codec_name = "MJPEG"
         self._widget: Optional[QWidget] = None
+        self.canvas: Optional[ModernVideoCanvas] = None
+        self.status_pill: Optional[QLabel] = None
+        self.log_label: Optional[QLabel] = None
+        self.btn_power: Optional[QPushButton] = None
+        self.usb_pill: Optional[QLabel] = None
+        self.combo_audio_dev: Optional[QComboBox] = None
+        self.btn_vcam: Optional[QPushButton] = None
 
         self._bind_events()
         self._init_usb_tunnel()
@@ -490,41 +497,48 @@ class ZeroCastModule(BaseModule):
             self.state_changed.emit(self.module_id, True)
 
     def _on_client_connected(self, client_info: str):
-        self.status_pill.setText("● STREAMING")
-        self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
-        self.log_label.setText(f"Connected: {client_info}")
+        if self.status_pill:
+            self.status_pill.setText("● STREAMING")
+            self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
+        if self.log_label:
+            self.log_label.setText(f"Connected: {client_info}")
         self.telemetry.reset()
         self.h264_decoder.reset()
 
     def _on_client_disconnected(self):
-        self.status_pill.setText("● READY" if self.is_active else "○ INACTIVE")
-        self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #141414; border: 1px solid #282828; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
-        self.log_label.setText("Client disconnected")
-        self.canvas.current_pixmap = QPixmap()
-        self.canvas.update()
+        if self.status_pill:
+            self.status_pill.setText("● READY" if self.is_active else "○ INACTIVE")
+            self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #141414; border: 1px solid #282828; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+        if self.log_label:
+            self.log_label.setText("Client disconnected")
+        if self.canvas:
+            self.canvas.current_pixmap = QPixmap()
+            self.canvas.update()
 
     def _on_frame_received(self, payload: bytes, frame_type: int, timestamp_us: int):
         if not self.is_active:
             return
 
-        pixmap = None
-        if frame_type == 1:
+        if frame_type == 0x02:  # TYPE_VIDEO_H264
             self.current_codec_name = "H.264"
-            img = self.h264_decoder.decode(payload)
-            if img:
-                pixmap = QPixmap.fromImage(img)
+            images = self.h264_decoder.decode(payload)
+            for img in images:
                 if self.virtual_cam.is_active:
-                    self.virtual_cam.send_qimage(img)
-        else:
+                    self.virtual_cam.push_frame(img)
+                stats = self.telemetry.update(len(payload), timestamp_us)
+                pixmap = QPixmap.fromImage(img)
+                if self.canvas:
+                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+        else:  # TYPE_VIDEO_MJPEG
             self.current_codec_name = "MJPEG"
             pixmap = QPixmap()
             pixmap.loadFromData(payload)
-            if self.virtual_cam.is_active and not pixmap.isNull():
-                self.virtual_cam.send_qimage(pixmap.toImage())
-
-        if pixmap and not pixmap.isNull():
-            stats = self.telemetry.update(len(payload), timestamp_us)
-            self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+            if not pixmap.isNull():
+                if self.virtual_cam.is_active:
+                    self.virtual_cam.push_frame(pixmap.toImage())
+                stats = self.telemetry.update(len(payload), timestamp_us)
+                if self.canvas:
+                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
 
     def _on_audio_received(self, pcm_data: bytes):
         if self.is_active:

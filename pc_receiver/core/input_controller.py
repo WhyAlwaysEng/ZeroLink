@@ -62,6 +62,9 @@ class InputController:
                     self._run_adb_async(["shell", "input", "swipe", str(x1), str(y1), str(target_x), str(target_y), "150"])
             self.last_press_pos = None
 
+    def send_touch_event(self, action: str, norm_x: float, norm_y: float):
+        self.handle_mouse_event(action, norm_x, norm_y)
+
     def send_back_key(self):
         self._run_adb_async(["shell", "input", "keyevent", "4"])
 
@@ -71,6 +74,9 @@ class InputController:
     def send_keyevent(self, keycode: int):
         """Sends an Android keycode (e.g. 66 for Enter, 67 for Backspace)."""
         self._run_adb_async(["shell", "input", "keyevent", str(keycode)])
+
+    def send_key_event(self, keycode: int):
+        self.send_keyevent(keycode)
 
     def send_text(self, text: str):
         """Sends typed characters directly to the Android device."""

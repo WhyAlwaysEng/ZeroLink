@@ -38,6 +38,10 @@ class H264Decoder:
     def is_available(self) -> bool:
         return self.codec is not None
 
+    def reset(self):
+        """Flushes and reinitializes the codec context for a new stream session."""
+        self._init_decoder()
+
     def decode(self, h264_data: bytes) -> List[QImage]:
         """Decodes raw H.264 NAL bytes and returns decoded QImages with SIMD reformatting."""
         if not self.codec:
