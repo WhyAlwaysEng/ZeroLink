@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <corners android:radius="24dp" />
-    <solid android:color="#E60F172A" /> <!-- Dark glass slate 90% opacity -->
+    <corners android:radius="20dp" />
+    <solid android:color="#E60A0A0A" />
     <stroke
-        android:width="1.5dp"
-        android:color="#38BDF8" /> <!-- Cyan neon edge -->
+        android:width="1dp"
+        android:color="#333333" />
 </shape>

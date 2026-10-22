@@ -66,10 +66,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1.5dp">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -187,10 +187,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1.5dp">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -314,10 +314,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1.5dp">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -378,10 +378,10 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
             app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="18dp"
+            app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
             app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1.5dp">
+            app:strokeWidth="1dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -475,14 +475,14 @@
         <Button
             android:id="@+id/btnToggleStream"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
-            android:layout_marginTop="24dp"
+            android:layout_height="56dp"
+            android:layout_marginTop="22dp"
             android:backgroundTint="@color/primary"
-            android:text="▶ START STREAMING (H.264)"
+            android:text="START STREAMING"
             android:textColor="@color/on_primary"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            app:cornerRadius="16dp" />
+            android:textSize="15sp"
+            android:fontFamily="sans-serif-black"
+            app:cornerRadius="10dp" />
 
         <TextView
             android:id="@+id/tvMetricHint"

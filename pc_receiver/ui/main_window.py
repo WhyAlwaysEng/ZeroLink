@@ -1,5 +1,5 @@
-"""ZeroLink Hub - Master PC Application Window
-Central dashboard and sidebar hosting pluggable ecosystem modules (ZeroCast, ZeroDrop, etc.).
+"""ZeroLink Hub - Master PC Application Window (Monochrome Minimalist Edition)
+Ultra-clean black & white design with hairline borders, generous spacing, and modern typography.
 """
 
 import os
@@ -34,24 +34,24 @@ def get_local_ip() -> str:
 
 
 class NavButton(QPushButton):
-    """Custom sidebar navigation button with active indicator styling."""
-    def __init__(self, text: str, icon_glyph: str, badge: str = "", parent=None):
+    """Minimalist monochrome sidebar item with subtle active indicator."""
+    def __init__(self, text: str, glyph: str, badge: str = "", parent=None):
         super().__init__(parent)
         self.setCheckable(True)
-        self.setFixedHeight(46)
+        self.setFixedHeight(42)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(14, 0, 14, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
-        icon_lbl = QLabel(icon_glyph)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 13))
+        icon_lbl = QLabel(glyph)
+        icon_lbl.setFont(QFont("Segoe UI Emoji", 12))
         icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(icon_lbl)
 
         text_lbl = QLabel(text)
-        text_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.DemiBold))
+        text_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
         text_lbl.setStyleSheet("color: inherit;")
         text_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(text_lbl)
@@ -60,12 +60,13 @@ class NavButton(QPushButton):
 
         if badge:
             badge_lbl = QLabel(badge)
-            badge_lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            badge_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             badge_lbl.setStyleSheet("""
-                background-color: #1A202C;
-                color: #718096;
+                background-color: #121212;
+                color: #555555;
                 padding: 2px 6px;
-                border-radius: 6px;
+                border: 1px solid #1E1E1E;
+                border-radius: 4px;
             """)
             badge_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
             layout.addWidget(badge_lbl)
@@ -73,25 +74,25 @@ class NavButton(QPushButton):
         self.setStyleSheet("""
             NavButton {
                 background-color: transparent;
-                color: #A0AEC0;
+                color: #777777;
                 border: none;
-                border-radius: 8px;
+                border-radius: 6px;
                 text-align: left;
             }
             NavButton:hover {
-                background-color: #161A26;
-                color: #FFFFFF;
+                background-color: #0E0E0E;
+                color: #CCCCCC;
             }
             NavButton:checked {
-                background-color: #1A2234;
-                color: #38BDF8;
-                border-left: 3px solid #00E676;
+                background-color: #141414;
+                color: #FFFFFF;
+                border-left: 2px solid #FFFFFF;
             }
         """)
 
 
 class MainWindow(QMainWindow):
-    """ZeroLink Hub Central Application Window."""
+    """ZeroLink Hub Central Application Window (Minimalist Edition)."""
 
     def __init__(self, port: int = 8888):
         super().__init__()
@@ -103,24 +104,22 @@ class MainWindow(QMainWindow):
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
 
-        self.resize(1200, 780)
-        self.setMinimumSize(900, 560)
+        self.resize(1180, 760)
+        self.setMinimumSize(880, 540)
         self.is_fullscreen = False
 
-        # Module Management
+        # Module Manager
         self.module_manager = ModuleManager(self)
 
-        # Initialize Core ZeroCast Module
+        # Core ZeroCast Module
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
-
-        # By default, start ZeroCast module so it's ready out-of-the-box
         self.mod_zerocast.start_service()
 
         self._setup_ui()
         self._bind_events()
 
-        # Check for updates asynchronously
+        # Update Checker
         self.latest_release_url = "https://github.com/WhyAlwaysEng/ZeroCast/releases"
         self.latest_release_tag = ""
         self.latest_release_notes = ""
@@ -129,38 +128,53 @@ class MainWindow(QMainWindow):
     def _setup_ui(self):
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #0B0D13;
+                background-color: #000000;
             }
             QWidget {
                 color: #FFFFFF;
-                font-family: 'Segoe UI', Inter, sans-serif;
+                font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
             }
             QFrame#sidebar {
-                background-color: #0E1118;
-                border-right: 1px solid #1A202C;
+                background-color: #050505;
+                border-right: 1px solid #161616;
             }
             QPushButton {
-                background-color: #181C26;
-                color: #E2E8F0;
-                border: 1px solid #283042;
+                background-color: #111111;
+                color: #E0E0E0;
+                border: 1px solid #222222;
                 border-radius: 6px;
-                padding: 6px 14px;
-                font-size: 12px;
+                padding: 6px 12px;
+                font-size: 11px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #242B3B;
-                border-color: #3B465E;
+                background-color: #1A1A1A;
+                border-color: #333333;
                 color: #FFFFFF;
             }
+            QPushButton:pressed {
+                background-color: #0A0A0A;
+            }
             QComboBox {
-                background-color: #181C26;
-                color: #E2E8F0;
-                border: 1px solid #283042;
+                background-color: #0F0F0F;
+                color: #CCCCCC;
+                border: 1px solid #222222;
                 border-radius: 6px;
                 padding: 4px 8px;
                 font-size: 11px;
-                font-weight: 500;
+            }
+            QComboBox:hover {
+                border-color: #333333;
+            }
+            QComboBox::drop-down {
+                border: none;
+                width: 16px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #0A0A0A;
+                color: #FFFFFF;
+                selection-background-color: #222222;
+                border: 1px solid #222222;
             }
         """)
 
@@ -173,10 +187,10 @@ class MainWindow(QMainWindow):
         # ==================== Left Sidebar ====================
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(220)
+        sidebar.setFixedWidth(210)
         side_layout = QVBoxLayout(sidebar)
-        side_layout.setContentsMargins(14, 20, 14, 16)
-        side_layout.setSpacing(8)
+        side_layout.setContentsMargins(16, 24, 16, 20)
+        side_layout.setSpacing(6)
 
         # Brand Header
         brand_row = QHBoxLayout()
@@ -185,29 +199,29 @@ class MainWindow(QMainWindow):
         logo_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
         if os.path.exists(logo_path):
             logo_lbl = QLabel()
-            pix = QPixmap(logo_path).scaled(32, 32, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pix = QPixmap(logo_path).scaled(26, 26, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             logo_lbl.setPixmap(pix)
             brand_row.addWidget(logo_lbl)
 
         brand_text_col = QVBoxLayout()
         brand_text_col.setSpacing(0)
         app_name = QLabel("ZeroLink")
-        app_name.setFont(QFont("Segoe UI", 14, QFont.Weight.ExtraBold))
-        app_name.setStyleSheet("color: #FFFFFF; letter-spacing: 0.5px;")
+        app_name.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
+        app_name.setStyleSheet("color: #FFFFFF; letter-spacing: 0.3px;")
         brand_text_col.addWidget(app_name)
 
         hub_badge = QLabel("HUB v1.0")
-        hub_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        hub_badge.setStyleSheet("color: #00E676; letter-spacing: 1px;")
+        hub_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        hub_badge.setStyleSheet("color: #555555; letter-spacing: 0.8px;")
         brand_text_col.addWidget(hub_badge)
 
         brand_row.addLayout(brand_text_col)
         brand_row.addStretch()
         side_layout.addLayout(brand_row)
 
-        side_layout.addSpacing(16)
+        side_layout.addSpacing(20)
 
-        # Nav Buttons Group
+        # Nav Buttons
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
 
@@ -234,39 +248,38 @@ class MainWindow(QMainWindow):
 
         side_layout.addStretch()
 
-        # Auto-Update Pill Button
-        self.btn_update = QPushButton("🚀 Update")
+        # Update Pill
+        self.btn_update = QPushButton("Update Available")
         self.btn_update.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00E676, stop:1 #38BDF8);
-                color: #0B0D13;
-                font-weight: 800;
+                background-color: #FFFFFF;
+                color: #000000;
+                font-weight: 700;
                 border: none;
-                border-radius: 8px;
+                border-radius: 6px;
                 padding: 8px 12px;
             }
             QPushButton:hover {
-                background: #FFFFFF;
-                color: #000000;
+                background-color: #E5E5E5;
             }
         """)
         self.btn_update.setVisible(False)
         self.btn_update.clicked.connect(self._on_update_clicked)
         side_layout.addWidget(self.btn_update)
 
-        # Utility Buttons
-        self.btn_pin = QPushButton("📌 Pin Window")
+        # Bottom Tools
+        self.btn_pin = QPushButton("Pin Window")
         self.btn_pin.setCheckable(True)
         self.btn_pin.clicked.connect(self._toggle_pin)
         side_layout.addWidget(self.btn_pin)
 
-        self.btn_fullscreen = QPushButton("🔲 Fullscreen (F11)")
+        self.btn_fullscreen = QPushButton("Fullscreen (F11)")
         self.btn_fullscreen.clicked.connect(self._toggle_fullscreen)
         side_layout.addWidget(self.btn_fullscreen)
 
         main_layout.addWidget(sidebar)
 
-        # ==================== Right Viewport (QStackedWidget) ====================
+        # ==================== Right Viewport ====================
         self.stacked = QStackedWidget(self)
 
         # Page 0: Dashboard
@@ -281,31 +294,32 @@ class MainWindow(QMainWindow):
         self.stacked.addWidget(self.cast_widget)
 
         # Page 2: ZeroDrop Preview
-        drop_page = self._create_placeholder_page("📁 ZeroDrop - Ultra-Fast Local File Transfer",
-                                                 "Coming in v1.1: Drag and drop files from Windows straight into Android storage over LAN or USB at wire-speed.")
+        drop_page = self._create_placeholder_page("ZeroDrop — Fast File Sharing",
+                                                 "Peer-to-peer LAN / USB file and folder transfers directly between PC and mobile storage without internet.")
         self.stacked.addWidget(drop_page)
 
         # Page 3: ZeroClip Preview
-        clip_page = self._create_placeholder_page("📋 ZeroClip - Universal Clipboard Sync",
-                                                 "Coming in v1.1: Instant two-way clipboard sync. Copy text or links on PC and paste directly on mobile.")
+        clip_page = self._create_placeholder_page("ZeroClip — Universal Clipboard",
+                                                 "Encrypted two-way clipboard sync. Copy text or links on PC and paste directly on mobile.")
         self.stacked.addWidget(clip_page)
 
         main_layout.addWidget(self.stacked, 1)
 
     def _create_placeholder_page(self, title: str, subtitle: str) -> QWidget:
         page = QWidget()
+        page.setStyleSheet("background-color: #000000;")
         l = QVBoxLayout(page)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        l.setSpacing(12)
+        l.setSpacing(14)
 
         t_lbl = QLabel(title)
-        t_lbl.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
+        t_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         t_lbl.setStyleSheet("color: #FFFFFF;")
         l.addWidget(t_lbl)
 
         s_lbl = QLabel(subtitle)
-        s_lbl.setFont(QFont("Segoe UI", 12))
-        s_lbl.setStyleSheet("color: #A0AEC0; max-width: 600px;")
+        s_lbl.setFont(QFont("Segoe UI", 11))
+        s_lbl.setStyleSheet("color: #666666; max-width: 500px;")
         s_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         s_lbl.setWordWrap(True)
         l.addWidget(s_lbl)
@@ -333,17 +347,17 @@ class MainWindow(QMainWindow):
         self.is_fullscreen = not self.is_fullscreen
         if self.is_fullscreen:
             self.showFullScreen()
-            self.btn_fullscreen.setText("🔲 Exit Fullscreen")
+            self.btn_fullscreen.setText("Exit Fullscreen")
         else:
             self.showNormal()
-            self.btn_fullscreen.setText("🔲 Fullscreen (F11)")
+            self.btn_fullscreen.setText("Fullscreen (F11)")
 
     def _toggle_pin(self):
         is_pinned = self.btn_pin.isChecked()
         flags = self.windowFlags()
         if is_pinned:
             self.setWindowFlags(flags | Qt.WindowType.WindowStaysOnTopHint)
-            self.btn_pin.setStyleSheet("background-color: #0E3320; color: #00E676; border: 1px solid #00E676;")
+            self.btn_pin.setStyleSheet("background-color: #FFFFFF; color: #000000; font-weight: 700; border: none;")
         else:
             self.setWindowFlags(flags & ~Qt.WindowType.WindowStaysOnTopHint)
             self.btn_pin.setStyleSheet("")
@@ -357,7 +371,6 @@ class MainWindow(QMainWindow):
         else:
             super().keyPressEvent(event)
 
-    # ----------------- GitHub Releases Auto-Update -----------------
     def _check_for_updates(self):
         self.update_worker = UpdateCheckWorker(CURRENT_VERSION, self)
         self.update_worker.update_available.connect(self._on_update_available)
@@ -367,16 +380,16 @@ class MainWindow(QMainWindow):
         self.latest_release_url = html_url
         self.latest_release_tag = tag_name
         self.latest_release_notes = notes
-        self.btn_update.setText(f"🚀 New {tag_name}")
+        self.btn_update.setText(f"Update: {tag_name}")
         self.btn_update.setVisible(True)
 
     def _on_update_clicked(self):
         box = QMessageBox(self)
-        box.setWindowTitle("ZeroLink Update Available")
-        box.setText(f"<h3>🎉 New Version Available: {self.latest_release_tag}</h3>"
-                    f"<p>Current Version: <b>v{CURRENT_VERSION}</b></p>"
-                    f"<p>Would you like to open GitHub Releases to download the latest update?</p>")
-        download_btn = box.addButton("Open Download Page", QMessageBox.ButtonRole.AcceptRole)
+        box.setWindowTitle("ZeroLink Update")
+        box.setText(f"<h3>New Release Available: {self.latest_release_tag}</h3>"
+                    f"<p>Current: v{CURRENT_VERSION}</p>"
+                    f"<p>Open download page on GitHub?</p>")
+        download_btn = box.addButton("Open Page", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
         box.exec()
 
