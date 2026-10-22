@@ -354,6 +354,40 @@ class DashboardView(QWidget):
         self.cards["zeromix"] = card_mix
         grid.addWidget(card_mix, 1, 1)
 
+        # ZeroDisplay
+        mod_display = self.module_manager.get_module("zerodisplay")
+        display_active = mod_display.is_active if mod_display else False
+        card_display = ModuleCard(
+            module_id="zerodisplay",
+            title="ZeroDisplay",
+            glyph="🖥️",
+            desc="Wireless PC Screen Mirror & Remote Touch Control. Turn your Android tablet or phone into a remote display with full touch gestures.",
+            is_enabled=display_active,
+            is_available=True,
+            port_info="Port 8892 (TCP)"
+        )
+        card_display.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_display.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zerodisplay"] = card_display
+        grid.addWidget(card_display, 2, 0)
+
+        # ZeroCam
+        mod_cam = self.module_manager.get_module("zerocam")
+        cam_active = mod_cam.is_active if mod_cam else False
+        card_cam = ModuleCard(
+            module_id="zerocam",
+            title="ZeroCam [Beta]",
+            glyph="📷",
+            desc="Wireless mobile webcam & OBS/Discord Virtual Camera Feeder. [Status: Beta / อยู่ระหว่างปรับปรุงประสิทธิภาพและความคมชัด]",
+            is_enabled=cam_active,
+            is_available=True,
+            port_info="Port 8893 (TCP)"
+        )
+        card_cam.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_cam.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zerocam"] = card_cam
+        grid.addWidget(card_cam, 2, 1)
+
         layout.addLayout(grid)
         layout.addStretch()
 
