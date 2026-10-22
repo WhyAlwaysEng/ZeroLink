@@ -1,6 +1,7 @@
 """ZeroLink Hub - Active Connections & Device Bridge View
 Displays all live client connections across ZeroCast, ZeroMix, ZeroClip, and ZeroDrop modules.
-Allows independent inspection and individual disconnection.
+Provides both a Per-Device Topology overview (e.g. Phone 1 on ZeroCast, Phone 2 on ZeroMix)
+and per-module breakdown with individual disconnection controls.
 """
 
 import time
@@ -9,13 +10,119 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QScrollArea, QMessageBox
+    QFrame, QScrollArea
 )
 
 from modules.zerocast.cast_module import ZeroCastModule
 from modules.zerodrop.drop_module import ZeroDropModule
 from modules.zeroclip.clip_module import ZeroClipModule
 from modules.zeromix.mix_module import ZeroMixModule
+
+
+class DeviceSummaryCard(QFrame):
+    """Card representing a physical client device and all modules it is linked to."""
+
+    def __init__(self, device_data: Dict, on_disconnect_all_callback, parent=None):
+        super().__init__(parent)
+        self.device_data = device_data
+        self.on_disconnect_all = on_disconnect_all_callback
+
+        self.setStyleSheet("""
+            DeviceSummaryCard {
+                background-color: #FFFFFF;
+                border: 1px solid #D1D5DB;
+                border-radius: 12px;
+                padding: 14px 18px;
+            }
+            DeviceSummaryCard:hover {
+                border-color: #9CA3AF;
+            }
+        """)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        # Top row: Device identification & Disconnect All button
+        top_row = QHBoxLayout()
+        top_row.setSpacing(10)
+
+        icon_lbl = QLabel("📱")
+        icon_lbl.setFont(QFont("Segoe UI Emoji", 15))
+        top_row.addWidget(icon_lbl)
+
+        model_name = device_data.get("model", "Android Device")
+        lbl_name = QLabel(model_name)
+        lbl_name.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        lbl_name.setStyleSheet("color: #111827;")
+        top_row.addWidget(lbl_name)
+
+        ip = device_data.get("ip", "127.0.0.1")
+        is_usb = ip in ("127.0.0.1", "localhost")
+        tunnel_badge = QLabel("⚡ USB ADB" if is_usb else "📶 Wi-Fi LAN")
+        tunnel_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        if is_usb:
+            tunnel_badge.setStyleSheet("""
+                background-color: #111827; color: #FFFFFF;
+                padding: 3px 8px; border-radius: 4px;
+            """)
+        else:
+            tunnel_badge.setStyleSheet("""
+                background-color: #E0E7FF; color: #3730A3;
+                padding: 3px 8px; border-radius: 4px;
+            """)
+        top_row.addWidget(tunnel_badge)
+
+        lbl_ip = QLabel(f"IP: {ip}")
+        lbl_ip.setStyleSheet("color: #6B7280; font-size: 11px;")
+        top_row.addWidget(lbl_ip)
+
+        top_row.addStretch()
+
+        btn_disconnect_all = QPushButton("Disconnect Device")
+        btn_disconnect_all.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_disconnect_all.setStyleSheet("""
+            QPushButton {
+                background-color: #FEE2E2;
+                color: #B91C1C;
+                border: 1px solid #FECACA;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 11px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #FCA5A5;
+                color: #7F1D1D;
+            }
+        """)
+        btn_disconnect_all.clicked.connect(lambda: self.on_disconnect_all(ip))
+        top_row.addWidget(btn_disconnect_all)
+        layout.addLayout(top_row)
+
+        # Bottom row: Active module badges with live stats
+        mod_row = QHBoxLayout()
+        mod_row.setSpacing(8)
+
+        lbl_connected_to = QLabel("Connected to:")
+        lbl_connected_to.setStyleSheet("color: #6B7280; font-size: 11px; font-weight: 600;")
+        mod_row.addWidget(lbl_connected_to)
+
+        modules = device_data.get("modules", [])
+        for mod in modules:
+            m_badge = QLabel(f"{mod.get('glyph', '🔌')} {mod.get('name', 'Module')}{(' (' + mod.get('extra', '') + ')') if mod.get('extra') else ''}")
+            m_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+            m_badge.setStyleSheet("""
+                background-color: #F3F4F6;
+                color: #1F2937;
+                border: 1px solid #E5E7EB;
+                border-radius: 6px;
+                padding: 3px 8px;
+            """)
+            mod_row.addWidget(m_badge)
+
+        mod_row.addStretch()
+        layout.addLayout(mod_row)
 
 
 class ClientRowWidget(QFrame):
@@ -51,7 +158,7 @@ class ClientRowWidget(QFrame):
 
         # Device Info
         info_col = QVBoxLayout()
-        info_col.setSpacing(3)
+        info_col.setSpacing(4)
 
         name_row = QHBoxLayout()
         name_row.setSpacing(8)
@@ -92,6 +199,22 @@ class ClientRowWidget(QFrame):
         lbl_mode = QLabel(f"Mode: {mode}")
         lbl_mode.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 500;")
         details_row.addWidget(lbl_mode)
+
+        # Streaming Stats if present (e.g. ZeroCast)
+        if "latency" in client_info:
+            lbl_lat = QLabel(f"⚡ {client_info['latency']}")
+            lbl_lat.setStyleSheet("color: #2563EB; font-size: 11px; font-weight: 600;")
+            details_row.addWidget(lbl_lat)
+
+        if "bitrate" in client_info:
+            lbl_br = QLabel(f"📊 {client_info['bitrate']}")
+            lbl_br.setStyleSheet("color: #7C3AED; font-size: 11px; font-weight: 600;")
+            details_row.addWidget(lbl_br)
+
+        if "fps" in client_info:
+            lbl_fps = QLabel(f"🎮 {client_info['fps']}")
+            lbl_fps.setStyleSheet("color: #059669; font-size: 11px; font-weight: 600;")
+            details_row.addWidget(lbl_fps)
 
         self.lbl_duration = QLabel("Duration: 00m 00s")
         self.lbl_duration.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
@@ -236,9 +359,9 @@ class ConnectionsView(QWidget):
         if hasattr(self.mod_zerodrop, "service"):
             self.mod_zerodrop.service.clients_updated.connect(self.refresh_devices)
 
-        # 1-second timer to tick durations
+        # Auto-refresh timer for durations & live stats
         self.timer = QTimer(self)
-        self.timer.timeout.connect(self._tick_durations)
+        self.timer.timeout.connect(self._on_tick)
         self.timer.start(1000)
 
         self.refresh_devices()
@@ -322,18 +445,52 @@ class ConnectionsView(QWidget):
         self.cards_container = QWidget()
         self.cards_layout = QVBoxLayout(self.cards_container)
         self.cards_layout.setContentsMargins(0, 0, 0, 0)
-        self.cards_layout.setSpacing(14)
+        self.cards_layout.setSpacing(16)
         scroll.setWidget(self.cards_container)
 
         root_layout.addWidget(scroll, 1)
 
+    def disconnect_device_all(self, ip: str):
+        """Disconnects a physical device across all running services."""
+        if hasattr(self.mod_zerocast, "server"):
+            self.mod_zerocast.server.disconnect_client(ip)
+        if hasattr(self.mod_zeromix, "service"):
+            self.mod_zeromix.service.disconnect_client(ip)
+        if hasattr(self.mod_zeroclip, "service"):
+            self.mod_zeroclip.service.disconnect_client(ip)
+        if hasattr(self.mod_zerodrop, "service"):
+            self.mod_zerodrop.service.disconnect_client(ip)
+        self.refresh_devices()
+
     def refresh_devices(self):
         """Polls connected clients across all 4 modules and reconstructs cards."""
-        # 1. Fetch clients
+        # 1. Fetch clients from all services
         cast_clients = self.mod_zerocast.server.get_connected_clients() if hasattr(self.mod_zerocast, "server") else []
+        for c in cast_clients:
+            c["module"] = "ZeroCast"
+            c["glyph"] = "📺"
+            if hasattr(self.mod_zerocast, "stats"):
+                c["fps"] = f"{self.mod_zerocast.stats.fps:.0f} FPS"
+                c["latency"] = f"{self.mod_zerocast.stats.latency_ms:.0f} ms"
+                c["bitrate"] = f"{self.mod_zerocast.stats.bitrate_mbps:.1f} Mbps"
+
         mix_clients = self.mod_zeromix.service.get_connected_clients() if hasattr(self.mod_zeromix, "service") else []
+        for c in mix_clients:
+            c["module"] = "ZeroMix"
+            c["glyph"] = "🎛️"
+            c["mode"] = "Mixer & Remote"
+
         clip_clients = self.mod_zeroclip.service.get_connected_clients() if hasattr(self.mod_zeroclip, "service") else []
+        for c in clip_clients:
+            c["module"] = "ZeroClip"
+            c["glyph"] = "📋"
+            c["mode"] = "Clipboard Sync"
+
         drop_clients = self.mod_zerodrop.service.get_connected_clients() if hasattr(self.mod_zerodrop, "service") else []
+        for c in drop_clients:
+            c["module"] = "ZeroDrop"
+            c["glyph"] = "📁"
+            c["mode"] = "File Drop"
 
         all_clients = cast_clients + mix_clients + clip_clients + drop_clients
         total = len(all_clients)
@@ -353,12 +510,47 @@ class ConnectionsView(QWidget):
         ])
         self.lbl_services_status.setText(f"Services: {active_count}/4 Online")
 
-        # Clear existing cards
+        # Clear existing layout
         while self.cards_layout.count() > 0:
             item = self.cards_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         self.cards.clear()
+
+        # ==================== Section 1: Active Devices Topology ====================
+        # Group by physical device (IP)
+        devices_map: Dict[str, Dict] = {}
+        for c in all_clients:
+            ip = c.get("ip", "127.0.0.1")
+            if ip not in devices_map:
+                devices_map[ip] = {
+                    "ip": ip,
+                    "model": c.get("model", "Android Device"),
+                    "modules": []
+                }
+            # Add module info
+            extra = c.get("fps") or c.get("mode") or ""
+            devices_map[ip]["modules"].append({
+                "name": c.get("module", "Module"),
+                "glyph": c.get("glyph", "🔌"),
+                "extra": extra
+            })
+
+        if devices_map:
+            sec_dev_lbl = QLabel("📱 ACTIVE DEVICES OVERVIEW (PHYSICAL PHONES / TABLETS)")
+            sec_dev_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+            sec_dev_lbl.setStyleSheet("color: #4B5563; letter-spacing: 0.5px;")
+            self.cards_layout.addWidget(sec_dev_lbl)
+
+            for ip, d_info in devices_map.items():
+                card = DeviceSummaryCard(d_info, on_disconnect_all_callback=self.disconnect_device_all, parent=self.cards_container)
+                self.cards_layout.addWidget(card)
+
+        # ==================== Section 2: Module Breakdown ====================
+        sec_mod_lbl = QLabel("🔌 MODULE CONNECTIONS & GRANULAR CONTROLS")
+        sec_mod_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        sec_mod_lbl.setStyleSheet("color: #4B5563; letter-spacing: 0.5px; margin-top: 8px;")
+        self.cards_layout.addWidget(sec_mod_lbl)
 
         # Add ZeroCast card
         card_cast = ModuleConnectionsCard(
@@ -414,6 +606,6 @@ class ConnectionsView(QWidget):
 
         self.cards_layout.addStretch()
 
-    def _tick_durations(self):
+    def _on_tick(self):
         for c in self.cards:
             c.update_durations()

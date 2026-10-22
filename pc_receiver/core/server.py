@@ -219,5 +219,12 @@ class StreamServer(QObject):
 
     def disconnect_client(self, addr: Optional[str] = None):
         """Forcefully disconnects current stream client."""
-        self._close_client()
+        if addr is None:
+            self._close_client()
+            return
+        if self.current_client_info:
+            c_ip = self.current_client_info.get("ip")
+            c_addr = self.current_client_info.get("addr")
+            if addr in (c_ip, c_addr) or not addr:
+                self._close_client()
 
