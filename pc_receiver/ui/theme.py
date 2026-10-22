@@ -1,23 +1,23 @@
-"""ZeroLink Hub - Theme & Styling Definitions
-Central Minimalist Monochrome Palette & Reusable Stylesheets.
+"""ZeroLink Hub - Theme & Styling Definitions (Light Minimalist Edition)
+Crisp white primary palette with high-contrast black typography, hairlines, and soft shading.
 """
 
 # Palette Constants
-COLOR_BG_VOID = "#000000"
-COLOR_BG_SIDEBAR = "#050505"
-COLOR_BG_SURFACE = "#0D0D0D"
-COLOR_BG_SURFACE_HOVER = "#141414"
-COLOR_BORDER_HAIRLINE = "#1A1A1A"
-COLOR_BORDER_STRONG = "#282828"
+COLOR_BG_MAIN = "#F9FAFB"
+COLOR_BG_SIDEBAR = "#FFFFFF"
+COLOR_BG_SURFACE = "#FFFFFF"
+COLOR_BG_SURFACE_HOVER = "#F3F4F6"
+COLOR_BORDER_HAIRLINE = "#E5E7EB"
+COLOR_BORDER_STRONG = "#D1D5DB"
 
-COLOR_TEXT_PRIMARY = "#FFFFFF"
-COLOR_TEXT_SECONDARY = "#888888"
-COLOR_TEXT_MUTED = "#555555"
+COLOR_TEXT_PRIMARY = "#111827"
+COLOR_TEXT_SECONDARY = "#4B5563"
+COLOR_TEXT_MUTED = "#9CA3AF"
 
 # Global Hub Application Stylesheet
 GLOBAL_APP_STYLESHEET = f"""
 QMainWindow {{
-    background-color: {COLOR_BG_VOID};
+    background-color: {COLOR_BG_MAIN};
 }}
 QWidget {{
     color: {COLOR_TEXT_PRIMARY};
@@ -28,8 +28,8 @@ QFrame#sidebar {{
     border-right: 1px solid {COLOR_BORDER_HAIRLINE};
 }}
 QPushButton {{
-    background-color: #111111;
-    color: #E0E0E0;
+    background-color: #FFFFFF;
+    color: {COLOR_TEXT_PRIMARY};
     border: 1px solid {COLOR_BORDER_STRONG};
     border-radius: 6px;
     padding: 6px 14px;
@@ -37,32 +37,32 @@ QPushButton {{
     font-weight: 600;
 }}
 QPushButton:hover {{
-    background-color: #1C1C1C;
-    border-color: #404040;
-    color: #FFFFFF;
+    background-color: #F3F4F6;
+    border-color: #9CA3AF;
 }}
 QPushButton:pressed {{
-    background-color: #0A0A0A;
+    background-color: #E5E7EB;
 }}
 QComboBox {{
-    background-color: #111111;
-    color: #CCCCCC;
+    background-color: #FFFFFF;
+    color: {COLOR_TEXT_PRIMARY};
     border: 1px solid {COLOR_BORDER_STRONG};
     border-radius: 6px;
     padding: 4px 8px;
     font-size: 11px;
 }}
 QComboBox:hover {{
-    border-color: #404040;
+    border-color: #9CA3AF;
 }}
 QComboBox::drop-down {{
     border: none;
     width: 16px;
 }}
 QComboBox QAbstractItemView {{
-    background-color: #0A0A0A;
-    color: #FFFFFF;
-    selection-background-color: #222222;
-    border: 1px solid {COLOR_BORDER_STRONG};
+    background-color: #FFFFFF;
+    color: {COLOR_TEXT_PRIMARY};
+    selection-background-color: #F3F4F6;
+    selection-color: #000000;
+    border: 1px solid {COLOR_BORDER_HAIRLINE};
 }}
 """

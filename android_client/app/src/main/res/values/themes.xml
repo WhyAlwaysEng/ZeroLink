@@ -1,7 +1,8 @@
 <resources>
-    <style name="Theme.ZeroCast" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Theme.ZeroCast" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/primary</item>
-        <item name="android:windowBackground">@color/background_dark</item>
-        <item name="android:statusBarColor">@color/background_dark</item>
+        <item name="android:windowBackground">@color/background</item>
+        <item name="android:statusBarColor">@color/background</item>
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 </resources>

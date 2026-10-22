@@ -1,18 +1,18 @@
-"""ZeroLink Hub - Dashboard View (Monochrome Minimalist Edition)
-Clean, uncluttered, pure black & white design with hairline borders and high-contrast typography.
+"""ZeroLink Hub - Dashboard View (Light Minimalist Edition)
+Crisp white cards with subtle hairline borders, soft drop shadows, and high-contrast black typography.
 """
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QScrollArea
+    QFrame, QGridLayout, QScrollArea, QGraphicsDropShadowEffect
 )
 from core.module_manager import ModuleManager
 
 
 class ModuleCard(QFrame):
-    """Ultra-clean minimal monochrome card with hairline border."""
+    """Crisp white minimal card with subtle hairline border and soft shadow."""
     toggle_clicked = pyqtSignal(str, bool)  # module_id, target_state
     open_clicked = pyqtSignal(str)          # module_id
 
@@ -27,40 +27,47 @@ class ModuleCard(QFrame):
         self.setObjectName("moduleCard")
         self.setStyleSheet("""
             QFrame#moduleCard {
-                background-color: #0D0D0D;
-                border: 1px solid #1C1C1C;
-                border-radius: 8px;
+                background-color: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 12px;
             }
             QFrame#moduleCard:hover {
-                border-color: #333333;
-                background-color: #121212;
+                border-color: #D1D5DB;
+                background-color: #FAFAFA;
             }
         """)
 
+        # Soft ambient shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(16)
+        shadow.setColor(QColor(0, 0, 0, 10))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(14)
+        layout.setSpacing(12)
 
         # Header: Glyph + Title + Status Pill
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
         icon_lbl = QLabel(glyph)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 18))
+        icon_lbl.setFont(QFont("Segoe UI Emoji", 20))
         header_row.addWidget(icon_lbl)
 
         title_col = QVBoxLayout()
         title_col.setSpacing(2)
 
         title_lbl = QLabel(title)
-        title_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        title_lbl.setStyleSheet("color: #FFFFFF; letter-spacing: 0.3px;")
+        title_lbl.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_lbl.setStyleSheet("color: #111827; letter-spacing: -0.2px;")
         title_col.addWidget(title_lbl)
 
         if port_info:
             port_lbl = QLabel(port_info)
             port_lbl.setFont(QFont("Consolas", 10))
-            port_lbl.setStyleSheet("color: #666666;")
+            port_lbl.setStyleSheet("color: #6B7280;")
             title_col.addWidget(port_lbl)
 
         header_row.addLayout(title_col)
@@ -77,7 +84,7 @@ class ModuleCard(QFrame):
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
         desc_lbl.setFont(QFont("Segoe UI", 11))
-        desc_lbl.setStyleSheet("color: #888888; line-height: 1.5;")
+        desc_lbl.setStyleSheet("color: #4B5563; line-height: 1.5;")
         layout.addWidget(desc_lbl)
 
         layout.addStretch()
@@ -95,24 +102,24 @@ class ModuleCard(QFrame):
             self.open_btn = QPushButton("Open Viewport →")
             self.open_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: transparent;
-                    color: #FFFFFF;
-                    border: 1px solid #282828;
+                    background-color: #FFFFFF;
+                    color: #111827;
+                    border: 1px solid #D1D5DB;
                     border-radius: 6px;
                     padding: 8px 16px;
                     font-size: 11px;
                     font-weight: 600;
                 }
                 QPushButton:hover {
-                    background-color: #1A1A1A;
-                    border-color: #444444;
+                    background-color: #F3F4F6;
+                    border-color: #9CA3AF;
                 }
             """)
             self.open_btn.clicked.connect(lambda: self.open_clicked.emit(self.module_id))
             footer_row.addWidget(self.open_btn)
         else:
             coming_lbl = QLabel("In Development")
-            coming_lbl.setStyleSheet("color: #555555; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;")
+            coming_lbl.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;")
             footer_row.addWidget(coming_lbl)
 
         layout.addLayout(footer_row)
@@ -121,34 +128,37 @@ class ModuleCard(QFrame):
         if not self.is_available:
             self.status_pill.setText("UPCOMING")
             self.status_pill.setStyleSheet("""
-                background-color: #161616;
-                color: #555555;
+                background-color: #F3F4F6;
+                color: #9CA3AF;
                 padding: 3px 8px;
-                border: 1px solid #222222;
+                border: 1px solid #E5E7EB;
                 border-radius: 4px;
                 font-size: 9px;
+                font-weight: bold;
                 letter-spacing: 0.5px;
             """)
         elif self.is_enabled:
             self.status_pill.setText("● ACTIVE")
             self.status_pill.setStyleSheet("""
-                background-color: #111111;
-                color: #FFFFFF;
+                background-color: #F0FDF4;
+                color: #166534;
                 padding: 3px 8px;
-                border: 1px solid #333333;
+                border: 1px solid #BBF7D0;
                 border-radius: 4px;
                 font-size: 9px;
+                font-weight: bold;
                 letter-spacing: 0.5px;
             """)
         else:
             self.status_pill.setText("○ INACTIVE")
             self.status_pill.setStyleSheet("""
-                background-color: #111111;
-                color: #555555;
+                background-color: #F3F4F6;
+                color: #6B7280;
                 padding: 3px 8px;
-                border: 1px solid #1E1E1E;
+                border: 1px solid #E5E7EB;
                 border-radius: 4px;
                 font-size: 9px;
+                font-weight: bold;
                 letter-spacing: 0.5px;
             """)
 
@@ -157,26 +167,25 @@ class ModuleCard(QFrame):
             self.toggle_btn.setText("Disable Module")
             self.toggle_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #141414;
-                    color: #888888;
-                    border: 1px solid #262626;
+                    background-color: #F3F4F6;
+                    color: #4B5563;
+                    border: 1px solid #D1D5DB;
                     border-radius: 6px;
                     padding: 8px 16px;
                     font-size: 11px;
                     font-weight: 600;
                 }
                 QPushButton:hover {
-                    background-color: #202020;
-                    color: #FFFFFF;
-                    border-color: #404040;
+                    background-color: #E5E7EB;
+                    color: #111827;
                 }
             """)
         else:
             self.toggle_btn.setText("Enable Module")
             self.toggle_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #FFFFFF;
-                    color: #000000;
+                    background-color: #000000;
+                    color: #FFFFFF;
                     border: none;
                     border-radius: 6px;
                     padding: 8px 16px;
@@ -184,7 +193,7 @@ class ModuleCard(QFrame):
                     font-weight: 700;
                 }
                 QPushButton:hover {
-                    background-color: #E2E2E2;
+                    background-color: #1F2937;
                 }
             """)
 
@@ -200,7 +209,7 @@ class ModuleCard(QFrame):
 
 
 class DashboardView(QWidget):
-    """Monochrome Minimalist Dashboard."""
+    """Crisp White Minimalist Dashboard."""
     navigate_to_module = pyqtSignal(str)
     module_toggle_requested = pyqtSignal(str, bool)
 
@@ -216,13 +225,13 @@ class DashboardView(QWidget):
     def _setup_ui(self):
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background: #000000; }")
+        scroll.setStyleSheet("QScrollArea { border: none; background: #F9FAFB; }")
 
         container = QWidget()
-        container.setStyleSheet("background-color: #000000;")
+        container.setStyleSheet("background-color: #F9FAFB;")
         layout = QVBoxLayout(container)
         layout.setContentsMargins(40, 36, 40, 36)
-        layout.setSpacing(32)
+        layout.setSpacing(28)
 
         # Top Bar: Page Title & System IP Info
         header_row = QHBoxLayout()
@@ -231,32 +240,32 @@ class DashboardView(QWidget):
         title_col = QVBoxLayout()
         title_col.setSpacing(4)
         title = QLabel("Overview")
-        title.setFont(QFont("Segoe UI", 22, QFont.Weight.Bold))
-        title.setStyleSheet("color: #FFFFFF; letter-spacing: -0.5px;")
+        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
+        title.setStyleSheet("color: #111827; letter-spacing: -0.5px;")
         title_col.addWidget(title)
 
-        subtitle = QLabel("Cross-Device Bridge • Windows & Android")
+        subtitle = QLabel("Cross-Device Bridge • Windows & Android Ecosystem")
         subtitle.setFont(QFont("Segoe UI", 12))
-        subtitle.setStyleSheet("color: #666666;")
+        subtitle.setStyleSheet("color: #6B7280;")
         title_col.addWidget(subtitle)
         header_row.addLayout(title_col)
 
         header_row.addStretch()
 
         ip_badge = QFrame()
-        ip_badge.setStyleSheet("background-color: #0C0C0C; border: 1px solid #1C1C1C; border-radius: 6px; padding: 6px 14px;")
+        ip_badge.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 6px 14px;")
         ip_layout = QHBoxLayout(ip_badge)
         ip_layout.setContentsMargins(8, 4, 8, 4)
         ip_layout.setSpacing(8)
 
         ip_lbl = QLabel("IP")
         ip_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        ip_lbl.setStyleSheet("color: #555555;")
+        ip_lbl.setStyleSheet("color: #9CA3AF;")
         ip_layout.addWidget(ip_lbl)
 
         ip_val = QLabel(self.local_ip)
-        ip_val.setFont(QFont("Consolas", 11, QFont.Weight.Bold))
-        ip_val.setStyleSheet("color: #FFFFFF;")
+        ip_val.setFont(QFont("Consolas", 12, QFont.Weight.Bold))
+        ip_val.setStyleSheet("color: #111827;")
         ip_layout.addWidget(ip_val)
 
         header_row.addWidget(ip_badge)
@@ -265,17 +274,17 @@ class DashboardView(QWidget):
         # Section Divider & Label
         divider = QFrame()
         divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet("border: none; border-top: 1px solid #161616;")
+        divider.setStyleSheet("border: none; border-top: 1px solid #E5E7EB;")
         layout.addWidget(divider)
 
-        sec_lbl = QLabel("MODULES")
+        sec_lbl = QLabel("PLUGGABLE ECOSYSTEM MODULES")
         sec_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        sec_lbl.setStyleSheet("color: #555555; letter-spacing: 1.5px;")
+        sec_lbl.setStyleSheet("color: #9CA3AF; letter-spacing: 1.2px;")
         layout.addWidget(sec_lbl)
 
         # Modules Grid
         grid = QGridLayout()
-        grid.setSpacing(16)
+        grid.setSpacing(18)
 
         # ZeroCast
         mod_cast = self.module_manager.get_module("zerocast")
@@ -284,7 +293,7 @@ class DashboardView(QWidget):
             module_id="zerocast",
             title="ZeroCast",
             glyph="📺",
-            desc="Low-latency GPU H.264 screen & internal audio mirroring with OBS Virtual Camera and reverse control.",
+            desc="Ultra-low latency GPU H.264 screen & internal audio mirroring with OBS Virtual Camera and reverse control.",
             is_enabled=cast_active,
             is_available=True,
             port_info="Port 8888 (TCP)"
@@ -299,7 +308,7 @@ class DashboardView(QWidget):
             module_id="zerodrop",
             title="ZeroDrop",
             glyph="📁",
-            desc="Local peer-to-peer file and directory transfers between PC and Android over LAN or USB cable.",
+            desc="Local peer-to-peer file and directory transfers between PC and Android over LAN or USB cable without internet.",
             is_enabled=False,
             is_available=False,
             port_info="Port 8890"
@@ -312,10 +321,10 @@ class DashboardView(QWidget):
             module_id="zeroclip",
             title="ZeroClip",
             glyph="📋",
-            desc="Real-time encrypted two-way clipboard text and link synchronization between devices.",
+            desc="Real-time encrypted two-way clipboard text and link synchronization between PC and mobile device.",
             is_enabled=False,
             is_available=False,
-            port_info="Sync Stream"
+            port_info="Encrypted Sync"
         )
         self.cards["zeroclip"] = card_clip
         grid.addWidget(card_clip, 1, 0)
@@ -325,10 +334,10 @@ class DashboardView(QWidget):
             module_id="zeropad",
             title="ZeroPad",
             glyph="🎮",
-            desc="Transform your phone into a low-latency virtual gamepad, custom macro deck, or wireless PC touchpad.",
+            desc="Transform your Android phone into a low-latency virtual gamepad, custom macro deck, or wireless PC touchpad.",
             is_enabled=False,
             is_available=False,
-            port_info="Direct Injection"
+            port_info="Direct Input"
         )
         self.cards["zeropad"] = card_pad
         grid.addWidget(card_pad, 1, 1)

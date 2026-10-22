@@ -63,10 +63,10 @@ class NavButton(QPushButton):
             badge_lbl = QLabel(badge)
             badge_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             badge_lbl.setStyleSheet("""
-                background-color: #121212;
-                color: #555555;
+                background-color: #F3F4F6;
+                color: #6B7280;
                 padding: 2px 6px;
-                border: 1px solid #1E1E1E;
+                border: 1px solid #E5E7EB;
                 border-radius: 4px;
             """)
             badge_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -75,19 +75,20 @@ class NavButton(QPushButton):
         self.setStyleSheet("""
             NavButton {
                 background-color: transparent;
-                color: #777777;
+                color: #6B7280;
                 border: none;
                 border-radius: 6px;
                 text-align: left;
             }
             NavButton:hover {
-                background-color: #0E0E0E;
-                color: #CCCCCC;
+                background-color: #F3F4F6;
+                color: #111827;
             }
             NavButton:checked {
-                background-color: #141414;
-                color: #FFFFFF;
-                border-left: 2px solid #FFFFFF;
+                background-color: #F3F4F6;
+                color: #000000;
+                font-weight: bold;
+                border-left: 3px solid #000000;
             }
         """)
 
@@ -158,12 +159,12 @@ class MainWindow(QMainWindow):
         brand_text_col.setSpacing(0)
         app_name = QLabel("ZeroLink")
         app_name.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        app_name.setStyleSheet("color: #FFFFFF; letter-spacing: 0.3px;")
+        app_name.setStyleSheet("color: #111827; letter-spacing: 0.3px;")
         brand_text_col.addWidget(app_name)
 
         hub_badge = QLabel("HUB v1.0")
         hub_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        hub_badge.setStyleSheet("color: #555555; letter-spacing: 0.8px;")
+        hub_badge.setStyleSheet("color: #6B7280; letter-spacing: 0.8px;")
         brand_text_col.addWidget(hub_badge)
 
         brand_row.addLayout(brand_text_col)
@@ -203,15 +204,15 @@ class MainWindow(QMainWindow):
         self.btn_update = QPushButton("Update Available")
         self.btn_update.setStyleSheet("""
             QPushButton {
-                background-color: #FFFFFF;
-                color: #000000;
+                background-color: #000000;
+                color: #FFFFFF;
                 font-weight: 700;
                 border: none;
                 border-radius: 6px;
                 padding: 8px 12px;
             }
             QPushButton:hover {
-                background-color: #E5E5E5;
+                background-color: #1F2937;
             }
         """)
         self.btn_update.setVisible(False)
@@ -258,19 +259,19 @@ class MainWindow(QMainWindow):
 
     def _create_placeholder_page(self, title: str, subtitle: str) -> QWidget:
         page = QWidget()
-        page.setStyleSheet("background-color: #000000;")
+        page.setStyleSheet("background-color: #F9FAFB;")
         l = QVBoxLayout(page)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
         l.setSpacing(14)
 
         t_lbl = QLabel(title)
         t_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        t_lbl.setStyleSheet("color: #FFFFFF;")
+        t_lbl.setStyleSheet("color: #111827;")
         l.addWidget(t_lbl)
 
         s_lbl = QLabel(subtitle)
         s_lbl.setFont(QFont("Segoe UI", 11))
-        s_lbl.setStyleSheet("color: #666666; max-width: 500px;")
+        s_lbl.setStyleSheet("color: #6B7280; max-width: 500px;")
         s_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         s_lbl.setWordWrap(True)
         l.addWidget(s_lbl)

@@ -110,62 +110,62 @@ class ModernVideoCanvas(QWidget):
             self._draw_modern_hud(painter)
 
     def _draw_inactive_screen(self, painter: QPainter):
-        painter.fillRect(self.rect(), QColor("#000000"))
+        painter.fillRect(self.rect(), QColor("#F9FAFB"))
         card_w, card_h = 520, 220
         cx = (self.width() - card_w) // 2
         cy = (self.height() - card_h) // 2
         card_rect = QRect(cx, cy, card_w, card_h)
 
-        painter.setBrush(QColor("#0A0A0A"))
-        painter.setPen(QPen(QColor("#1E1E1E"), 1))
-        painter.drawRoundedRect(card_rect, 8, 8)
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.setPen(QPen(QColor("#E5E7EB"), 1.5))
+        painter.drawRoundedRect(card_rect, 12, 12)
 
         badge_rect = QRect(cx + 24, cy + 24, 130, 24)
-        painter.setBrush(QColor("#141414"))
-        painter.setPen(QPen(QColor("#242424"), 1))
+        painter.setBrush(QColor("#F3F4F6"))
+        painter.setPen(QPen(QColor("#E5E7EB"), 1))
         painter.drawRoundedRect(badge_rect, 4, 4)
 
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        painter.setPen(QColor("#777777"))
+        painter.setPen(QColor("#6B7280"))
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, "○ MODULE INACTIVE")
 
         painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        painter.setPen(QColor("#FFFFFF"))
+        painter.setPen(QColor("#111827"))
         painter.drawText(cx + 24, cy + 80, "ZeroCast Service is Turned Off")
 
         painter.setFont(QFont("Segoe UI", 11))
-        painter.setPen(QColor("#777777"))
+        painter.setPen(QColor("#6B7280"))
         painter.drawText(cx + 24, cy + 112, "Port 8888 is closed. Mobile devices cannot connect.")
         painter.drawText(cx + 24, cy + 134, "Click 'Enable Module' in the top bar or dashboard to start.")
 
     def _draw_standby_screen(self, painter: QPainter):
-        painter.fillRect(self.rect(), QColor("#000000"))
+        painter.fillRect(self.rect(), QColor("#F9FAFB"))
         card_w, card_h = 520, 240
         cx = (self.width() - card_w) // 2
         cy = (self.height() - card_h) // 2
         card_rect = QRect(cx, cy, card_w, card_h)
 
-        painter.setBrush(QColor("#0A0A0A"))
-        painter.setPen(QPen(QColor("#1E1E1E"), 1))
-        painter.drawRoundedRect(card_rect, 8, 8)
+        painter.setBrush(QColor("#FFFFFF"))
+        painter.setPen(QPen(QColor("#E5E7EB"), 1.5))
+        painter.drawRoundedRect(card_rect, 12, 12)
 
         badge_rect = QRect(cx + 24, cy + 24, 110, 24)
-        painter.setBrush(QColor("#FFFFFF"))
+        painter.setBrush(QColor("#000000"))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(badge_rect, 4, 4)
 
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.ExtraBold))
-        painter.setPen(QColor("#000000"))
+        painter.setPen(QColor("#FFFFFF"))
         painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, "ZEROCAST v1.0")
 
         painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
-        painter.setPen(QColor("#FFFFFF"))
+        painter.setPen(QColor("#111827"))
         painter.drawText(cx + 24, cy + 80, "Ready for Device Stream")
 
         painter.setFont(QFont("Segoe UI", 11))
-        painter.setPen(QColor("#777777"))
+        painter.setPen(QColor("#6B7280"))
         painter.drawText(cx + 24, cy + 112, "1. Connect Android via USB Cable (Auto ADB) or Wi-Fi.")
-        painter.drawText(cx + 24, cy + 134, "2. Open ZeroLink app on phone and tap 'START STREAMING'.")
+        painter.drawText(cx + 24, cy + 134, "2. Open ZeroLink app on phone, tap ZeroCast, and start stream.")
 
     def _draw_modern_hud(self, painter: QPainter):
         hud_items = [
@@ -396,7 +396,7 @@ class ZeroCastModule(BaseModule):
 
         # Header Bar
         top_bar = QFrame()
-        top_bar.setStyleSheet("background-color: #0A0A0A; border-bottom: 1px solid #161616;")
+        top_bar.setStyleSheet("background-color: #FFFFFF; border-bottom: 1px solid #E5E7EB;")
         bar_layout = QHBoxLayout(top_bar)
         bar_layout.setContentsMargins(18, 10, 18, 10)
         bar_layout.setSpacing(10)
@@ -406,15 +406,15 @@ class ZeroCastModule(BaseModule):
         bar_layout.addWidget(self.btn_power)
 
         self.status_pill = QLabel("● READY" if self.is_active else "○ INACTIVE")
-        self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #141414; border: 1px solid #282828; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+        self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
         self.usb_pill = QLabel("USB: Checking...")
-        self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+        self.usb_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.usb_pill)
 
         self.wifi_pill = QLabel(f"Wi-Fi: {self.local_ip}:{self.port}")
-        self.wifi_pill.setStyleSheet("color: #888888; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
+        self.wifi_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
         bar_layout.addWidget(self.wifi_pill)
 
         bar_layout.addStretch()
@@ -443,13 +443,13 @@ class ZeroCastModule(BaseModule):
 
         # Bottom Bar Dock
         bottom_bar = QFrame()
-        bottom_bar.setStyleSheet("background-color: #0A0A0A; border-top: 1px solid #161616;")
+        bottom_bar.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E5E7EB;")
         bot_layout = QHBoxLayout(bottom_bar)
         bot_layout.setContentsMargins(18, 8, 18, 8)
         bot_layout.setSpacing(10)
 
         self.log_label = QLabel("ZeroCast Ready")
-        self.log_label.setStyleSheet("color: #555555; font-size: 11px;")
+        self.log_label.setStyleSheet("color: #6B7280; font-size: 11px;")
         bot_layout.addWidget(self.log_label)
 
         bot_layout.addStretch()
