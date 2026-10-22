@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "ZeroCast"
+rootProject.name = "ZeroLink"
 include(":app")

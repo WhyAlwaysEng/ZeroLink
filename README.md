@@ -2,10 +2,10 @@
 
 <img src="assets/logo.png" width="130" height="130" alt="ZeroCast Logo" style="border-radius: 28px;" />
 
-# ZeroCast v1.0
+# ZeroLink v1.0
 
-### **Ultra-Low Latency Native Android Screen & Audio Mirroring Engine**
-*High-Performance GPU H.264 Acceleration • Studio PCM Internal Audio • Virtual Camera (OBS/Discord) • Reverse Control*
+### **Modular Cross-Device Ecosystem & Ultra-Low Latency Streaming Engine**
+*Zero-Latency GPU Screen Mirroring • Studio Internal Audio • OBS Virtual Camera • Pluggable Architecture*
 
 [![Release](https://img.shields.io/badge/Release-v1.0.0-00E676?style=for-the-badge&logo=android)](https://github.com/WhyAlwaysEng/ZeroCast/releases)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-38BDF8?style=for-the-badge&logo=windows)](https://github.com/WhyAlwaysEng/ZeroCast)
