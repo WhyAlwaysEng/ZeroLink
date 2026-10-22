@@ -244,7 +244,7 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_display)
         side_layout.addWidget(self.btn_nav_display)
 
-        self.btn_nav_cam = NavButton("ZeroCam", "📷", badge="NEW")
+        self.btn_nav_cam = NavButton("ZeroCam", "📷", badge="BETA")
         self.btn_nav_cam.clicked.connect(lambda: self.stacked.setCurrentIndex(6))
         self.nav_group.addButton(self.btn_nav_cam)
         side_layout.addWidget(self.btn_nav_cam)

@@ -347,8 +347,10 @@ class ZeroCamActivity : AppCompatActivity() {
             return
         }
 
+        val t0 = System.currentTimeMillis()
         try {
             val bitmap = imageProxy.toBitmap()
+            val t1 = System.currentTimeMillis()
             val finalBitmap = if (bitmap.width > targetWidth || bitmap.height > targetHeight) {
                 val scale = minOf(targetWidth.toFloat() / bitmap.width, targetHeight.toFloat() / bitmap.height)
                 val sw = (bitmap.width * scale).toInt()
@@ -359,10 +361,12 @@ class ZeroCamActivity : AppCompatActivity() {
             } else {
                 bitmap
             }
+            val t2 = System.currentTimeMillis()
 
             baos.reset()
             finalBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
             val jpegBytes = baos.toByteArray()
+            val t3 = System.currentTimeMillis()
             if (finalBitmap != bitmap) {
                 finalBitmap.recycle()
             }
@@ -387,6 +391,7 @@ class ZeroCamActivity : AppCompatActivity() {
             frameCount++
             bytesThisSec += packet.size
             val now = System.currentTimeMillis()
+            Log.i("ZeroCamPerf", "w=${bitmap.width}x${bitmap.height} -> ${finalBitmap.width}x${finalBitmap.height} | toBmp=${t1-t0}ms scale=${t2-t1}ms comp=${t3-t2}ms | size=${jpegBytes.size/1024}KB")
             if (now - lastStatTime >= 1000) {
                 val dt = (now - lastStatTime) / 1000f
                 val fps = frameCount / dt

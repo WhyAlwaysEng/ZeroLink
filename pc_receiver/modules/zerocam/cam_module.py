@@ -138,6 +138,24 @@ class ZeroCamModule(BaseModule):
 
         root_layout.addWidget(top_bar)
 
+        # Beta / Under Improvement Notice Banner
+        beta_banner = QFrame()
+        beta_banner.setStyleSheet("background-color: #FFFBEB; border-bottom: 1px solid #FDE68A;")
+        bb_layout = QHBoxLayout(beta_banner)
+        bb_layout.setContentsMargins(28, 8, 28, 8)
+        bb_layout.setSpacing(10)
+
+        bb_icon = QLabel("🛠️")
+        bb_icon.setFont(QFont("Segoe UI Emoji", 11))
+        bb_layout.addWidget(bb_icon)
+
+        bb_text = QLabel("<b>ZeroCam [Beta / อยู่ระหว่างปรับปรุง]:</b> สามารถใช้งานสตรีมเข้า Discord / OBS ได้ตามปกติ ระบบส่งสัญญาณวิดีโอความคมชัดสูงระดับฮาร์ดแวร์กำลังอยู่ระหว่างการพัฒนาปรับปรุงเพิ่มเติม")
+        bb_text.setFont(QFont("Segoe UI", 10))
+        bb_text.setStyleSheet("color: #92400E;")
+        bb_layout.addWidget(bb_text, 1)
+
+        root_layout.addWidget(beta_banner)
+
         # Scrollable Viewport
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

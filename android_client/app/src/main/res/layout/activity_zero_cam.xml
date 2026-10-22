@@ -101,15 +101,28 @@
                     android:text="📷 "
                     android:textSize="20sp" />
 
-                <TextView
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
-                    android:fontFamily="sans-serif-bold"
-                    android:text="ZeroCam: PC Wireless Webcam"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp" />
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="sans-serif-bold"
+                        android:text="ZeroCam [Beta / กำลังปรับปรุง]"
+                        android:textColor="#FFFFFF"
+                        android:textSize="14sp" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🛠️ ใช้งานได้ตามปกติ (อยู่ระหว่างพัฒนาปรับปรุงคุณภาพ)"
+                        android:textColor="#F59E0B"
+                        android:textSize="10sp" />
+                </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvCamFps"
