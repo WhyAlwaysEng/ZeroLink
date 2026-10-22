@@ -18,6 +18,7 @@ from core.updater import UpdateCheckWorker, CURRENT_VERSION
 from modules.zerocast.cast_module import ZeroCastModule
 from modules.zerodrop.drop_module import ZeroDropModule
 from modules.zeroclip.clip_module import ZeroClipModule
+from modules.zeromix.mix_module import ZeroMixModule
 from ui.dashboard_view import DashboardView
 from ui.theme import GLOBAL_APP_STYLESHEET
 
@@ -130,6 +131,11 @@ class MainWindow(QMainWindow):
         self.module_manager.register_module(self.mod_zeroclip)
         self.mod_zeroclip.start_service()
 
+        # ZeroMix Module
+        self.mod_zeromix = ZeroMixModule(port=8891, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zeromix)
+        self.mod_zeromix.start_service()
+
         self._setup_ui()
         self._bind_events()
 
@@ -210,6 +216,11 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_clip)
         side_layout.addWidget(self.btn_nav_clip)
 
+        self.btn_nav_mix = NavButton("ZeroMix", "🎛️")
+        self.btn_nav_mix.clicked.connect(lambda: self.stacked.setCurrentIndex(4))
+        self.nav_group.addButton(self.btn_nav_mix)
+        side_layout.addWidget(self.btn_nav_mix)
+
         side_layout.addStretch()
 
         # Update Pill
@@ -265,6 +276,10 @@ class MainWindow(QMainWindow):
         self.clip_widget = self.mod_zeroclip.get_widget()
         self.stacked.addWidget(self.clip_widget)
 
+        # Page 4: ZeroMix Viewport
+        self.mix_widget = self.mod_zeromix.get_widget()
+        self.stacked.addWidget(self.mix_widget)
+
         main_layout.addWidget(self.stacked, 1)
 
     def _create_placeholder_page(self, title: str, subtitle: str) -> QWidget:
@@ -298,6 +313,15 @@ class MainWindow(QMainWindow):
         if module_id == "zerocast":
             self.stacked.setCurrentIndex(1)
             self.btn_nav_cast.setChecked(True)
+        elif module_id == "zerodrop":
+            self.stacked.setCurrentIndex(2)
+            self.btn_nav_drop.setChecked(True)
+        elif module_id == "zeroclip":
+            self.stacked.setCurrentIndex(3)
+            self.btn_nav_clip.setChecked(True)
+        elif module_id == "zeromix":
+            self.stacked.setCurrentIndex(4)
+            self.btn_nav_mix.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)
             self.btn_nav_dashboard.setChecked(True)

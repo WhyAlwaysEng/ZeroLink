@@ -45,14 +45,11 @@ class MainActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Module 4: ZeroPad (Virtual Controller)
-        binding.cardModuleZeroPad.setOnClickListener {
+        // Module 4: ZeroMix (Virtual Audio Mixer & Sound Deck)
+        binding.cardModuleZeroMix.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            MaterialAlertDialogBuilder(this)
-                .setTitle("🎮 ZeroPad")
-                .setMessage("Transform your Android phone into a low-latency virtual gamepad, streamer macro deck, or wireless PC touchpad.\n\nComing soon in ZeroLink v1.2!")
-                .setPositiveButton("Got it", null)
-                .show()
+            val intent = Intent(this, ZeroMixActivity::class.java)
+            startActivity(intent)
         }
     }
 }

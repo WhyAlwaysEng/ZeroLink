@@ -364,9 +364,9 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ==================== MODULE 4: ZeroPad ==================== -->
+        <!-- ==================== MODULE 4: ZeroMix ==================== -->
         <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardModuleZeroPad"
+            android:id="@+id/cardModuleZeroMix"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="14dp"
@@ -389,7 +389,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="🎮 "
+                    android:text="🎛️ "
                     android:textSize="22sp" />
 
                 <LinearLayout
@@ -402,7 +402,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="ZeroPad"
+                        android:text="ZeroMix"
                         android:textColor="@color/text_primary"
                         android:textSize="16sp"
                         android:fontFamily="sans-serif-black" />
@@ -410,7 +410,7 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Virtual Gamepad, Touchpad &amp; Macro Deck"
+                        android:text="Wireless Audio Mixer &amp; Sound Deck"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
@@ -423,8 +423,8 @@
                     android:paddingTop="3dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="3dp"
-                    android:text="v1.2 SOON"
-                    android:textColor="@color/text_tertiary"
+                    android:text="ACTIVE"
+                    android:textColor="@color/text_primary"
                     android:textSize="10sp"
                     android:fontFamily="sans-serif-bold" />
             </LinearLayout>

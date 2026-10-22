@@ -337,18 +337,22 @@ class DashboardView(QWidget):
         self.cards["zeroclip"] = card_clip
         grid.addWidget(card_clip, 1, 0)
 
-        # ZeroPad
-        card_pad = ModuleCard(
-            module_id="zeropad",
-            title="ZeroPad",
-            glyph="🎮",
-            desc="Transform your Android phone into a low-latency virtual gamepad, custom macro deck, or wireless PC touchpad.",
-            is_enabled=False,
-            is_available=False,
-            port_info="Direct Input"
+        # ZeroMix
+        mod_mix = self.module_manager.get_module("zeromix")
+        mix_active = mod_mix.is_active if mod_mix else False
+        card_mix = ModuleCard(
+            module_id="zeromix",
+            title="ZeroMix",
+            glyph="🎛️",
+            desc="Virtual audio mixer & soundboard. Mix mic with music, auto-duck background audio while speaking, and trigger meme sounds wirelessly.",
+            is_enabled=mix_active,
+            is_available=True,
+            port_info="Port 8891 (TCP)"
         )
-        self.cards["zeropad"] = card_pad
-        grid.addWidget(card_pad, 1, 1)
+        card_mix.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_mix.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zeromix"] = card_mix
+        grid.addWidget(card_mix, 1, 1)
 
         layout.addLayout(grid)
         layout.addStretch()
