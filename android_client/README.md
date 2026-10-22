@@ -1,6 +1,6 @@
-# 📱 ZeroCast Android Client (Mobile Engine)
+# 📱 ZeroLink Android Client (Mobile Hub & Engine)
 
-Native Android client application for **ZeroCast**, built with **Kotlin**, **Android SDK 35**, **MediaProjection**, **MediaCodec (Hardware GPU)**, and **AudioPlaybackCapture**.
+Native Android client and modular dashboard for **ZeroLink**, built with **Kotlin**, **Android SDK 35**, **MediaProjection**, **MediaCodec (Hardware GPU)**, and **AudioPlaybackCapture**. Offers a unified hub screen to navigate between modules (ZeroCast, ZeroDrop, ZeroClip, ZeroPad).
 
 ---
 

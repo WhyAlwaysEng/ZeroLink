@@ -1,105 +1,232 @@
 <div align="center">
 
-<img src="assets/logo.png" width="130" height="130" alt="ZeroCast Logo" style="border-radius: 28px;" />
+<img src="assets/logo.png" width="128" height="128" alt="ZeroLink Logo" style="border-radius: 26px; box-shadow: 0 8px 24px rgba(0,0,0,0.06);" />
 
-# ZeroLink v1.0
+# ZeroLink
 
-### **Modular Cross-Device Ecosystem & Ultra-Low Latency Streaming Engine**
-*Zero-Latency GPU Screen Mirroring • Studio Internal Audio • OBS Virtual Camera • Pluggable Architecture*
+### **Modular Cross-Device Ecosystem Hub • Windows PC & Android**
+*Ultra-Low Latency Screen Mirroring • Studio Internal Audio • Virtual Camera • Pluggable Module Architecture*
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-00E676?style=for-the-badge&logo=android)](https://github.com/WhyAlwaysEng/ZeroCast/releases)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-38BDF8?style=for-the-badge&logo=windows)](https://github.com/WhyAlwaysEng/ZeroCast)
-[![License](https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge)](LICENSE)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://python.org)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-7F52FF?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
+<p align="center">
+  <img src="https://img.shields.io/badge/Version-v1.0.0-000000?style=for-the-badge&logo=github&logoColor=white" alt="Version 1.0.0" />
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Android-111827?style=for-the-badge&logo=android&logoColor=white" alt="Platform" />
+  <img src="https://img.shields.io/badge/Design-Minimal%20Monochrome-F9FAFB?style=for-the-badge&labelColor=111827&color=E5E7EB" alt="Minimal Monochrome" />
+  <img src="https://img.shields.io/badge/License-MIT-000000?style=for-the-badge" alt="License" />
+</p>
 
 </div>
 
 ---
 
-## 🌟 Highlights & Key Features
+## 📖 Introduction
 
-ZeroCast is an open-source, ultra-low latency screen mirroring and internal audio streaming ecosystem built specifically for gaming, content creation, presentations, and device management over local Wi-Fi or USB cable.
+**ZeroLink** is an open-source, modular cross-device ecosystem connecting Windows PCs and Android devices. Built with a **Clean Minimalist Monochrome** aesthetic (White & Black) and a **Pluggable Architecture**, ZeroLink functions as a central command hub where features exist as independent, lightweight modules that can be toggled on demand.
 
-- ⚡ **Zero-Latency H.264 GPU Pipeline**: Hardware-accelerated encoding directly from Android `MediaCodec` into PyAV C-level decoding with baseline profile (no B-frames) for instantaneous responsiveness.
-- 📱 **100% Native Display Resolution**: Supports high-density physical resolutions (e.g. 1080×2400 FHD+) with dynamic orientation auto-switching (Landscape ⇄ Portrait).
-- 🔊 **Internal Audio Capture (`AudioPlaybackCapture`)**: Streams system audio and game audio directly into PC speakers with dedicated ~200ms Jitter Buffer and zero crackle.
-- 🎧 **Dynamic Audio Output Selector**: Easily route mobile audio between your Gaming Headset (HyperX, etc.) and Speakers directly from the PC receiver.
-- 🎥 **Virtual Camera Integration**: Turn your mobile device (screen or camera) into an ultra-sharp 1080p 60FPS webcam for **Discord, Zoom, Google Meet, Microsoft Teams, and OBS Studio**.
-- 🖱️ **Full Reverse Touch & Keyboard Injection**: Click, drag, and swipe the phone from your PC screen with automatic ADB tunneling. Type directly using your physical PC keyboard.
-- 📊 **Floating Mobile Performance HUD**: Drag-and-drop floating pill displaying live CPU %, RAM %, and Battery Temp on your phone, with tap-to-shrink Ghost Mode (completely invisible on PC).
-- 🌙 **Auto-Dim Screen Saver**: Dims phone backlight to 1% while streaming to eliminate heat and save 40–50% battery, while the PC mirror stays 100% vibrant.
-- 🚀 **Built-in GitHub Auto-Update Checker**: Both PC receiver and mobile client automatically detect new GitHub releases and provide one-click updates.
+If you only want basic screen casting, turn on the **ZeroCast** module. When other modules are inactive, their network sockets, audio sinks, and background listeners remain completely dormant—ensuring zero unnecessary resource usage.
+
+---
+
+## 🧩 The ZeroLink Module Suite
+
+```
+  ┌────────────────────────────────────────────────────────┐
+  │                   ZeroLink Core Hub                    │
+  │     (Device Discovery • Session Sync • Unified UI)     │
+  └───────────────┬────────────────────────┬───────────────┘
+                  │                        │
+       ┌──────────┴──────────┐  ┌──────────┴──────────┐
+       │   📺 ZeroCast        │  │   📁 ZeroDrop        │
+       │   Screen / Audio     │  │   Peer LAN Transfer  │
+       │   Mirroring (Active) │  │   (Roadmap v1.1)     │
+       └─────────────────────┘  └─────────────────────┘
+                  │                        │
+       ┌──────────┴──────────┐  ┌──────────┴──────────┐
+       │   📋 ZeroClip        │  │   🎮 ZeroPad         │
+       │   Cross-Clipboard    │  │   Remote Touchpad    │
+       │   (Roadmap v1.1)     │  │   (Roadmap v1.2)     │
+       └─────────────────────┘  └─────────────────────┘
+```
+
+### 📺 1. ZeroCast *(Core Engine - Active)*
+- ⚡ **Zero-Latency H.264 GPU Pipeline**: Hardware-accelerated encoding via Android `MediaCodec` into PyAV C-level decoding with baseline profile (no B-frames) for instantaneous, lag-free responsiveness.
+- 🔊 **Internal Audio Capture (`AudioPlaybackCapture`)**: Streams in-game audio and system sounds in crisp 16-bit 48kHz PCM with a dynamic jitter buffer.
+- 🎧 **Dynamic Audio Sink Selector**: Switch mobile audio between your Gaming Headset and PC Speakers in real-time.
+- 🎥 **OBS / Discord Virtual Camera**: Convert your phone screen or mobile camera into an ultra-sharp 1080p 60FPS webcam for Discord, Zoom, Meet, and OBS Studio.
+- 🖱️ **Reverse Touch & Keyboard Injection**: Click, drag, and swipe your phone directly from PC with automatic ADB tunneling; type directly using your physical computer keyboard.
+- 📊 **Ghost Performance HUD**: Real-time floating performance pill on mobile (CPU, RAM, Temp) that is automatically invisible on the PC mirror.
+- 🌙 **OLED Auto-Dim**: Lowers mobile display backlight to 1% while streaming to reduce heat and save battery without affecting PC mirror brightness.
+
+### 📁 2. ZeroDrop *(Roadmap v1.1)*
+- Drag-and-drop instant peer-to-peer file transfer over LAN and USB with multi-gigabit speeds.
+
+### 📋 3. ZeroClip *(Roadmap v1.1)*
+- Instant background clipboard synchronization (copy on PC → paste on Android, and vice-versa).
+
+### 🎮 4. ZeroPad *(Roadmap v1.2)*
+- Turn your smartphone into a low-latency precision PC trackpad, presentation clicker, or game controller.
 
 ---
 
 ## 🏗️ Architecture Overview
 
 ```mermaid
-graph LR
-    subgraph Android["📱 Android Client (Kotlin)"]
-        A[MediaProjection] --> B[MediaCodec H.264 GPU]
-        C[AudioPlaybackCapture] --> D[PCM 16-bit 48kHz]
-        B --> E[TCP Frame Streamer]
-        D --> E
-        F[Dynamic ABR Engine] -.->|Adjust Bitrate| B
+graph TD
+    subgraph MobileHub["📱 Android Client (ZeroLink Hub)"]
+        MHub[MainActivity Dashboard] -->|User Selects Module| MCast[ZeroCastActivity]
+        MCast --> MP[MediaProjection / Camera]
+        MP --> MENC[MediaCodec H.264 GPU]
+        MCast --> MAUD[AudioPlaybackCapture]
+        MENC --> MTCP[TCP Packet Engine]
+        MAUD --> MTCP
     end
 
-    subgraph Transport["⚡ Transport Layer"]
-        E -->|USB ADB Reverse / Wi-Fi LAN| G[Port 8888 TCP]
-        H[UDP Discovery Beacon] -.->|Port 8889| I[Auto-Discovery]
+    subgraph Transport["⚡ Transport Bridge"]
+        MTCP -->|USB ADB Port Forward / Wi-Fi LAN 8888| PTCP[TCP Socket Server]
+        UDPBeacon[UDP Discovery 8889] -.->|Auto-Detect PC| UDPListen[PC Beacon Listener]
     end
 
-    subgraph PC["🖥️ Windows PC Receiver (PyQt6 / PyAV)"]
-        G --> J[PyAV H.264 Hardware Decoder]
-        G --> K[Asynchronous Jitter Buffer]
-        J --> L[Glassmorphic Canvas Viewport]
-        J --> M[🎥 OBS Virtual Camera]
-        K --> N[🎧 QAudioSink Output Device]
-        O[Mouse & Keyboard Controller] -->|ADB Shell Input| A
+    subgraph PCHub["🖥️ Windows PC (ZeroLink Hub)"]
+        PTCP --> CoreHub[ZeroLink Hub Core Router]
+        CoreHub --> CastModule[ZeroCast Module]
+        CastModule --> H264Dec[PyAV C-level Decoder]
+        CastModule --> AudioBuf[PCM Jitter Buffer & QAudioSink]
+        H264Dec --> Canvas[Clean White Viewport]
+        H264Dec --> VCam[OBS Virtual Camera]
+        Canvas --> InputCtrl[Reverse Touch & Keyboard Injector]
+        InputCtrl -->|ADB Shell Input| MobileHub
     end
 ```
 
 ---
 
-## 📂 Repository Structure
+## 📂 Project Structure
 
-This repository is modularly split into two independent sub-projects:
-
-| Component | Path | Description |
-| :--- | :--- | :--- |
-| **🖥️ PC Receiver** | [`pc_receiver/`](pc_receiver/) | Python PyQt6 desktop receiver, hardware decoder, audio sink, and virtual camera engine. |
-| **📱 Android Client** | [`android_client/`](android_client/) | Native Android app in Kotlin utilizing MediaProjection, MediaCodec, and Foreground Services. |
-| **🎨 Assets** | [`assets/`](assets/) | Vector logos, app icons, and branding graphics. |
-
-👉 For dedicated setup and development guides, visit:
-- **[PC Receiver Guide & Setup (pc_receiver/README.md)](pc_receiver/README.md)**
-- **[Android Client Guide & Build (android_client/README.md)](android_client/README.md)**
+```
+ZeroLink/
+├── assets/                       # Vector logos, icons, and monochrome brand assets
+│   ├── logo.png                  # Primary 512x512 monochrome logo
+│   └── zerolink_logo.png
+├── pc_receiver/                  # 🖥️ Windows PC Application (PyQt6 / Python)
+│   ├── main.py                   # Hub entry point
+│   ├── icon.ico & icon.png       # PC App and window icons
+│   ├── requirements.txt          # Python dependencies
+│   ├── ZeroLink.spec             # PyInstaller standalone build spec
+│   ├── core/                     # Modular Hub Engine
+│   │   ├── base_module.py        # Abstract BaseModule interface
+│   │   └── module_manager.py     # Pluggable lifecycle manager
+│   ├── modules/                  # Extensible Modules Directory
+│   │   └── zerocast/             # Screen & Audio streaming module
+│   │       ├── cast_module.py    # ZeroCast module implementation
+│   │       ├── video_receiver.py # PyAV H.264 decoder & socket server
+│   │       ├── audio_receiver.py # PCM audio jitter buffer
+│   │       └── virtual_camera.py # pyvirtualcam OBS integration
+│   └── ui/                       # Clean Minimalist White UI
+│       ├── main_window.py        # PC Hub Window with Navigation Sidebar
+│       ├── dashboard_view.py     # Modular card overview with soft drop shadows
+│       └── theme.py              # Minimal monochrome stylesheet
+├── android_client/               # 📱 Android Application (Kotlin)
+│   ├── app/src/main/
+│   │   ├── AndroidManifest.xml   # Permissions, services, and launcher configs
+│   │   ├── java/com/zerocast/
+│   │   │   ├── ui/               # Modular UI screens
+│   │   │   │   ├── MainActivity.kt      # Hub Dashboard (Modules selector)
+│   │   │   │   └── ZeroCastActivity.kt  # Dedicated ZeroCast stream controller
+│   │   │   ├── service/          # MediaProjection & Overlay Foreground Services
+│   │   │   ├── audio/            # AudioPlaybackCapture & PCM streaming
+│   │   │   ├── camera/           # CameraX manager & dual stream
+│   │   │   └── util/             # UDP Discovery & Network helpers
+│   │   └── res/                  # Material3 Light Clean White resources
+└── dist/                         # 📦 Compiled Release Binaries
+    ├── ZeroLink-v1.0.0.apk       # Android App installer
+    └── ZeroLink-v1.0.0-Windows.zip # Windows PC Standalone package
+```
 
 ---
 
 ## 🚀 Quick Start Guide
 
-### 1. Launch PC Receiver
-Make sure you have Python 3.10+ installed:
+### Option 1: Using Pre-compiled Binaries (Recommended)
+1. **Windows PC**: Download and extract `ZeroLink-v1.0.0-Windows.zip` from [`dist/`](dist/), then run **`ZeroLink.exe`**.
+2. **Android**: Install `ZeroLink-v1.0.0.apk` from [`dist/`](dist/) on your phone.
+
+---
+
+### Option 2: Running & Building from Source
+
+#### 1. Setup Windows PC Receiver
+Requires **Python 3.10+**:
 ```powershell
-# Navigate to pc_receiver directory
+# Navigate to PC directory
 cd pc_receiver
 
-# Install dependencies
+# Install required dependencies
 pip install -r requirements.txt
 
-# Start receiver
+# Run the ZeroLink Hub
 python main.py
 ```
 
-### 2. Connect from Android
-1. Open the **ZeroCast** app on your phone.
-2. Select your connection mode:
-   - **⚡ USB Cable**: Plug in USB cable with USB Debugging enabled. The app auto-connects to `127.0.0.1:8888`.
-   - **📡 Wi-Fi**: Tap **`[ 🔍 Auto-Discover PC ]`** to automatically find your computer on LAN.
-3. Tap **`▶ START STREAMING (H.264)`**.
-4. Enjoy smooth, zero-latency mirroring on your PC!
+To compile a standalone `.exe`:
+```powershell
+pyinstaller ZeroLink.spec --noconfirm
+```
+
+#### 2. Setup Android Client
+Requires **Android Studio** or **Android SDK (API 34)**:
+```powershell
+cd android_client
+
+# Build Debug APK
+.\gradlew.bat assembleDebug
+
+# Install directly to connected phone via ADB
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+---
+
+## 🔌 Developer Guide: Adding a New Module
+
+ZeroLink is designed from the ground up to make adding new modules painless.
+
+### 1. Create a PC Module (`pc_receiver/modules/<module_name>/`)
+Create a class inheriting from `BaseModule`:
+```python
+from core.base_module import BaseModule
+from PyQt6.QtWidgets import QWidget, QLabel
+
+class MyCustomModule(BaseModule):
+    @property
+    def module_id(self) -> str:
+        return "my_module"
+
+    @property
+    def display_name(self) -> str:
+        return "My Custom Tool"
+
+    @property
+    def icon_glyph(self) -> str:
+        return "⚡"
+
+    def create_widget(self) -> QWidget:
+        return QLabel("Hello from My Module!")
+
+    def start(self) -> bool:
+        # Initialize background threads, sockets, or listeners
+        self._is_running = True
+        return True
+
+    def stop(self) -> bool:
+        # Cleanly release ports and resources
+        self._is_running = False
+        return True
+```
+Register your module in `pc_receiver/core/module_manager.py`—it will automatically appear as an interactive card in the PC Hub and sidebar.
+
+### 2. Create an Android Module Screen (`android_client/`)
+1. Create a dedicated Activity (e.g. `MyModuleActivity.kt`).
+2. Add a module card in `activity_main.xml`.
+3. Set the card click listener in `MainActivity.kt` to launch your Activity.
 
 ---
 
@@ -112,10 +239,28 @@ python main.py
 | **Esc** | Exit Fullscreen / Send Android Back Key |
 | **PC Typing** | Directly inputs text, letters, space, backspace, and enter to Android |
 | **`🎥 V-Cam` Button** | Activates Virtual Camera feed for Discord, Zoom, OBS |
-| **`📌 Pin` Button** | Pins the ZeroCast window always on top |
+| **`📌 Pin` Button** | Pins the ZeroLink window always on top |
+
+---
+
+## 🌐 Creating a Brand New GitHub Repository
+
+To push this codebase to a fresh, independent GitHub repository:
+
+```powershell
+# 1. Update the git remote to your new repository URL:
+git remote set-url origin https://github.com/<your-username>/ZeroLink.git
+
+# 2. Or create it directly with GitHub CLI (gh):
+gh repo create ZeroLink --public --source=. --remote=origin --push
+
+# 3. Push all code to main:
+git branch -M main
+git push -u origin main
+```
 
 ---
 
 ## 📜 License
 
-ZeroCast is licensed under the [MIT License](LICENSE).
+ZeroLink is open-source software licensed under the [MIT License](LICENSE).

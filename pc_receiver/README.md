@@ -1,6 +1,6 @@
-# 🖥️ ZeroCast PC Receiver (Desktop Engine)
+# 🖥️ ZeroLink PC Receiver (Hub & Desktop Engine)
 
-The desktop receiver application for **ZeroCast**, written in Python 3.10+ using **PyQt6**, **PyAV (FFmpeg C-bindings)**, and **pyvirtualcam**.
+The desktop receiver application for **ZeroLink**, written in Python 3.10+ using **PyQt6**, **PyAV (FFmpeg C-bindings)**, and **pyvirtualcam**. Features a modular hub architecture supporting multiple tools (ZeroCast, ZeroDrop, ZeroClip, ZeroPad).
 
 ---
 
