@@ -210,9 +210,11 @@ class ZeroMixModule(BaseModule):
         self.soundboard_layout: Optional[QGridLayout] = None
 
         # Wire engine signals
+        self.lbl_phone_cast_status: Optional[QLabel] = None
         self.engine.levels_updated.connect(self._on_levels_updated)
         self.engine.ducking_state_changed.connect(self._on_ducking_changed)
         self.engine.soundboard_list_changed.connect(self._refresh_soundboard_ui)
+        self.engine.phone_stream_status_changed.connect(self._on_phone_stream_status_changed)
         self.service.client_count_changed.connect(self._on_client_count_changed)
 
     @property
@@ -370,14 +372,18 @@ class ZeroMixModule(BaseModule):
         self.strip_mic.layout().addWidget(chk_hear_mic)
         stems_layout.addWidget(self.strip_mic, 1)
 
-        # Music Channel
-        self.strip_music = ChannelStrip("Music Track", "🎵", initial_vol=80, max_vol=100)
+        # Strip Music / Phone Cast
+        self.strip_music = ChannelStrip("Phone Cast / Music", "📱", initial_vol=80, max_vol=100)
         self.strip_music.volume_changed.connect(lambda v: self.engine.set_music_volume(v))
         self.strip_music.mute_toggled.connect(lambda m: self.engine.set_music_mute(m))
 
+        self.lbl_phone_cast_status = QLabel("● Phone Cast: Ready")
+        self.lbl_phone_cast_status.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 600; padding: 2px 0;")
+        self.strip_music.layout().addWidget(self.lbl_phone_cast_status)
+
         # Music file loader
         music_btn_row = QHBoxLayout()
-        btn_open_music = QPushButton("📁 Load Music")
+        btn_open_music = QPushButton("📁 PC Music")
         btn_open_music.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         btn_open_music.clicked.connect(self._pick_music_file)
         music_btn_row.addWidget(btn_open_music)
@@ -643,3 +649,12 @@ class ZeroMixModule(BaseModule):
             weight = "700" if count > 0 else "400"
             self.client_pill.setText(f"📱 Mobile: {count} Connected")
             self.client_pill.setStyleSheet(f"color: {color}; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: {weight};")
+
+    def _on_phone_stream_status_changed(self, is_active: bool):
+        if self.lbl_phone_cast_status:
+            if is_active:
+                self.lbl_phone_cast_status.setText("● Phone Cast: Streaming")
+                self.lbl_phone_cast_status.setStyleSheet("color: #10B981; font-size: 10px; font-weight: 700; padding: 2px 0;")
+            else:
+                self.lbl_phone_cast_status.setText("● Phone Cast: Ready")
+                self.lbl_phone_cast_status.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 600; padding: 2px 0;")

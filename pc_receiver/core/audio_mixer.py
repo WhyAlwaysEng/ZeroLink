@@ -20,6 +20,7 @@ class AudioMixerEngine(QObject):
     soundboard_list_changed = pyqtSignal()
     sound_playback_changed = pyqtSignal(str, bool)        # sound_name, is_playing
     playback_state_changed = pyqtSignal(bool, str)        # is_music_playing, current_track_name
+    phone_stream_status_changed = pyqtSignal(bool)
 
     def __init__(self, sample_rate: int = 48000, block_size: int = 1024, parent=None):
         super().__init__(parent)
@@ -57,6 +58,10 @@ class AudioMixerEngine(QObject):
 
         # Audio Buffers & Playback state
         self._lock = threading.Lock()
+        self._phone_buffer = bytearray()
+        self._last_phone_audio_time: float = 0.0
+        self._phone_streaming_active: bool = False
+
         self._music_data: Optional[np.ndarray] = None     # shape: (N, 2), float32
         self._music_idx: int = 0
         self._is_music_playing = False
@@ -259,10 +264,26 @@ class AudioMixerEngine(QObject):
         effective_mic = 0.0 if self.mute_mic else self.vol_mic
         mic_stereo = np.column_stack((mic_mono * effective_mic, mic_mono * effective_mic))
 
-        # 2. Process Music Channel
+        # 2. Process Music / Phone Cast Channel
         music_stereo = np.zeros((frames, 2), dtype=np.float32)
+        has_phone_audio = False
+
         with self._lock:
-            if self._is_music_playing and self._music_data is not None:
+            # 2a. Priority: Incoming Live Phone Cast Audio from ZeroCast
+            needed_bytes = frames * 4
+            if len(self._phone_buffer) >= 4:
+                take_bytes = min(len(self._phone_buffer), needed_bytes)
+                take_bytes = (take_bytes // 4) * 4
+                if take_bytes > 0:
+                    raw_bytes = bytes(self._phone_buffer[:take_bytes])
+                    del self._phone_buffer[:take_bytes]
+                    int16_arr = np.frombuffer(raw_bytes, dtype=np.int16).reshape(-1, 2)
+                    sample_count = len(int16_arr)
+                    music_stereo[:sample_count] = int16_arr.astype(np.float32) / 32768.0
+                    has_phone_audio = True
+
+            # 2b. Secondary: Local Music File Playback
+            if not has_phone_audio and self._is_music_playing and self._music_data is not None:
                 rem = len(self._music_data) - self._music_idx
                 take = min(frames, rem)
                 if take > 0:
@@ -272,6 +293,13 @@ class AudioMixerEngine(QObject):
                 if self._music_idx >= len(self._music_data):
                     self._is_music_playing = False
                     self.playback_state_changed.emit(False, self._current_track_name)
+
+        # Check phone stream indicator
+        now_t = time.time()
+        is_phone_active = (now_t - self._last_phone_audio_time) < 0.6
+        if self._phone_streaming_active != is_phone_active:
+            self._phone_streaming_active = is_phone_active
+            self.phone_stream_status_changed.emit(is_phone_active)
 
         effective_music = 0.0 if self.mute_music else (self.vol_music * self._current_duck_factor)
         music_stereo *= effective_music
@@ -330,6 +358,20 @@ class AudioMixerEngine(QObject):
             min(1.0, self._peak_music),
             min(1.0, self._peak_sound)
         )
+
+    def write_phone_pcm(self, pcm_data: bytes):
+        """Receives live 16-bit stereo PCM audio streamed from Android phone via ZeroCast."""
+        if not self.is_running or not pcm_data:
+            return
+        with self._lock:
+            # Bound buffer backlog to ~0.35s to eliminate latency drift
+            max_bytes = int(self.sample_rate * 4 * 0.35)
+            if len(self._phone_buffer) > max_bytes:
+                excess = len(self._phone_buffer) - max_bytes
+                excess = (excess // 4) * 4
+                del self._phone_buffer[:excess]
+            self._phone_buffer.extend(pcm_data)
+            self._last_phone_audio_time = time.time()
 
     # Audio file decoding using PyAV
     def load_audio(self, file_path: str) -> Optional[np.ndarray]:

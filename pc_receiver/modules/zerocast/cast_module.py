@@ -404,11 +404,13 @@ class ZeroCastModule(BaseModule):
     """Monochrome Minimalist ZeroCast Module."""
     toggle_fullscreen_requested = pyqtSignal()
     toggle_pin_requested = pyqtSignal()
+    audio_pcm_received = pyqtSignal(bytes)
 
     def __init__(self, port: int = 8888, local_ip: str = "127.0.0.1", parent=None):
         super().__init__(parent)
         self.port = port
         self.local_ip = local_ip
+        self.use_external_mixer = False
 
         self.telemetry = TelemetryTracker()
         self.server = StreamServer(host="0.0.0.0", port=self.port)
@@ -897,7 +899,9 @@ class ZeroCastModule(BaseModule):
 
     def _on_audio_received(self, pcm_data: bytes):
         if self.is_active:
-            self.audio_player.play_chunk(pcm_data)
+            self.audio_pcm_received.emit(pcm_data)
+            if not self.use_external_mixer and self.audio_player:
+                self.audio_player.play_chunk(pcm_data)
 
     def _handle_reverse_input(self, action: str, nx: float, ny: float):
         self.input_controller.send_touch_event(action, nx, ny)

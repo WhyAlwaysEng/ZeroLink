@@ -136,6 +136,11 @@ class MainWindow(QMainWindow):
         self.module_manager.register_module(self.mod_zeromix)
         self.mod_zeromix.start_service()
 
+        # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
+        self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
+        self.mod_zerocast.use_external_mixer = self.mod_zeromix.is_active
+        self.mod_zeromix.state_changed.connect(self._on_zeromix_state_changed)
+
         self._setup_ui()
         self._bind_events()
 
@@ -328,6 +333,10 @@ class MainWindow(QMainWindow):
 
     def _on_module_toggle_requested(self, module_id: str, enable: bool):
         self.module_manager.toggle_module(module_id, enable)
+
+    def _on_zeromix_state_changed(self, module_id: str, is_active: bool):
+        if module_id == "zeromix":
+            self.mod_zerocast.use_external_mixer = is_active
 
     def _toggle_fullscreen(self):
         self.is_fullscreen = not self.is_fullscreen
