@@ -240,26 +240,50 @@ class StreamForegroundService : LifecycleService() {
     }
 
     private fun checkOrientationChanged() {
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val rot = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            display?.rotation ?: Surface.ROTATION_0
-        } else {
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.rotation
+        try {
+            val dm = getSystemService(Context.DISPLAY_SERVICE) as? DisplayManager
+            val rot = dm?.getDisplay(Display.DEFAULT_DISPLAY)?.rotation ?: Surface.ROTATION_0
+            val isConfigLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val isRotLandscape = rot == Surface.ROTATION_90 || rot == Surface.ROTATION_270
+            val isLandscape = isConfigLandscape || isRotLandscape
+
+            val targetW = if (isLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
+            val targetH = if (isLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
+
+            if (targetW != currentActiveWidth || targetH != currentActiveHeight) {
+                Log.d(TAG, "Orientation changed -> Reconfiguring stream to ${targetW}x${targetH} (Landscape=$isLandscape)")
+                currentActiveWidth = targetW
+                currentActiveHeight = targetH
+
+                // Stop old video encoder and restart with new orientation dimensions
+                screenCaptureH264Manager?.stop()
+                screenCaptureH264Manager = null
+
+                screenCaptureManager?.stop()
+                screenCaptureManager = null
+
+                mainHandler.postDelayed({
+                    if (isStreaming && mediaProjection != null) {
+                        startVideoEncoder(targetW, targetH)
+                    }
+                }, 200) // Small debounce for Android window manager to settle
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in checkOrientationChanged: ${e.message}", e)
         }
-        val isConfigLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        val isRotLandscape = rot == Surface.ROTATION_90 || rot == Surface.ROTATION_270
-        val isLandscape = isConfigLandscape || isRotLandscape
+    }
 
-        val targetW = if (isLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
-        val targetH = if (isLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
+    private fun handleToggleOrientation() {
+        if (!isStreaming || mediaProjection == null) return
+        try {
+            val isCurrentlyLandscape = currentActiveWidth > currentActiveHeight
+            val newW = if (isCurrentlyLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
+            val newH = if (isCurrentlyLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
 
-        if (targetW != currentActiveWidth || targetH != currentActiveHeight) {
-            Log.d(TAG, "Orientation changed -> Reconfiguring stream to ${targetW}x${targetH} (Landscape=$isLandscape)")
-            currentActiveWidth = targetW
-            currentActiveHeight = targetH
+            Log.d(TAG, "Manual toggle orientation requested: ${currentActiveWidth}x${currentActiveHeight} -> ${newW}x${newH}")
+            currentActiveWidth = newW
+            currentActiveHeight = newH
 
-            // Stop old video encoder and restart with new orientation dimensions
             screenCaptureH264Manager?.stop()
             screenCaptureH264Manager = null
 
@@ -268,33 +292,12 @@ class StreamForegroundService : LifecycleService() {
 
             mainHandler.postDelayed({
                 if (isStreaming && mediaProjection != null) {
-                    startVideoEncoder(targetW, targetH)
+                    startVideoEncoder(newW, newH)
                 }
-            }, 200) // Small debounce for Android window manager to settle
+            }, 150)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error in handleToggleOrientation: ${e.message}", e)
         }
-    }
-
-    private fun handleToggleOrientation() {
-        if (!isStreaming || mediaProjection == null) return
-        val isCurrentlyLandscape = currentActiveWidth > currentActiveHeight
-        val newW = if (isCurrentlyLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
-        val newH = if (isCurrentlyLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
-
-        Log.d(TAG, "Manual toggle orientation requested: ${currentActiveWidth}x${currentActiveHeight} -> ${newW}x${newH}")
-        currentActiveWidth = newW
-        currentActiveHeight = newH
-
-        screenCaptureH264Manager?.stop()
-        screenCaptureH264Manager = null
-
-        screenCaptureManager?.stop()
-        screenCaptureManager = null
-
-        mainHandler.postDelayed({
-            if (isStreaming && mediaProjection != null) {
-                startVideoEncoder(newW, newH)
-            }
-        }, 150)
     }
 
     private fun startForegroundWithNotification() {
