@@ -129,7 +129,8 @@ class ModernVideoCanvas(QWidget):
 
     def _draw_inactive_screen(self, painter: QPainter):
         painter.fillRect(self.rect(), QColor("#F9FAFB"))
-        card_w, card_h = 520, 220
+        card_w = max(260, min(520, self.width() - 32))
+        card_h = min(220, self.height() - 32)
         cx = (self.width() - card_w) // 2
         cy = (self.height() - card_h) // 2
         card_rect = QRect(cx, cy, card_w, card_h)
@@ -158,7 +159,8 @@ class ModernVideoCanvas(QWidget):
 
     def _draw_standby_screen(self, painter: QPainter):
         painter.fillRect(self.rect(), QColor("#F9FAFB"))
-        card_w, card_h = 520, 240
+        card_w = max(260, min(520, self.width() - 32))
+        card_h = min(240, self.height() - 32)
         cx = (self.width() - card_w) // 2
         cy = (self.height() - card_h) // 2
         card_rect = QRect(cx, cy, card_w, card_h)
@@ -308,14 +310,28 @@ class ZeroCastPopoutWindow(QMainWindow):
         self.shortcut_esc = QShortcut(QKeySequence("Esc"), self)
         self.shortcut_esc.activated.connect(self._exit_fullscreen_on_esc)
 
-    def toggle_pin(self, checked: bool):
-        self.is_pinned = checked
+    def toggle_pin(self, checked: bool = None):
+        if checked is None:
+            self.is_pinned = not self.is_pinned
+        else:
+            self.is_pinned = checked
         flag = Qt.WindowType.WindowStaysOnTopHint
-        if checked:
+        pos = self.pos()
+        size = self.size()
+        if self.is_pinned:
             self.setWindowFlags(self.windowFlags() | flag)
         else:
             self.setWindowFlags(self.windowFlags() & ~flag)
+        self.resize(size)
+        self.move(pos)
         self.show()
+        if hasattr(self.cast_module, "btn_pin") and self.cast_module.btn_pin:
+            if self.is_pinned:
+                self.cast_module.btn_pin.setText("📌 Pinned")
+                self.cast_module.btn_pin.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: 700; border-radius: 4px; padding: 4px 8px; font-size: 11px;")
+            else:
+                self.cast_module.btn_pin.setText("📌 Pin")
+                self.cast_module.btn_pin.setStyleSheet("background-color: #F3F4F6; color: #374151; font-weight: 600; border: 1px solid #D1D5DB; border-radius: 4px; padding: 4px 8px; font-size: 11px;")
 
     def _toggle_fullscreen(self):
         if not self.is_fullscreen:
@@ -330,7 +346,7 @@ class ZeroCastPopoutWindow(QMainWindow):
             self._toggle_fullscreen()
 
     def closeEvent(self, event):
-        event.accept()
+        event.ignore()
         self.cast_module.dock_back()
 
 
@@ -517,8 +533,8 @@ class ZeroCastModule(BaseModule):
         top_bar = QFrame()
         top_bar.setStyleSheet("background-color: #FFFFFF; border-bottom: 1px solid #E5E7EB;")
         bar_layout = QHBoxLayout(top_bar)
-        bar_layout.setContentsMargins(18, 10, 18, 10)
-        bar_layout.setSpacing(10)
+        bar_layout.setContentsMargins(14, 8, 14, 8)
+        bar_layout.setSpacing(8)
 
         self.btn_power = QPushButton("Disable Module" if self.is_active else "Enable Module")
         self.btn_power.clicked.connect(self._toggle_power)
@@ -538,16 +554,37 @@ class ZeroCastModule(BaseModule):
 
         bar_layout.addStretch()
 
+        # Pin Button (Pop-out mode only)
+        self.btn_pin = QPushButton("📌 Pin")
+        self.btn_pin.setToolTip("Always on Top (Keep floating above other windows)")
+        self.btn_pin.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #374151;
+                font-weight: 600;
+                border: 1px solid #D1D5DB;
+                border-radius: 4px;
+                padding: 4px 8px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+            }
+        """)
+        self.btn_pin.clicked.connect(lambda: self.popout_window.toggle_pin() if self.popout_window else None)
+        self.btn_pin.setVisible(False)
+        bar_layout.addWidget(self.btn_pin)
+
         self.btn_vcam = QPushButton("V-Cam: OFF")
         self.btn_vcam.clicked.connect(self._toggle_virtual_cam)
         bar_layout.addWidget(self.btn_vcam)
 
         # Manual Orientation Selector
         self.combo_rotate = QComboBox()
-        self.combo_rotate.addItem("🔄 Auto / 0°", 0)
-        self.combo_rotate.addItem("🔄 90° Landscape", 90)
-        self.combo_rotate.addItem("🔄 180° Inverted", 180)
-        self.combo_rotate.addItem("🔄 270° Landscape", 270)
+        self.combo_rotate.addItem("🔄 0° Auto", 0)
+        self.combo_rotate.addItem("🔄 90°", 90)
+        self.combo_rotate.addItem("🔄 180°", 180)
+        self.combo_rotate.addItem("🔄 270°", 270)
         self.combo_rotate.setToolTip("Force manual orientation (0°, 90°, 180°, 270°)")
         self.combo_rotate.currentIndexChanged.connect(self._on_rotation_changed)
         bar_layout.addWidget(self.combo_rotate)
@@ -567,7 +604,7 @@ class ZeroCastModule(BaseModule):
                 color: #111827;
                 border: 1px solid #D1D5DB;
                 font-weight: 600;
-                padding: 5px 10px;
+                padding: 4px 10px;
                 border-radius: 6px;
             }
             QPushButton:hover {
@@ -600,8 +637,8 @@ class ZeroCastModule(BaseModule):
         bottom_bar = QFrame()
         bottom_bar.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E5E7EB;")
         bot_layout = QHBoxLayout(bottom_bar)
-        bot_layout.setContentsMargins(18, 8, 18, 8)
-        bot_layout.setSpacing(10)
+        bot_layout.setContentsMargins(14, 6, 14, 6)
+        bot_layout.setSpacing(8)
 
         self.log_label = QLabel("ZeroCast Ready")
         self.log_label.setStyleSheet("color: #6B7280; font-size: 11px;")
@@ -617,11 +654,11 @@ class ZeroCastModule(BaseModule):
         btn_home.clicked.connect(lambda: self.input_controller.send_key_event(3))
         bot_layout.addWidget(btn_home)
 
-        bot_layout.addSpacing(6)
+        bot_layout.addSpacing(4)
 
         # Volume Controls
         self.btn_audio = QPushButton("🔊")
-        self.btn_audio.setFixedWidth(36)
+        self.btn_audio.setFixedWidth(32)
         self.btn_audio.setToolTip("Click to Mute / Unmute")
         self.btn_audio.clicked.connect(self._toggle_audio)
         bot_layout.addWidget(self.btn_audio)
@@ -629,7 +666,7 @@ class ZeroCastModule(BaseModule):
         self.slider_volume = QSlider(Qt.Orientation.Horizontal)
         self.slider_volume.setRange(0, 100)
         self.slider_volume.setValue(100)
-        self.slider_volume.setFixedWidth(85)
+        self.slider_volume.setFixedWidth(75)
         self.slider_volume.setToolTip("Volume: 100%")
         self.slider_volume.setStyleSheet("""
             QSlider::groove:horizontal {
@@ -876,7 +913,8 @@ class ZeroCastModule(BaseModule):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         card = QFrame()
-        card.setFixedSize(540, 270)
+        card.setMaximumWidth(540)
+        card.setMinimumWidth(300)
         card.setStyleSheet("""
             QFrame {
                 background-color: #FFFFFF;
@@ -934,6 +972,30 @@ class ZeroCastModule(BaseModule):
         layout.addWidget(card)
         return container
 
+    def _set_compact_mode(self, is_compact: bool):
+        """Toggles between standard Hub mode and responsive compact mode for pop-out."""
+        # Top bar
+        if hasattr(self, "btn_power") and self.btn_power:
+            self.btn_power.setVisible(not is_compact)
+        if hasattr(self, "usb_pill") and self.usb_pill:
+            self.usb_pill.setVisible(not is_compact)
+        if hasattr(self, "wifi_pill") and self.wifi_pill:
+            self.wifi_pill.setVisible(not is_compact)
+        if hasattr(self, "chk_auto_popout") and self.chk_auto_popout:
+            self.chk_auto_popout.setVisible(not is_compact)
+        if hasattr(self, "btn_qr") and self.btn_qr:
+            self.btn_qr.setVisible(not is_compact)
+        if hasattr(self, "btn_snapshot") and self.btn_snapshot:
+            self.btn_snapshot.setVisible(not is_compact)
+        if hasattr(self, "btn_pin") and self.btn_pin:
+            self.btn_pin.setVisible(is_compact)
+
+        # Bottom bar
+        if hasattr(self, "log_label") and self.log_label:
+            self.log_label.setVisible(not is_compact)
+        if hasattr(self, "combo_audio_dev") and self.combo_audio_dev:
+            self.combo_audio_dev.setVisible(not is_compact)
+
     def pop_out(self):
         """Detaches the ZeroCast streaming viewport into an independent floating window."""
         if self.is_popped_out or not self._content_widget:
@@ -942,17 +1004,23 @@ class ZeroCastModule(BaseModule):
         if not self.popout_window:
             self.popout_window = ZeroCastPopoutWindow(self)
 
+        self._set_compact_mode(True)
+        if self.btn_popout:
+            self.btn_popout.setText("↙ Dock")
+            self.btn_popout.setToolTip("Dock ZeroCast back into the main Hub window")
+
         self._content_widget.setParent(None)
         self.popout_window.setCentralWidget(self._content_widget)
+        self._content_widget.show()
+        self.canvas.show()
+        self.canvas.update()
+
         self.popout_window.show()
         self.popout_window.raise_()
         self.popout_window.activateWindow()
 
         if self._stacked_container:
             self._stacked_container.setCurrentIndex(1)
-        if self.btn_popout:
-            self.btn_popout.setText("↙ Dock to Hub")
-            self.btn_popout.setToolTip("Dock ZeroCast back into the main Hub window")
         if self.log_label:
             self.log_label.setText("ZeroCast floating in standalone window")
 
@@ -961,18 +1029,27 @@ class ZeroCastModule(BaseModule):
         if not self.is_popped_out or not self._content_widget:
             return
         self.is_popped_out = False
+
         if self.popout_window:
+            self.popout_window.takeCentralWidget()
             self.popout_window.hide()
 
-        self._content_widget.setParent(None)
-        if self._dock_layout:
-            self._dock_layout.addWidget(self._content_widget)
-        if self._stacked_container:
-            self._stacked_container.setCurrentIndex(0)
-
+        self._set_compact_mode(False)
         if self.btn_popout:
             self.btn_popout.setText("↗ Pop-out")
             self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
+
+        self._content_widget.setParent(self._dock_container)
+        if self._dock_layout:
+            self._dock_layout.addWidget(self._content_widget)
+
+        self._content_widget.show()
+        self.canvas.show()
+        self.canvas.update()
+
+        if self._stacked_container:
+            self._stacked_container.setCurrentIndex(0)
+
         if self.log_label:
             self.log_label.setText("ZeroCast docked back to Hub")
 
