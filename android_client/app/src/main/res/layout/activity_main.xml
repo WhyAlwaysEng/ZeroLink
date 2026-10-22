@@ -12,11 +12,11 @@
         android:layout_height="wrap_content"
         android:orientation="vertical"
         android:paddingStart="20dp"
-        android:paddingTop="24dp"
+        android:paddingTop="28dp"
         android:paddingEnd="20dp"
-        android:paddingBottom="36dp">
+        android:paddingBottom="44dp">
 
-        <!-- Top Header Bar with Live Pill -->
+        <!-- Header: Brand Title & Status Pill -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -34,13 +34,15 @@
                     android:layout_height="wrap_content"
                     android:text="ZeroLink"
                     android:textColor="@color/text_primary"
-                    android:textSize="28sp"
-                    android:fontFamily="sans-serif-black" />
+                    android:textSize="26sp"
+                    android:fontFamily="sans-serif-black"
+                    android:letterSpacing="-0.02" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Ecosystem Hub • ZeroCast Module v1.0"
+                    android:layout_marginTop="2dp"
+                    android:text="Ecosystem Hub v1.0 • Windows &amp; Android"
                     android:textColor="@color/text_tertiary"
                     android:textSize="12sp" />
             </LinearLayout>
@@ -50,21 +52,21 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="@drawable/bg_badge_pill"
-                android:paddingStart="14dp"
-                android:paddingTop="7dp"
-                android:paddingEnd="14dp"
-                android:paddingBottom="7dp"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
                 android:text="● READY"
-                android:textColor="@color/status_green"
-                android:textSize="12sp"
-                android:fontFamily="sans-serif-medium" />
+                android:textColor="@color/text_primary"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-bold" />
         </LinearLayout>
 
-        <!-- 1. Connection Method Card -->
+        <!-- Connection Gateway Card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
+            android:layout_marginTop="22dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
@@ -75,18 +77,18 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="18dp">
+                android:padding="16dp">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="CONNECTION METHOD"
+                    android:text="DEVICE LINK GATEWAY"
                     android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
+                    android:textSize="10sp"
                     android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08" />
+                    android:letterSpacing="0.1" />
 
-                <!-- Segmented Mode Buttons -->
+                <!-- Segmented Buttons -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -97,29 +99,32 @@
                         android:id="@+id/btnModeUsb"
                         style="@style/Widget.Material3.Button.TonalButton"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="44dp"
                         android:layout_marginEnd="6dp"
                         android:layout_weight="1"
                         android:text="⚡ USB Cable"
-                        android:textColor="@color/status_green"
-                        android:textSize="13sp" />
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:cornerRadius="8dp" />
 
                     <Button
                         android:id="@+id/btnModeWifi"
                         style="@style/Widget.Material3.Button.OutlinedButton"
                         android:layout_width="0dp"
-                        android:layout_height="48dp"
+                        android:layout_height="44dp"
                         android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        android:text="📡 Wi-Fi (LAN)"
-                        android:textSize="13sp" />
+                        android:text="📡 Wi-Fi LAN"
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        app:cornerRadius="8dp" />
                 </LinearLayout>
 
-                <!-- IP & Port row -->
+                <!-- Target IP & Port -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
+                    android:layout_marginTop="10dp"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
@@ -129,7 +134,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginEnd="8dp"
                         android:layout_weight="2.2"
-                        android:hint="Target PC IP">
+                        android:hint="PC IP Address">
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etServerIp"
@@ -158,34 +163,42 @@
 
                 <Button
                     android:id="@+id/btnAutoDiscover"
-                    style="@style/Widget.Material3.Button.TonalButton"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="10dp"
-                    android:backgroundTint="#132B45"
-                    android:text="🔍 Auto-Discover PC (Scan Wi-Fi)"
-                    android:textColor="#38BDF8"
-                    android:textSize="13sp"
-                    android:textStyle="bold"
-                    app:cornerRadius="12dp" />
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:text="🔍 Auto-Discover PC on LAN"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    app:cornerRadius="8dp" />
 
                 <TextView
                     android:id="@+id/tvConnectionHint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="⚡ USB Mode Active: Zero-latency connection via 127.0.0.1:8888"
-                    android:textColor="@color/status_green"
+                    android:text="⚡ USB Active: Zero-latency via 127.0.0.1:8888"
+                    android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
-
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 2. Display & Native Resolution Card -->
+        <!-- Section Divider: Modules -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:text="ECOSYSTEM MODULES"
+            android:textColor="@color/text_tertiary"
+            android:textSize="11sp"
+            android:fontFamily="sans-serif-black"
+            android:letterSpacing="0.12" />
+
+        <!-- ==================== MODULE 1: ZeroCast ==================== -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
             app:cardBackgroundColor="@color/surface"
             app:cardCornerRadius="12dp"
             app:cardElevation="0dp"
@@ -198,6 +211,63 @@
                 android:orientation="vertical"
                 android:padding="18dp">
 
+                <!-- Module Header -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📺 "
+                        android:textSize="20sp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ZeroCast"
+                            android:textColor="@color/text_primary"
+                            android:textSize="16sp"
+                            android:fontFamily="sans-serif-black" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="GPU Mirroring &amp; Internal Audio"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge_pill"
+                        android:paddingStart="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="3dp"
+                        android:text="CORE"
+                        android:textColor="@color/text_primary"
+                        android:textSize="10sp"
+                        android:fontFamily="sans-serif-bold" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="14dp"
+                    android:layout_marginBottom="12dp"
+                    android:background="@color/surface_stroke" />
+
+                <!-- Resolution Selection -->
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -208,10 +278,10 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="DISPLAY RESOLUTION"
+                        android:text="RESOLUTION"
                         android:textColor="@color/text_tertiary"
-                        android:textSize="11sp"
-                        android:fontFamily="sans-serif-black"
+                        android:textSize="10sp"
+                        android:fontFamily="sans-serif-bold"
                         android:letterSpacing="0.08" />
 
                     <TextView
@@ -219,61 +289,101 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:background="@drawable/bg_badge_native"
-                        android:paddingStart="8dp"
-                        android:paddingTop="3dp"
-                        android:paddingEnd="8dp"
-                        android:paddingBottom="3dp"
+                        android:paddingStart="6dp"
+                        android:paddingTop="2dp"
+                        android:paddingEnd="6dp"
+                        android:paddingBottom="2dp"
                         android:text="100% NATIVE"
-                        android:textColor="@color/status_green"
-                        android:textSize="10sp"
+                        android:textColor="@color/text_primary"
+                        android:textSize="9sp"
                         android:fontFamily="sans-serif-bold" />
                 </LinearLayout>
 
                 <Spinner
                     android:id="@+id/spinnerResolution"
                     android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="8dp"
-                    android:background="@drawable/bg_spinner_card"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp" />
-
-                <!-- Framerate Section -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:text="FRAME RATE TARGET"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08" />
-
-                <Spinner
-                    android:id="@+id/spinnerFps"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
+                    android:layout_height="44dp"
                     android:layout_marginTop="6dp"
                     android:background="@drawable/bg_spinner_card"
                     android:paddingStart="12dp"
                     android:paddingEnd="12dp" />
 
-                <!-- Capture Source Section -->
+                <!-- Framerate & Bitrate Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:orientation="horizontal">
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginEnd="6dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="FPS TARGET"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="10sp"
+                            android:fontFamily="sans-serif-bold"
+                            android:letterSpacing="0.08" />
+
+                        <Spinner
+                            android:id="@+id/spinnerFps"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="4dp"
+                            android:background="@drawable/bg_spinner_card"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp" />
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="6dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="BITRATE"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="10sp"
+                            android:fontFamily="sans-serif-bold"
+                            android:letterSpacing="0.08" />
+
+                        <Spinner
+                            android:id="@+id/spinnerBitrate"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="4dp"
+                            android:background="@drawable/bg_spinner_card"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="8dp" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- Source Choice (Screen vs Camera) -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="12dp"
                     android:text="CAPTURE SOURCE"
                     android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-black"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-bold"
                     android:letterSpacing="0.08" />
 
                 <RadioGroup
                     android:id="@+id/rgSource"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
+                    android:layout_marginTop="4dp"
                     android:orientation="horizontal">
 
                     <RadioButton
@@ -282,7 +392,7 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:checked="true"
-                        android:text="📱 Screen"
+                        android:text="Screen"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp" />
 
@@ -291,7 +401,7 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="📷 Rear"
+                        android:text="Rear Cam"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp" />
 
@@ -300,63 +410,30 @@
                         android:layout_width="0dp"
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
-                        android:text="🤳 Front"
+                        android:text="Front Cam"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp" />
                 </RadioGroup>
 
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- 3. Hardware Video Codec & Audio Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ENCODING ENGINE"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08" />
-
-                <!-- Codec Choice -->
+                <!-- Codec Choice (Hidden / Default H.264) -->
                 <RadioGroup
                     android:id="@+id/rgCodec"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical">
+                    android:visibility="gone">
 
                     <RadioButton
                         android:id="@+id/rbH264"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:checked="true"
-                        android:text="⚡ H.264 Baseline (GPU Hardware • 60 FPS)"
-                        android:textColor="@color/status_green"
-                        android:textStyle="bold" />
+                        android:text="H.264" />
 
                     <RadioButton
                         android:id="@+id/rbMjpeg"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="🖼️ MJPEG Frame Stream"
-                        android:textColor="@color/text_secondary" />
+                        android:text="MJPEG" />
                 </RadioGroup>
 
                 <!-- Audio Switch -->
@@ -364,64 +441,16 @@
                     android:id="@+id/chkAudio"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:checked="true"
-                    android:text="🔊 Stream Device Audio (Direct to PC Speakers)"
-                    android:textColor="@color/text_primary" />
-
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-        <!-- 4. Advanced Streaming Settings Card -->
-        <com.google.android.material.card.MaterialCardView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            app:cardBackgroundColor="@color/surface"
-            app:cardCornerRadius="12dp"
-            app:cardElevation="0dp"
-            app:strokeColor="@color/surface_stroke"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="18dp">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="ADVANCED STREAMING SETTINGS"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08" />
-
-                <!-- Bitrate Selection as Full-Width Card Row -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:text="H.264 TARGET BITRATE"
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="11sp"
-                    android:fontFamily="sans-serif-black"
-                    android:letterSpacing="0.08" />
-
-                <Spinner
-                    android:id="@+id/spinnerBitrate"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
                     android:layout_marginTop="6dp"
-                    android:background="@drawable/bg_spinner_card"
-                    android:paddingStart="12dp"
-                    android:paddingEnd="12dp" />
+                    android:checked="true"
+                    android:text="🔊 Stream Device Audio (To PC Speakers)"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp" />
 
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="10dp"
                     android:layout_marginBottom="10dp"
                     android:background="@color/surface_stroke" />
 
@@ -432,67 +461,180 @@
                     android:layout_height="wrap_content"
                     android:text="📊 Floating Phone HUD (CPU / RAM %)"
                     android:textColor="@color/text_primary"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="Tap floating pill on phone to shrink to tiny dot. Moves anywhere freely."
-                    android:textColor="@color/text_tertiary"
-                    android:textSize="11sp" />
-
-                <View
-                    android:layout_width="match_parent"
-                    android:layout_height="1dp"
-                    android:layout_marginTop="12dp"
-                    android:layout_marginBottom="10dp"
-                    android:background="@color/surface_stroke" />
 
                 <!-- Auto-Dim Screen Switch -->
                 <com.google.android.material.switchmaterial.SwitchMaterial
                     android:id="@+id/switchDimScreen"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
                     android:text="🌙 Auto-Dim Screen (Cooling &amp; Battery Saver)"
                     android:textColor="@color/text_primary"
-                    android:textSize="13sp"
+                    android:textSize="12sp"
                     android:textStyle="bold" />
 
+                <!-- START STREAMING BUTTON -->
+                <Button
+                    android:id="@+id/btnToggleStream"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="18dp"
+                    android:backgroundTint="@color/primary"
+                    android:text="START STREAMING"
+                    android:textColor="@color/on_primary"
+                    android:textSize="14sp"
+                    android:fontFamily="sans-serif-black"
+                    android:letterSpacing="0.04"
+                    app:cornerRadius="8dp" />
+
                 <TextView
+                    android:id="@+id/tvMetricHint"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="4dp"
-                    android:text="Dims phone backlight to 1% while streaming. PC monitor retains 100% full vibrant brightness."
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="Zero-Latency GPU Pipeline • Ready"
                     android:textColor="@color/text_tertiary"
                     android:textSize="11sp" />
 
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Hero Streaming Action Button -->
-        <Button
-            android:id="@+id/btnToggleStream"
-            android:layout_width="match_parent"
-            android:layout_height="56dp"
-            android:layout_marginTop="22dp"
-            android:backgroundTint="@color/primary"
-            android:text="START STREAMING"
-            android:textColor="@color/on_primary"
-            android:textSize="15sp"
-            android:fontFamily="sans-serif-black"
-            app:cornerRadius="10dp" />
-
-        <TextView
-            android:id="@+id/tvMetricHint"
+        <!-- ==================== MODULE 2: ZeroDrop (Future) ==================== -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:gravity="center"
-            android:text="Zero-Latency Pipeline • Tap Start to Cast Screen"
-            android:textColor="@color/text_tertiary"
-            android:textSize="11sp" />
+            android:layout_marginTop="14dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/surface_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📁 "
+                        android:textSize="18sp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ZeroDrop"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:fontFamily="sans-serif-black" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Peer-to-peer Wi-Fi / USB file transfer"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge_pill"
+                        android:paddingStart="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="3dp"
+                        android:text="v1.1 SOON"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="9sp"
+                        android:fontFamily="sans-serif-bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- ==================== MODULE 3: ZeroClip (Future) ==================== -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="0dp"
+            app:strokeColor="@color/surface_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="📋 "
+                        android:textSize="18sp" />
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="ZeroClip"
+                            android:textColor="@color/text_primary"
+                            android:textSize="15sp"
+                            android:fontFamily="sans-serif-black" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Real-time two-way clipboard sync"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="11sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_badge_pill"
+                        android:paddingStart="8dp"
+                        android:paddingTop="3dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="3dp"
+                        android:text="v1.1 SOON"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="9sp"
+                        android:fontFamily="sans-serif-bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
 </ScrollView>
