@@ -33,6 +33,7 @@ class ZeroMixActivity : AppCompatActivity() {
     private var discovery: NetworkDiscovery? = null
 
     private var isUserDragging = false
+    private var isApplyingState = false
 
     private val recordAudioPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -178,13 +179,15 @@ class ZeroMixActivity : AppCompatActivity() {
 
         // Ducking
         binding.switchDucking.setOnCheckedChangeListener { _, isChecked ->
-            mixManager?.setDucking(isChecked, binding.sbDuckLevel.progress)
+            if (!isApplyingState) {
+                mixManager?.setDucking(isChecked, binding.sbDuckLevel.progress)
+            }
         }
 
         binding.sbDuckLevel.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 binding.tvDuckLevel.text = "$progress%"
-                if (fromUser) {
+                if (fromUser && !isApplyingState) {
                     mixManager?.setDucking(binding.switchDucking.isChecked, progress)
                 }
             }
@@ -281,23 +284,28 @@ class ZeroMixActivity : AppCompatActivity() {
     }
 
     private fun applyMixerState(state: ZeroMixState) {
-        if (!isUserDragging) {
-            binding.sbMicVol.progress = state.micVol
-            binding.tvMicVol.text = "${state.micVol}%"
+        isApplyingState = true
+        try {
+            if (!isUserDragging) {
+                binding.sbMicVol.progress = state.micVol
+                binding.tvMicVol.text = "${state.micVol}%"
 
-            binding.sbMusicVol.progress = state.musicVol
-            binding.tvMusicVol.text = "${state.musicVol}%"
+                binding.sbMusicVol.progress = state.musicVol
+                binding.tvMusicVol.text = "${state.musicVol}%"
 
-            binding.sbSoundVol.progress = state.soundVol
-            binding.tvSoundVol.text = "${state.soundVol}%"
+                binding.sbSoundVol.progress = state.soundVol
+                binding.tvSoundVol.text = "${state.soundVol}%"
+            }
+
+            updateMuteBtnStyle(binding.btnMuteMic, state.micMuted)
+            updateMuteBtnStyle(binding.btnMuteMusic, state.musicMuted)
+
+            binding.switchDucking.isChecked = state.duckingEnabled
+            binding.sbDuckLevel.progress = state.duckingLevel
+            binding.tvDuckLevel.text = "${state.duckingLevel}%"
+        } finally {
+            isApplyingState = false
         }
-
-        updateMuteBtnStyle(binding.btnMuteMic, state.micMuted)
-        updateMuteBtnStyle(binding.btnMuteMusic, state.musicMuted)
-
-        binding.switchDucking.isChecked = state.duckingEnabled
-        binding.sbDuckLevel.progress = state.duckingLevel
-        binding.tvDuckLevel.text = "${state.duckingLevel}%"
     }
 
     private fun updateMuteBtnStyle(btn: android.widget.Button, isMuted: Boolean) {

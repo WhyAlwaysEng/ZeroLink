@@ -215,6 +215,9 @@ class ZeroMixModule(BaseModule):
         self.engine.ducking_state_changed.connect(self._on_ducking_changed)
         self.engine.soundboard_list_changed.connect(self._refresh_soundboard_ui)
         self.engine.phone_stream_status_changed.connect(self._on_phone_stream_status_changed)
+        self.engine.volume_changed.connect(self._on_engine_volume_changed)
+        self.engine.mute_changed.connect(self._on_engine_mute_changed)
+        self.engine.ducking_config_changed.connect(self._on_engine_ducking_config_changed)
         self.service.client_count_changed.connect(self._on_client_count_changed)
 
     @property
@@ -658,3 +661,31 @@ class ZeroMixModule(BaseModule):
             else:
                 self.lbl_phone_cast_status.setText("● Phone Cast: Ready")
                 self.lbl_phone_cast_status.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 600; padding: 2px 0;")
+
+    def _on_engine_volume_changed(self, channel: str, pct: int):
+        if channel == "mic" and self.strip_mic:
+            self.strip_mic.set_volume_externally(pct)
+        elif channel == "music" and self.strip_music:
+            self.strip_music.set_volume_externally(pct)
+        elif channel == "soundboard" and self.strip_sound:
+            self.strip_sound.set_volume_externally(pct)
+
+    def _on_engine_mute_changed(self, channel: str, muted: bool):
+        if channel == "mic" and self.strip_mic:
+            self.strip_mic.set_mute_externally(muted)
+        elif channel == "music" and self.strip_music:
+            self.strip_music.set_mute_externally(muted)
+        elif channel == "soundboard" and self.strip_sound:
+            self.strip_sound.set_mute_externally(muted)
+
+    def _on_engine_ducking_config_changed(self, enabled: bool, level: int):
+        if self.chk_ducking:
+            self.chk_ducking.blockSignals(True)
+            self.chk_ducking.setChecked(enabled)
+            self.chk_ducking.blockSignals(False)
+        if self.slider_duck_level:
+            self.slider_duck_level.blockSignals(True)
+            self.slider_duck_level.setValue(level)
+            self.slider_duck_level.blockSignals(False)
+        if self.lbl_duck_level:
+            self.lbl_duck_level.setText(f"{level}%")

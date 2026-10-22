@@ -22,6 +22,10 @@ class AudioMixerEngine(QObject):
     sound_playback_changed = pyqtSignal(str, bool)        # sound_name, is_playing
     playback_state_changed = pyqtSignal(bool, str)        # is_music_playing, current_track_name
     phone_stream_status_changed = pyqtSignal(bool)
+    volume_changed = pyqtSignal(str, int)                 # channel ("mic", "music", "soundboard"), pct
+    mute_changed = pyqtSignal(str, bool)                  # channel, muted
+    ducking_config_changed = pyqtSignal(bool, int)        # enabled, level_pct
+    state_changed = pyqtSignal()
 
     def __init__(self, sample_rate: int = 48000, block_size: int = 1024, parent=None):
         super().__init__(parent)
@@ -550,26 +554,41 @@ class AudioMixerEngine(QObject):
 
     def set_mic_volume(self, pct: int):
         self.vol_mic = max(0.0, min(1.5, pct / 100.0))
+        self.volume_changed.emit("mic", pct)
+        self.state_changed.emit()
 
     def set_music_volume(self, pct: int):
         self.vol_music = max(0.0, min(1.0, pct / 100.0))
+        self.volume_changed.emit("music", pct)
+        self.state_changed.emit()
 
     def set_soundboard_volume(self, pct: int):
         self.vol_soundboard = max(0.0, min(1.0, pct / 100.0))
+        self.volume_changed.emit("soundboard", pct)
+        self.state_changed.emit()
 
     def set_mic_mute(self, muted: bool):
         self.mute_mic = muted
+        self.mute_changed.emit("mic", muted)
+        self.state_changed.emit()
 
     def set_music_mute(self, muted: bool):
         self.mute_music = muted
+        self.mute_changed.emit("music", muted)
+        self.state_changed.emit()
 
     def set_soundboard_mute(self, muted: bool):
         self.mute_soundboard = muted
+        self.mute_changed.emit("soundboard", muted)
+        self.state_changed.emit()
 
     def set_monitor_mic(self, enabled: bool):
         self.monitor_mic = enabled
+        self.state_changed.emit()
 
     def set_ducking_config(self, enabled: bool, duck_level_pct: int, threshold_db: float = -32.0):
         self.ducking_enabled = enabled
         self.ducking_level = max(0.0, min(0.8, duck_level_pct / 100.0))
         self.voice_threshold_db = threshold_db
+        self.ducking_config_changed.emit(enabled, duck_level_pct)
+        self.state_changed.emit()

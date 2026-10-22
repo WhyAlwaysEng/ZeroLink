@@ -31,6 +31,7 @@ class ZeroMixService(QObject):
 
         # Hook engine signals to broadcast updates to mobile
         self.engine.soundboard_list_changed.connect(self.broadcast_sound_list)
+        self.engine.state_changed.connect(self.broadcast_state)
 
     def start(self) -> bool:
         if self.is_running:
@@ -173,6 +174,11 @@ class ZeroMixService(QObject):
             "ducking_level": int(self.engine.ducking_level * 100),
             "sounds": [{"id": item["id"], "name": item["name"]} for item in self.engine.soundboard_items]
         }
+
+    def broadcast_state(self):
+        """Broadcasts latest mixer state (volumes, mutes, ducking, sounds) to all connected mobile clients."""
+        payload = self._get_full_state_payload()
+        self.broadcast(payload)
 
     def broadcast_sound_list(self):
         """Notifies all connected mobile clients with the latest soundboard list."""
