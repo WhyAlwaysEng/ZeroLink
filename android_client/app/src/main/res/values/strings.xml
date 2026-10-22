@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">ZeroCast</string>
+    <string name="app_name">ZeroLink</string>
     <string name="title_connection">Connection Mode</string>
     <string name="title_stream_settings">Stream Configuration</string>
     <string name="hint_server_ip">Target PC IP (e.g. 192.168.1.50)</string>

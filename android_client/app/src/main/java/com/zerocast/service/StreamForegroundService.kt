@@ -134,6 +134,15 @@ class StreamForegroundService : LifecycleService() {
 
             override fun onError(error: Throwable) {
                 Log.e(TAG, "Stream error: ${error.message}")
+                mainHandler.post {
+                    val msg = if (error is java.net.ConnectException) {
+                        "⚠️ Connection refused: Ensure ZeroCast module is ENABLED in ZeroLink Hub on PC"
+                    } else {
+                        "Stream error: ${error.localizedMessage ?: "Connection failed"}"
+                    }
+                    android.widget.Toast.makeText(applicationContext, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                stopStreaming()
             }
 
             override fun onCongestionChanged(isCongested: Boolean) {
