@@ -178,6 +178,10 @@ class ZeroMixService(QObject):
             level = int(msg.get("level", int(self.engine.ducking_level * 100)))
             self.engine.set_ducking_config(enabled, level)
 
+        elif action == "SET_VOICE_EFFECT":
+            eff = msg.get("effect", "OFF")
+            self.engine.set_voice_effect(eff)
+
     def _get_full_state_payload(self) -> Dict:
         return {
             "action": "STATE_UPDATE",
@@ -189,6 +193,7 @@ class ZeroMixService(QObject):
             "sound_muted": self.engine.mute_soundboard,
             "ducking_enabled": self.engine.ducking_enabled,
             "ducking_level": int(self.engine.ducking_level * 100),
+            "voice_effect": self.engine.get_voice_effect(),
             "sounds": [{"id": item["id"], "name": item["name"]} for item in self.engine.soundboard_items]
         }
 

@@ -218,6 +218,7 @@ class ZeroMixModule(BaseModule):
         self.engine.volume_changed.connect(self._on_engine_volume_changed)
         self.engine.mute_changed.connect(self._on_engine_mute_changed)
         self.engine.ducking_config_changed.connect(self._on_engine_ducking_config_changed)
+        self.engine.voice_effect_changed.connect(self._on_voice_effect_changed)
         self.service.client_count_changed.connect(self._on_client_count_changed)
 
     @property
@@ -439,6 +440,49 @@ class ZeroMixModule(BaseModule):
         stems_layout.addWidget(self.strip_sound, 1)
 
         content_layout.addLayout(stems_layout)
+
+        # Voice FX Modulator Card (Real-Time Voice Changer)
+        vfx_card = QFrame()
+        vfx_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; }")
+        vfx_l = QVBoxLayout(vfx_card)
+        vfx_l.setSpacing(12)
+
+        vfx_hdr = QHBoxLayout()
+        vfx_title = QLabel("🎙️ Real-Time Voice Changer (Voice FX)")
+        vfx_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        vfx_title.setStyleSheet("color: #111827;")
+        vfx_hdr.addWidget(vfx_title)
+
+        vfx_hdr.addStretch()
+
+        self.lbl_vfx_active = QLabel("● EFFECT: NORMAL VOICE")
+        self.lbl_vfx_active.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 700; background: #F3F4F6; padding: 3px 8px; border-radius: 4px;")
+        vfx_hdr.addWidget(self.lbl_vfx_active)
+        vfx_l.addLayout(vfx_hdr)
+
+        vfx_sub = QLabel("Transform your microphone voice in real time before sending to Discord, Game Chat, or Zoom.")
+        vfx_sub.setStyleSheet("color: #6B7280; font-size: 11px; border: none;")
+        vfx_l.addWidget(vfx_sub)
+
+        # Effect Buttons Row
+        vfx_btn_row = QHBoxLayout()
+        vfx_btn_row.setSpacing(8)
+        self.vfx_buttons = {}
+
+        effects = self.engine.voice_fx.AVAILABLE_EFFECTS
+        for eff in effects:
+            btn = QPushButton(f"{eff['icon']} {eff['name']}")
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            eff_id = eff["id"]
+            btn.clicked.connect(lambda checked, eid=eff_id: self._on_vfx_button_clicked(eid))
+            self.vfx_buttons[eff_id] = btn
+            vfx_btn_row.addWidget(btn)
+
+        vfx_l.addLayout(vfx_btn_row)
+        content_layout.addWidget(vfx_card)
+
+        # Initial render of VFX active state
+        self._on_voice_effect_changed(self.engine.get_voice_effect())
 
         # Smart Auto-Ducking Card
         duck_card = QFrame()
@@ -717,6 +761,41 @@ class ZeroMixModule(BaseModule):
         btn_del.clicked.connect(lambda _, sid=item["id"]: self.engine.remove_sound(sid))
         l.addWidget(btn_del)
         return tile
+
+    def _on_vfx_button_clicked(self, effect_id: str):
+        self.engine.set_voice_effect(effect_id)
+
+    def _on_voice_effect_changed(self, effect_id: str):
+        if not hasattr(self, "vfx_buttons") or not self.vfx_buttons:
+            return
+        for eid, btn in self.vfx_buttons.items():
+            if eid == effect_id:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #111827; color: #FFFFFF; font-weight: bold;
+                        border: 1px solid #111827; border-radius: 8px; padding: 7px 12px; font-size: 11px;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F3F4F6; color: #374151; font-weight: 500;
+                        border: 1px solid #E5E7EB; border-radius: 8px; padding: 7px 12px; font-size: 11px;
+                    }
+                    QPushButton:hover { background-color: #E5E7EB; color: #111827; }
+                """)
+        if hasattr(self, "lbl_vfx_active") and self.lbl_vfx_active:
+            eff_name = effect_id
+            for e in self.engine.voice_fx.AVAILABLE_EFFECTS:
+                if e["id"] == effect_id:
+                    eff_name = f"{e['icon']} {e['name'].upper()}"
+                    break
+            if effect_id == "OFF":
+                self.lbl_vfx_active.setText("● EFFECT: NORMAL VOICE")
+                self.lbl_vfx_active.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 700; background: #F3F4F6; padding: 3px 8px; border-radius: 4px;")
+            else:
+                self.lbl_vfx_active.setText(f"● ACTIVE: {eff_name}")
+                self.lbl_vfx_active.setStyleSheet("color: #059669; font-size: 10px; font-weight: 700; background: #ECFDF5; padding: 3px 8px; border-radius: 4px;")
 
     def _on_ducking_toggled(self, checked: bool):
         val = self.slider_duck_level.value() if self.slider_duck_level else 20

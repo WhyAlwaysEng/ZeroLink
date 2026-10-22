@@ -13,6 +13,7 @@ import numpy as np
 import sounddevice as sd
 import av
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
+from core.voice_fx import VoiceFxProcessor
 
 
 class AudioMixerEngine(QObject):
@@ -25,6 +26,7 @@ class AudioMixerEngine(QObject):
     volume_changed = pyqtSignal(str, int)                 # channel ("mic", "music", "soundboard"), pct
     mute_changed = pyqtSignal(str, bool)                  # channel, muted
     ducking_config_changed = pyqtSignal(bool, int)        # enabled, level_pct
+    voice_effect_changed = pyqtSignal(str)                # effect_id e.g. "OFF", "RADIO", "DEEP", ...
     state_changed = pyqtSignal()
 
     def __init__(self, sample_rate: int = 48000, block_size: int = 1024, parent=None):
@@ -60,6 +62,9 @@ class AudioMixerEngine(QObject):
         self.duck_release = 0.05          # Speed of fading back up (smooth)
         self._current_duck_factor = 1.0
         self._is_ducking = False
+
+        # Real-time Voice FX Processor
+        self.voice_fx = VoiceFxProcessor(sample_rate=self.sample_rate)
 
         # Audio Buffers & Playback state
         self._lock = threading.Lock()
@@ -315,9 +320,12 @@ class AudioMixerEngine(QObject):
                 self._is_ducking = False
                 self.ducking_state_changed.emit(False, 1.0)
 
+        # Apply Real-Time Voice FX
+        processed_mono = self.voice_fx.process(mic_mono)
+
         # Scale mic audio
         effective_mic = 0.0 if self.mute_mic else self.vol_mic
-        mic_stereo = np.column_stack((mic_mono * effective_mic, mic_mono * effective_mic))
+        mic_stereo = np.column_stack((processed_mono * effective_mic, processed_mono * effective_mic))
 
         # 2. Process Music / Phone Cast Channel
         music_stereo = np.zeros((frames, 2), dtype=np.float32)
@@ -581,6 +589,16 @@ class AudioMixerEngine(QObject):
         self.mute_soundboard = muted
         self.mute_changed.emit("soundboard", muted)
         self.state_changed.emit()
+
+    def set_voice_effect(self, effect_id: str):
+        """Sets real-time voice changer effect ('OFF', 'RADIO', 'DEEP', 'CHIPMUNK', 'ROBOT', 'ECHO')."""
+        self.voice_fx.set_effect(effect_id)
+        current = self.voice_fx.get_current_effect()
+        self.voice_effect_changed.emit(current)
+        self.state_changed.emit()
+
+    def get_voice_effect(self) -> str:
+        return self.voice_fx.get_current_effect()
 
     def set_monitor_mic(self, enabled: bool):
         self.monitor_mic = enabled

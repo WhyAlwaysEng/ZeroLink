@@ -28,6 +28,7 @@ data class ZeroMixState(
     val soundMuted: Boolean = false,
     val duckingEnabled: Boolean = true,
     val duckingLevel: Int = 20,
+    val voiceEffect: String = "OFF",
     val sounds: List<SoundboardItem> = emptyList()
 )
 
@@ -117,6 +118,7 @@ class ZeroMixManager(
             soundMuted = json.optBoolean("sound_muted", false),
             duckingEnabled = json.optBoolean("ducking_enabled", true),
             duckingLevel = json.optInt("ducking_level", 20),
+            voiceEffect = json.optString("voice_effect", "OFF"),
             sounds = sounds
         )
     }
@@ -173,6 +175,13 @@ class ZeroMixManager(
             put("action", "SET_DUCKING")
             put("enabled", enabled)
             put("level", level)
+        })
+    }
+
+    fun setVoiceEffect(effectId: String) {
+        sendCommand(JSONObject().apply {
+            put("action", "SET_VOICE_EFFECT")
+            put("effect", effectId)
         })
     }
 

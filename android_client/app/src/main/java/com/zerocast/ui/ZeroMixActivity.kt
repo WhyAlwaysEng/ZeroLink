@@ -210,6 +210,23 @@ class ZeroMixActivity : AppCompatActivity() {
             mixManager?.stopSound()
         }
 
+        // Voice Changer (Voice FX)
+        val vfxMap = mapOf(
+            binding.btnVfxOff to "OFF",
+            binding.btnVfxRadio to "RADIO",
+            binding.btnVfxDeep to "DEEP",
+            binding.btnVfxChipmunk to "CHIPMUNK",
+            binding.btnVfxRobot to "ROBOT",
+            binding.btnVfxEcho to "ECHO"
+        )
+        for ((btn, effectId) in vfxMap) {
+            btn.setOnClickListener {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                mixManager?.setVoiceEffect(effectId)
+                updateVoiceEffectUI(effectId)
+            }
+        }
+
         // Phone Audio Cast (Audio-Only)
         binding.btnToggleAudioCast.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -309,9 +326,36 @@ class ZeroMixActivity : AppCompatActivity() {
             binding.switchDucking.isChecked = state.duckingEnabled
             binding.sbDuckLevel.progress = state.duckingLevel
             binding.tvDuckLevel.text = "${state.duckingLevel}%"
+
+            updateVoiceEffectUI(state.voiceEffect)
         } finally {
             isApplyingState = false
         }
+    }
+
+    private fun updateVoiceEffectUI(activeId: String) {
+        val upperId = activeId.uppercase().trim()
+        val buttons = listOf(
+            Triple(binding.btnVfxOff, "OFF", "Normal"),
+            Triple(binding.btnVfxRadio, "RADIO", "📻 Radio"),
+            Triple(binding.btnVfxDeep, "DEEP", "🦁 Deep"),
+            Triple(binding.btnVfxChipmunk, "CHIPMUNK", "🐿️ Helium"),
+            Triple(binding.btnVfxRobot, "ROBOT", "🤖 Cyborg"),
+            Triple(binding.btnVfxEcho, "ECHO", "🏟️ Stadium")
+        )
+
+        var activeLabel = "Normal"
+        for ((btn, id, label) in buttons) {
+            if (id == upperId) {
+                activeLabel = label
+                btn.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
+                btn.setTextColor(ContextCompat.getColor(this, R.color.background))
+            } else {
+                btn.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.card_background))
+                btn.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+            }
+        }
+        binding.tvActiveVfx.text = activeLabel
     }
 
     private fun updateMuteBtnStyle(btn: android.widget.Button, isMuted: Boolean) {
