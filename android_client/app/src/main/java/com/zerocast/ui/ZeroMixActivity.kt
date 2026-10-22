@@ -87,9 +87,6 @@ class ZeroMixActivity : AppCompatActivity() {
             }
         )
 
-        // Auto-connect
-        startConnect()
-
         // Sync with background streaming service state
         StreamForegroundService.stateListener = object : StreamForegroundService.ServiceStateListener {
             override fun onStreamingStateChanged(isStreaming: Boolean, isAudioOnly: Boolean) {
@@ -283,10 +280,13 @@ class ZeroMixActivity : AppCompatActivity() {
 
     private fun startConnect() {
         val host = binding.etServerIp.text.toString().trim()
-        if (host.isNotEmpty()) {
-            ZeroLinkConfig.setServerIp(this, host)
-            mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
+        if (host.isEmpty()) {
+            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
+            return
         }
+        ZeroLinkConfig.setServerIp(this, host)
+        binding.btnConnect.text = "Connecting..."
+        mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
     }
 
     private fun applyMixerState(state: ZeroMixState) {

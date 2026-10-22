@@ -3,6 +3,7 @@ package com.zerocast.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -43,9 +44,11 @@ class ZeroClipActivity : AppCompatActivity() {
                 if (isConnected) {
                     binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
                     binding.btnConnect.text = "Disconnect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
                     binding.btnConnect.text = "Sync"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             },
             onClipSynced = { text, source, ts ->
@@ -53,9 +56,6 @@ class ZeroClipActivity : AppCompatActivity() {
                 addHistoryItem(text, source, ts)
             }
         )
-
-        // Auto-connect on open
-        startSync()
     }
 
     private fun setupListeners() {
@@ -115,10 +115,13 @@ class ZeroClipActivity : AppCompatActivity() {
 
     private fun startSync() {
         val ip = binding.etServerIp.text.toString().trim()
-        if (ip.isNotEmpty()) {
-            ZeroLinkConfig.setServerIp(this, ip)
-            clipManager?.start(ip, ZeroLinkConfig.DEFAULT_CLIP_PORT)
+        if (ip.isEmpty()) {
+            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
+            return
         }
+        ZeroLinkConfig.setServerIp(this, ip)
+        binding.btnConnect.text = "Connecting..."
+        clipManager?.start(ip, ZeroLinkConfig.DEFAULT_CLIP_PORT)
     }
 
     private fun updateCurrentClipboardDisplay() {

@@ -18,7 +18,10 @@ class FileTransferManager(private val context: Context) {
 
     private var receiverSocket: Socket? = null
     private var receiverJob: Job? = null
-    private var isReceiverRunning = false
+    var isReceiverRunning = false
+        private set
+    var isReceiverConnected = false
+        private set
 
     /**
      * Sends a file from Android to PC over a dedicated upload connection.
@@ -127,6 +130,8 @@ class FileTransferManager(private val context: Context) {
                     val regHeader = JSONObject().apply {
                         put("action", "REGISTER_RECEIVER")
                         put("device", Build.MODEL)
+                        put("device_model", Build.MODEL)
+                        put("model", Build.MODEL)
                     }.toString() + "\n"
                     out.write(regHeader.toByteArray(Charsets.UTF_8))
                     out.flush()
@@ -138,6 +143,7 @@ class FileTransferManager(private val context: Context) {
                         throw Exception("Registration rejected")
                     }
 
+                    isReceiverConnected = true
                     withContext(Dispatchers.Main) {
                         onStatusChanged(true, "● CONNECTED TO PC")
                     }
@@ -227,11 +233,18 @@ class FileTransferManager(private val context: Context) {
                         }
                     }
                 } catch (e: Exception) {
+                    isReceiverConnected = false
                     Log.d(TAG, "ZeroDrop receiver connection: ${e.message}")
                     withContext(Dispatchers.Main) {
-                        onStatusChanged(false, "○ DISCONNECTED")
+                        val errMsg = when (e) {
+                            is java.net.ConnectException -> "Connection refused: Ensure ZeroDrop is ENABLED on PC"
+                            is java.net.SocketTimeoutException -> "Connection timed out"
+                            else -> e.localizedMessage ?: "Connection failed"
+                        }
+                        onStatusChanged(false, "○ DISCONNECTED ($errMsg)")
                     }
                 } finally {
+                    isReceiverConnected = false
                     try { receiverSocket?.close() } catch (e: Exception) {}
                     receiverSocket = null
                 }
@@ -257,6 +270,7 @@ class FileTransferManager(private val context: Context) {
 
     fun stopReceiveWorker() {
         isReceiverRunning = false
+        isReceiverConnected = false
         receiverJob?.cancel()
         receiverJob = null
         try {

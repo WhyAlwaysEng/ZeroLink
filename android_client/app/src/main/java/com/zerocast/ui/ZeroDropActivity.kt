@@ -1,6 +1,7 @@
 package com.zerocast.ui
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Bundle
 import android.text.format.Formatter
@@ -50,9 +51,6 @@ class ZeroDropActivity : AppCompatActivity() {
 
         setupListeners()
         loadExistingReceivedFiles()
-
-        // Auto-connect receiver worker to PC
-        startReceiver()
     }
 
     private fun setupListeners() {
@@ -62,7 +60,15 @@ class ZeroDropActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            startReceiver()
+            if (transferManager.isReceiverRunning) {
+                transferManager.stopReceiveWorker()
+                binding.btnConnect.text = "Connect"
+                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
+                binding.tvDropStatus.text = "○ DISCONNECTED"
+                binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            } else {
+                startReceiver()
+            }
         }
 
         binding.btnModeUsb.setOnClickListener {
@@ -115,8 +121,15 @@ class ZeroDropActivity : AppCompatActivity() {
 
     private fun startReceiver() {
         val host = binding.etServerIp.text.toString().trim()
-        if (host.isEmpty()) return
+        if (host.isEmpty()) {
+            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
+            return
+        }
         ZeroLinkConfig.setServerIp(this, host)
+
+        binding.btnConnect.text = "Connecting..."
+        binding.tvDropStatus.text = "Connecting to $host:${ZeroLinkConfig.DEFAULT_DROP_PORT}..."
+        binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
 
         transferManager.startReceiveWorker(
             host = host,
@@ -140,10 +153,12 @@ class ZeroDropActivity : AppCompatActivity() {
                 binding.tvDropStatus.text = msg
                 if (isConnected) {
                     binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                    binding.btnConnect.text = "Connected"
+                    binding.btnConnect.text = "Disconnect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
                     binding.btnConnect.text = "Connect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             }
         )
