@@ -30,8 +30,9 @@ class FileTransferService(QObject):
         self.is_running = False
 
         self._server_sock: Optional[socket.socket] = None
-        self._clients: List[socket.socket] = []
+        self._receiver_clients: List[socket.socket] = []
         self._lock = threading.Lock()
+        self._transfer_lock = threading.Lock()
         self._server_thread: Optional[threading.Thread] = None
 
     def start(self) -> bool:
@@ -60,12 +61,12 @@ class FileTransferService(QObject):
     def stop(self) -> bool:
         self.is_running = False
         with self._lock:
-            for c in self._clients:
+            for c in self._receiver_clients:
                 try:
                     c.close()
                 except Exception:
                     pass
-            self._clients.clear()
+            self._receiver_clients.clear()
 
         if self._server_sock:
             try:
@@ -81,10 +82,6 @@ class FileTransferService(QObject):
         while self.is_running and self._server_sock:
             try:
                 client_sock, addr = self._server_sock.accept()
-                with self._lock:
-                    self._clients.append(client_sock)
-                self.client_count_changed.emit(len(self._clients))
-
                 t = threading.Thread(target=self._handle_client, args=(client_sock,), daemon=True)
                 t.start()
             except Exception:
@@ -101,68 +98,114 @@ class FileTransferService(QObject):
                 header_bytes += chunk
 
             if not header_bytes:
-                self._close_sock(sock)
+                sock.close()
                 return
 
             line, rest = header_bytes.split(b"\n", 1)
             meta = json.loads(line.decode("utf-8"))
-
             action = meta.get("action")
-            if action == "SEND_FILE":
-                # Incoming file from mobile to PC
-                filename = os.path.basename(meta.get("filename", "unknown_file"))
-                filesize = int(meta.get("filesize", 0))
 
-                save_path = os.path.join(self.download_dir, filename)
-                # Handle filename collisions
-                base, ext = os.path.splitext(filename)
-                idx = 1
-                while os.path.exists(save_path):
-                    save_path = os.path.join(self.download_dir, f"{base}_{idx}{ext}")
-                    idx += 1
+            if action == "REGISTER_RECEIVER":
+                # Mobile device registering as persistent receiver for files pushed from PC
+                sock.sendall(json.dumps({"status": "REGISTERED"}).encode("utf-8") + b"\n")
+                with self._lock:
+                    self._receiver_clients.append(sock)
+                self.client_count_changed.emit(len(self._receiver_clients))
 
-                received = len(rest)
-                start_time = time.time()
-                last_update = start_time
+                # Monitor socket for disconnect
+                self._monitor_receiver(sock)
 
-                with open(save_path, "wb") as f:
-                    if rest:
-                        f.write(rest)
+            elif action == "SEND_FILE":
+                # Mobile uploading a file to PC
+                self._receive_file_from_mobile(sock, meta, rest)
 
-                    while received < filesize and self.is_running:
-                        chunk = sock.recv(min(65536, filesize - received))
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                        received += len(chunk)
+        except Exception as e:
+            print(f"[ZeroDrop] Client error: {e}")
+            try:
+                sock.close()
+            except Exception:
+                pass
 
-                        now = time.time()
-                        if now - last_update >= 0.15:
-                            elapsed = now - start_time
-                            speed = (received / 1048576.0) / elapsed if elapsed > 0 else 0.0
-                            self.transfer_progress.emit(filename, received, filesize, speed)
-                            last_update = now
+    def _monitor_receiver(self, sock: socket.socket):
+        """Monitors a registered mobile receiver socket for disconnection."""
+        while self.is_running:
+            # Check if socket is still alive using select
+            # Only poll when transfer lock is not held
+            if self._transfer_lock.locked():
+                time.sleep(0.5)
+                continue
 
-                if received >= filesize:
-                    self.transfer_completed.emit(filename, "RECEIVED", save_path)
-                    # Send ACK
-                    sock.sendall(json.dumps({"status": "OK", "filename": filename}).encode("utf-8") + b"\n")
-                else:
-                    self.transfer_failed.emit(filename, "Connection interrupted")
+            try:
+                rlist, _, xlist = select.select([sock], [], [sock], 1.0)
+                if xlist:
+                    break
+                if rlist:
+                    # Check if client sent data or closed
+                    # Peek to see if EOF (0 bytes means disconnect)
+                    data = sock.recv(1024, socket.MSG_PEEK)
+                    if not data:
+                        break
+                    # If heartbeat/ping was sent, consume it
+                    sock.recv(len(data))
+            except Exception:
+                break
+
+        with self._lock:
+            if sock in self._receiver_clients:
+                self._receiver_clients.remove(sock)
+            try:
+                sock.close()
+            except Exception:
+                pass
+        self.client_count_changed.emit(len(self._receiver_clients))
+
+    def _receive_file_from_mobile(self, sock: socket.socket, meta: dict, initial_data: bytes):
+        """Handles an incoming file upload from mobile device to PC."""
+        try:
+            filename = os.path.basename(meta.get("filename", "unknown_file"))
+            filesize = int(meta.get("filesize", 0))
+
+            save_path = os.path.join(self.download_dir, filename)
+            base, ext = os.path.splitext(filename)
+            idx = 1
+            while os.path.exists(save_path):
+                save_path = os.path.join(self.download_dir, f"{base}_{idx}{ext}")
+                idx += 1
+
+            received = len(initial_data)
+            start_time = time.time()
+            last_update = start_time
+
+            with open(save_path, "wb") as f:
+                if initial_data:
+                    f.write(initial_data)
+
+                while received < filesize and self.is_running:
+                    chunk = sock.recv(min(65536, filesize - received))
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    received += len(chunk)
+
+                    now = time.time()
+                    if now - last_update >= 0.15:
+                        elapsed = now - start_time
+                        speed = (received / 1048576.0) / elapsed if elapsed > 0 else 0.0
+                        self.transfer_progress.emit(filename, received, filesize, speed)
+                        last_update = now
+
+            if received >= filesize:
+                self.transfer_completed.emit(filename, "RECEIVED", save_path)
+                sock.sendall(json.dumps({"status": "OK", "filename": filename}).encode("utf-8") + b"\n")
+            else:
+                self.transfer_failed.emit(filename, "Connection interrupted")
         except Exception as e:
             self.transfer_failed.emit("Transfer", str(e))
         finally:
-            self._close_sock(sock)
-
-    def _close_sock(self, sock: socket.socket):
-        with self._lock:
-            if sock in self._clients:
-                self._clients.remove(sock)
-                try:
-                    sock.close()
-                except Exception:
-                    pass
-        self.client_count_changed.emit(len(self._clients))
+            try:
+                sock.close()
+            except Exception:
+                pass
 
     def send_files_to_client(self, file_paths: List[str]):
         """Pushes files from PC to connected mobile client(s)."""
@@ -170,54 +213,81 @@ class FileTransferService(QObject):
             return
 
         def _sender():
-            with self._lock:
-                clients = list(self._clients)
+            with self._transfer_lock:
+                with self._lock:
+                    clients = list(self._receiver_clients)
 
-            if not clients:
-                self.transfer_failed.emit(os.path.basename(file_paths[0]), "No mobile device connected")
-                return
+                if not clients:
+                    self.transfer_failed.emit(
+                        os.path.basename(file_paths[0]),
+                        "No mobile device connected. Open ZeroDrop on your phone first."
+                    )
+                    return
 
-            sock = clients[0]
+                sock = clients[0]
 
-            for path in file_paths:
-                if not os.path.exists(path):
-                    continue
+                for path in file_paths:
+                    if not os.path.exists(path):
+                        continue
 
-                filename = os.path.basename(path)
-                filesize = os.path.getsize(path)
+                    filename = os.path.basename(path)
+                    filesize = os.path.getsize(path)
 
-                try:
-                    # Send header
-                    header = json.dumps({
-                        "action": "SEND_FILE",
-                        "filename": filename,
-                        "filesize": filesize
-                    }) + "\n"
-                    sock.sendall(header.encode("utf-8"))
+                    try:
+                        # Send PUSH_TO_PHONE header
+                        header = json.dumps({
+                            "action": "PUSH_TO_PHONE",
+                            "filename": filename,
+                            "filesize": filesize
+                        }) + "\n"
+                        sock.sendall(header.encode("utf-8"))
 
-                    # Stream content
-                    sent = 0
-                    start_time = time.time()
-                    last_update = start_time
+                        # Stream content
+                        sent = 0
+                        start_time = time.time()
+                        last_update = start_time
 
-                    with open(path, "rb") as f:
-                        while sent < filesize and self.is_running:
-                            buf = f.read(65536)
-                            if not buf:
+                        with open(path, "rb") as f:
+                            while sent < filesize and self.is_running:
+                                buf = f.read(65536)
+                                if not buf:
+                                    break
+                                sock.sendall(buf)
+                                sent += len(buf)
+
+                                now = time.time()
+                                if now - last_update >= 0.15:
+                                    elapsed = now - start_time
+                                    speed = (sent / 1048576.0) / elapsed if elapsed > 0 else 0.0
+                                    self.transfer_progress.emit(filename, sent, filesize, speed)
+                                    last_update = now
+
+                        # Read ACK from mobile
+                        ack_bytes = b""
+                        sock.settimeout(10.0)
+                        while b"\n" not in ack_bytes and self.is_running:
+                            c = sock.recv(1024)
+                            if not c:
                                 break
-                            sock.sendall(buf)
-                            sent += len(buf)
+                            ack_bytes += c
+                        sock.settimeout(None)
 
-                            now = time.time()
-                            if now - last_update >= 0.15:
-                                elapsed = now - start_time
-                                speed = (sent / 1048576.0) / elapsed if elapsed > 0 else 0.0
-                                self.transfer_progress.emit(filename, sent, filesize, speed)
-                                last_update = now
-
-                    self.transfer_completed.emit(filename, "SENT", path)
-                except Exception as e:
-                    self.transfer_failed.emit(filename, str(e))
-                    break
+                        if b'"OK"' in ack_bytes or b'"status": "OK"' in ack_bytes:
+                            self.transfer_completed.emit(filename, "SENT", path)
+                        else:
+                            self.transfer_completed.emit(filename, "SENT", path)
+                    except Exception as e:
+                        sock.settimeout(None)
+                        self.transfer_failed.emit(filename, str(e))
+                        # Socket might be broken, remove it
+                        with self._lock:
+                            if sock in self._receiver_clients:
+                                self._receiver_clients.remove(sock)
+                            try:
+                                sock.close()
+                            except Exception:
+                                pass
+                        self.client_count_changed.emit(len(self._receiver_clients))
+                        break
 
         threading.Thread(target=_sender, daemon=True).start()

@@ -3,23 +3,26 @@ package com.zerocast.network
 import android.content.Context
 import android.media.MediaScannerConnection
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.OpenableColumns
 import android.util.Log
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
-import java.io.InputStream
+import java.io.*
 import java.net.InetSocketAddress
 import java.net.Socket
 
 class FileTransferManager(private val context: Context) {
     private val TAG = "ZeroDrop"
 
+    private var receiverSocket: Socket? = null
+    private var receiverJob: Job? = null
+    private var isReceiverRunning = false
+
+    /**
+     * Sends a file from Android to PC over a dedicated upload connection.
+     */
     fun sendFileToPc(
         host: String,
         port: Int = 8890,
@@ -89,6 +92,177 @@ class FileTransferManager(private val context: Context) {
                 try { socket?.close() } catch (e: Exception) {}
             }
         }
+    }
+
+    /**
+     * Starts a persistent receiver worker that connects to PC on port 8890
+     * and listens for incoming files pushed by the PC.
+     */
+    fun startReceiveWorker(
+        host: String,
+        port: Int = 8890,
+        onProgress: (String, Int, Float) -> Unit,
+        onFileReceived: (File) -> Unit,
+        onError: (String, String) -> Unit,
+        onStatusChanged: (Boolean, String) -> Unit
+    ) {
+        stopReceiveWorker()
+        isReceiverRunning = true
+
+        receiverJob = CoroutineScope(Dispatchers.IO).launch {
+            while (isActive && isReceiverRunning) {
+                try {
+                    withContext(Dispatchers.Main) {
+                        onStatusChanged(false, "Connecting...")
+                    }
+
+                    val s = Socket()
+                    s.connect(InetSocketAddress(host, port), 4000)
+                    receiverSocket = s
+
+                    val out = s.getOutputStream()
+                    val inStream = s.getInputStream()
+
+                    // Register as receiver
+                    val regHeader = JSONObject().apply {
+                        put("action", "REGISTER_RECEIVER")
+                        put("device", Build.MODEL)
+                    }.toString() + "\n"
+                    out.write(regHeader.toByteArray(Charsets.UTF_8))
+                    out.flush()
+
+                    // Read registration response
+                    val regLine = readLineFromStream(inStream)
+                    if (regLine == null || !regLine.contains("REGISTERED")) {
+                        s.close()
+                        throw Exception("Registration rejected")
+                    }
+
+                    withContext(Dispatchers.Main) {
+                        onStatusChanged(true, "● CONNECTED TO PC")
+                    }
+
+                    // Main receiver loop
+                    while (isActive && isReceiverRunning) {
+                        val headerLine = readLineFromStream(inStream) ?: break
+                        if (headerLine.isBlank()) continue
+
+                        val meta = JSONObject(headerLine)
+                        val action = meta.optString("action")
+
+                        if (action == "PUSH_TO_PHONE") {
+                            val rawName = meta.optString("filename", "received_file")
+                            val filesize = meta.optLong("filesize", 0L)
+
+                            val targetDir = getZeroDropDir()
+                            var targetFile = File(targetDir, rawName)
+
+                            // Deduplicate filename
+                            val dotIdx = rawName.lastIndexOf('.')
+                            val base = if (dotIdx != -1) rawName.substring(0, dotIdx) else rawName
+                            val ext = if (dotIdx != -1) rawName.substring(dotIdx) else ""
+                            var counter = 1
+                            while (targetFile.exists()) {
+                                targetFile = File(targetDir, "${base}_$counter$ext")
+                                counter++
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                onProgress(targetFile.name, 0, 0f)
+                            }
+
+                            val fos = FileOutputStream(targetFile)
+                            val buf = ByteArray(65536)
+                            var received: Long = 0
+                            val startTime = System.currentTimeMillis()
+                            var lastUpdate = startTime
+
+                            fos.use { output ->
+                                while (received < filesize && isActive && isReceiverRunning) {
+                                    val needed = Math.min(buf.size.toLong(), filesize - received).toInt()
+                                    val count = inStream.read(buf, 0, needed)
+                                    if (count == -1) break
+                                    output.write(buf, 0, count)
+                                    received += count
+
+                                    val now = System.currentTimeMillis()
+                                    if (now - lastUpdate >= 150) {
+                                        val elapsedSec = (now - startTime) / 1000f
+                                        val speedMb = if (elapsedSec > 0) (received / 1048576f) / elapsedSec else 0f
+                                        val pct = if (filesize > 0) ((received.toFloat() / filesize) * 100).toInt() else 0
+                                        withContext(Dispatchers.Main) {
+                                            onProgress(targetFile.name, pct, speedMb)
+                                        }
+                                        lastUpdate = now
+                                    }
+                                }
+                                output.flush()
+                            }
+
+                            if (received >= filesize) {
+                                // Scan file into MediaStore so Gallery/Files can see it
+                                MediaScannerConnection.scanFile(
+                                    context,
+                                    arrayOf(targetFile.absolutePath),
+                                    null,
+                                    null
+                                )
+
+                                // Send ACK back to PC
+                                val ack = JSONObject().apply {
+                                    put("status", "OK")
+                                    put("filename", targetFile.name)
+                                }.toString() + "\n"
+                                out.write(ack.toByteArray(Charsets.UTF_8))
+                                out.flush()
+
+                                withContext(Dispatchers.Main) {
+                                    onProgress(targetFile.name, 100, 0f)
+                                    onFileReceived(targetFile)
+                                }
+                            } else {
+                                targetFile.delete()
+                                throw IOException("Transfer interrupted")
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.d(TAG, "ZeroDrop receiver connection: ${e.message}")
+                    withContext(Dispatchers.Main) {
+                        onStatusChanged(false, "○ DISCONNECTED")
+                    }
+                } finally {
+                    try { receiverSocket?.close() } catch (e: Exception) {}
+                    receiverSocket = null
+                }
+
+                // Wait before reconnecting if still enabled
+                if (isReceiverRunning) {
+                    delay(3000)
+                }
+            }
+        }
+    }
+
+    private fun readLineFromStream(inStream: InputStream): String? {
+        val baos = ByteArrayOutputStream()
+        var b: Int
+        while (inStream.read().also { b = it } != -1) {
+            if (b == '\n'.code) break
+            baos.write(b)
+        }
+        if (b == -1 && baos.size() == 0) return null
+        return baos.toString("UTF-8")
+    }
+
+    fun stopReceiveWorker() {
+        isReceiverRunning = false
+        receiverJob?.cancel()
+        receiverJob = null
+        try {
+            receiverSocket?.close()
+        } catch (e: Exception) {}
+        receiverSocket = null
     }
 
     private fun getFileInfo(uri: Uri): Pair<String, Long> {

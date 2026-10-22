@@ -200,12 +200,12 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_cast)
         side_layout.addWidget(self.btn_nav_cast)
 
-        self.btn_nav_drop = NavButton("ZeroDrop", "📁", badge="v1.1")
+        self.btn_nav_drop = NavButton("ZeroDrop", "📁")
         self.btn_nav_drop.clicked.connect(lambda: self.stacked.setCurrentIndex(2))
         self.nav_group.addButton(self.btn_nav_drop)
         side_layout.addWidget(self.btn_nav_drop)
 
-        self.btn_nav_clip = NavButton("ZeroClip", "📋", badge="v1.1")
+        self.btn_nav_clip = NavButton("ZeroClip", "📋")
         self.btn_nav_clip.clicked.connect(lambda: self.stacked.setCurrentIndex(3))
         self.nav_group.addButton(self.btn_nav_clip)
         side_layout.addWidget(self.btn_nav_clip)

@@ -291,8 +291,8 @@
                     android:paddingTop="3dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="3dp"
-                    android:text="v1.1 SOON"
-                    android:textColor="@color/text_tertiary"
+                    android:text="ACTIVE"
+                    android:textColor="@color/text_primary"
                     android:textSize="10sp"
                     android:fontFamily="sans-serif-bold" />
             </LinearLayout>
@@ -357,8 +357,8 @@
                     android:paddingTop="3dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="3dp"
-                    android:text="v1.1 SOON"
-                    android:textColor="@color/text_tertiary"
+                    android:text="ACTIVE"
+                    android:textColor="@color/text_primary"
                     android:textSize="10sp"
                     android:fontFamily="sans-serif-bold" />
             </LinearLayout>

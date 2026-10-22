@@ -18,7 +18,8 @@ import java.net.Socket
 
 class ClipboardSyncManager(
     private val context: Context,
-    private val onStatusChanged: (Boolean, String) -> Unit = { _, _ -> }
+    private val onStatusChanged: (Boolean, String) -> Unit = { _, _ -> },
+    private val onClipSynced: (String, String, Long) -> Unit = { _, _, _ -> }
 ) {
     private val TAG = "ZeroClip"
     private val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -40,6 +41,7 @@ class ClipboardSyncManager(
                 lastSyncedText = text
                 lastSyncedTimestamp = System.currentTimeMillis()
                 sendClipboardText(text)
+                onClipSynced(text, "PHONE", lastSyncedTimestamp)
             }
         }
     }
@@ -73,9 +75,11 @@ class ClipboardSyncManager(
                         if (json.optString("action") == "SYNC_CLIP") {
                             val text = json.optString("text")
                             val source = json.optString("source", "PC")
+                            val ts = json.optLong("timestamp", System.currentTimeMillis())
+
                             if (text.isNotEmpty() && text != lastSyncedText) {
                                 lastSyncedText = text
-                                lastSyncedTimestamp = System.currentTimeMillis()
+                                lastSyncedTimestamp = ts
 
                                 withContext(Dispatchers.Main) {
                                     clipboard.removePrimaryClipChangedListener(clipListener)
@@ -86,6 +90,7 @@ class ClipboardSyncManager(
 
                                     val preview = if (text.length > 35) text.substring(0, 32) + "..." else text
                                     Toast.makeText(context, "📋 Synced from $source: $preview", Toast.LENGTH_SHORT).show()
+                                    onClipSynced(text, source, ts)
                                 }
                             }
                         }

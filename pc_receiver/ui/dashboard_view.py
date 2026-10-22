@@ -304,28 +304,36 @@ class DashboardView(QWidget):
         grid.addWidget(card_cast, 0, 0)
 
         # ZeroDrop
+        mod_drop = self.module_manager.get_module("zerodrop")
+        drop_active = mod_drop.is_active if mod_drop else False
         card_drop = ModuleCard(
             module_id="zerodrop",
             title="ZeroDrop",
             glyph="📁",
-            desc="Local peer-to-peer file and directory transfers between PC and Android over LAN or USB cable without internet.",
-            is_enabled=False,
-            is_available=False,
-            port_info="Port 8890"
+            desc="High-speed bidirectional LAN & USB file sharing between Windows PC and Android with drag-and-drop.",
+            is_enabled=drop_active,
+            is_available=True,
+            port_info="Port 8890 (TCP)"
         )
+        card_drop.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_drop.open_clicked.connect(self.navigate_to_module.emit)
         self.cards["zerodrop"] = card_drop
         grid.addWidget(card_drop, 0, 1)
 
         # ZeroClip
+        mod_clip = self.module_manager.get_module("zeroclip")
+        clip_active = mod_clip.is_active if mod_clip else False
         card_clip = ModuleCard(
             module_id="zeroclip",
             title="ZeroClip",
             glyph="📋",
-            desc="Real-time encrypted two-way clipboard text and link synchronization between PC and mobile device.",
-            is_enabled=False,
-            is_available=False,
-            port_info="Encrypted Sync"
+            desc="Instant bidirectional shared clipboard. Copy text or links on PC and paste directly on mobile, or vice versa in real-time.",
+            is_enabled=clip_active,
+            is_available=True,
+            port_info="Port 8889 (TCP)"
         )
+        card_clip.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_clip.open_clicked.connect(self.navigate_to_module.emit)
         self.cards["zeroclip"] = card_clip
         grid.addWidget(card_clip, 1, 0)
 
