@@ -55,6 +55,9 @@ class CamServer(QObject):
         self.sharpness = 0.5            # 0.0 to 1.5 Detail enhancer / unsharp mask
         self.saturation = 1.15          # 0.5 to 2.0 Color vibrancy booster
 
+        # Hardware H.264 Decoder
+        self._h264_decoder = None
+
         # Sockets & threads
         self._server_sock: Optional[socket.socket] = None
         self._server_thread: Optional[threading.Thread] = None
@@ -208,7 +211,13 @@ class CamServer(QObject):
                     if not frame_data:
                         break
 
-                    self._process_camera_frame(frame_data, rotation_deg)
+                    if flags & 0x01:
+                        # Hardware H.264 NAL Unit stream (Ultra-Low Latency, Crystal Clarity)
+                        self._process_h264_frame(frame_data, rotation_deg)
+                    else:
+                        # Classic MJPEG stream
+                        self._process_camera_frame(frame_data, rotation_deg)
+
                     self._frame_count += 1
                     self._bytes_received += (20 + payload_len)
 
@@ -320,6 +329,44 @@ class CamServer(QObject):
         bytes_per_line = ch * w
         q_img = QImage(rgb.data, w, h, bytes_per_line, QImage.Format.Format_RGB888).copy()
         self.frame_ready.emit(q_img)
+
+    def _process_h264_frame(self, nal_bytes: bytes, rotation_deg: int = 0):
+        """Hardware H.264 stream processor: decodes NAL units with PyAV in < 1ms."""
+        if not self._h264_decoder:
+            from core.h264_decoder import H264Decoder
+            self._h264_decoder = H264Decoder()
+
+        images = self._h264_decoder.decode(nal_bytes)
+        for q_img in images:
+            self.frame_ready.emit(q_img)
+
+            # Feed Virtual Camera (Discord / OBS) if active
+            if self.enable_virtual_cam and self._vcam:
+                try:
+                    w, h = q_img.width(), q_img.height()
+                    ptr = q_img.bits()
+                    ptr.setsize(h * w * 3)
+                    arr = np.frombuffer(ptr, np.uint8).reshape((h, w, 3))
+
+                    eff_rot = (rotation_deg + self.manual_rotation + self.rotation_degrees) % 360
+                    if eff_rot == 90:
+                        arr = cv2.rotate(arr, cv2.ROTATE_90_CLOCKWISE)
+                    elif eff_rot == 180:
+                        arr = cv2.rotate(arr, cv2.ROTATE_180)
+                    elif eff_rot == 270:
+                        arr = cv2.rotate(arr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+                    if self.flip_horizontal:
+                        arr = cv2.flip(arr, 1)
+
+                    if arr.shape[1] != self._vcam_w or arr.shape[0] != self._vcam_h:
+                        arr = cv2.resize(arr, (self._vcam_w, self._vcam_h), interpolation=cv2.INTER_LINEAR)
+
+                    # pyvirtualcam expects BGR if PixelFormat.BGR
+                    bgr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
+                    self._vcam.send(bgr)
+                except Exception:
+                    pass
 
     def send_control_command(self, cmd: Dict):
         """Sends command JSON (e.g. switch camera, toggle flash) to the phone."""

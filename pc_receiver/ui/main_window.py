@@ -7,10 +7,11 @@ import sys
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QUrl
-from PyQt6.QtGui import QIcon, QFont, QColor, QPixmap, QDesktopServices
+from PyQt6.QtGui import QIcon, QFont, QColor, QPixmap, QDesktopServices, QAction
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QStackedWidget, QFrame, QMessageBox, QButtonGroup
+    QPushButton, QStackedWidget, QFrame, QMessageBox, QButtonGroup,
+    QSystemTrayIcon, QMenu
 )
 
 from core.module_manager import ModuleManager
@@ -21,6 +22,7 @@ from modules.zeroclip.clip_module import ZeroClipModule
 from modules.zeromix.mix_module import ZeroMixModule
 from modules.zerodisplay.display_module import ZeroDisplayModule
 from modules.zerocam.cam_module import ZeroCamModule
+from modules.zeropad.pad_module import ZeroPadModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.theme import GLOBAL_APP_STYLESHEET
@@ -149,6 +151,11 @@ class MainWindow(QMainWindow):
         self.module_manager.register_module(self.mod_zerocam)
         self.mod_zerocam.start_service()
 
+        # ZeroPad Module (Wireless Media & Macro Remote)
+        self.mod_zeropad = ZeroPadModule(port=8894, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zeropad)
+        self.mod_zeropad.start_service()
+
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
         self.mod_zerocast.use_external_mixer = False
@@ -156,6 +163,11 @@ class MainWindow(QMainWindow):
 
         self._setup_ui()
         self._bind_events()
+
+        # System Tray
+        self._is_quitting = False
+        self._tray_notified = False
+        self._setup_tray_icon()
 
         # Update Checker
         self.latest_release_url = "https://github.com/WhyAlwaysEng/ZeroCast/releases"
@@ -249,8 +261,13 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_cam)
         side_layout.addWidget(self.btn_nav_cam)
 
+        self.btn_nav_pad = NavButton("ZeroPad", "🎮", badge="NEW")
+        self.btn_nav_pad.clicked.connect(lambda: self.stacked.setCurrentIndex(7))
+        self.nav_group.addButton(self.btn_nav_pad)
+        side_layout.addWidget(self.btn_nav_pad)
+
         self.btn_nav_connections = NavButton("Connections", "🔗")
-        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(7))
+        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
@@ -321,7 +338,11 @@ class MainWindow(QMainWindow):
         self.cam_widget = self.mod_zerocam.get_widget()
         self.stacked.addWidget(self.cam_widget)
 
-        # Page 7: Connections / Device Bridge
+        # Page 7: ZeroPad Viewport
+        self.pad_widget = self.mod_zeropad.get_widget()
+        self.stacked.addWidget(self.pad_widget)
+
+        # Page 8: Connections / Device Bridge
         self.connections_view = ConnectionsView(
             self.mod_zerocast,
             self.mod_zerodrop,
@@ -329,6 +350,7 @@ class MainWindow(QMainWindow):
             self.mod_zeromix,
             mod_zerodisplay=self.mod_zerodisplay,
             mod_zerocam=self.mod_zerocam,
+            mod_zeropad=self.mod_zeropad,
             parent=self
         )
         self.stacked.addWidget(self.connections_view)
@@ -381,8 +403,11 @@ class MainWindow(QMainWindow):
         elif module_id == "zerocam":
             self.stacked.setCurrentIndex(6)
             self.btn_nav_cam.setChecked(True)
-        elif module_id == "connections":
+        elif module_id == "zeropad":
             self.stacked.setCurrentIndex(7)
+            self.btn_nav_pad.setChecked(True)
+        elif module_id == "connections":
+            self.stacked.setCurrentIndex(8)
             self.btn_nav_connections.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)
@@ -448,6 +473,88 @@ class MainWindow(QMainWindow):
         if box.clickedButton() == download_btn:
             QDesktopServices.openUrl(QUrl(self.latest_release_url))
 
-    def closeEvent(self, event):
+    def _setup_tray_icon(self):
+        """Sets up Windows System Tray icon with quick actions and minimize-to-tray."""
+        self.tray_icon = QSystemTrayIcon(self)
+
+        logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "zerolink_logo.png")
+        if os.path.exists(logo_path):
+            self.tray_icon.setIcon(QIcon(logo_path))
+        else:
+            self.tray_icon.setIcon(self.windowIcon())
+
+        self.tray_icon.setToolTip("ZeroLink Ecosystem Hub (Active in Background)")
+
+        tray_menu = QMenu()
+        tray_menu.setStyleSheet("""
+            QMenu {
+                background-color: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 6px;
+                font-family: 'Segoe UI';
+                font-size: 11px;
+            }
+            QMenu::item {
+                padding: 6px 20px;
+                border-radius: 4px;
+                color: #111827;
+            }
+            QMenu::item:selected {
+                background-color: #F3F4F6;
+            }
+            QMenu::separator {
+                height: 1px;
+                background-color: #E5E7EB;
+                margin: 4px 0;
+            }
+        """)
+
+        action_open = QAction("🖥️ Open ZeroLink Hub", self)
+        action_open.triggered.connect(self._restore_from_tray)
+        tray_menu.addAction(action_open)
+
+        tray_menu.addSeparator()
+
+        action_quit = QAction("❌ Exit ZeroLink", self)
+        action_quit.triggered.connect(self._really_quit)
+        tray_menu.addAction(action_quit)
+
+        self.tray_icon.setContextMenu(tray_menu)
+        self.tray_icon.activated.connect(self._on_tray_activated)
+        self.tray_icon.show()
+
+    def _restore_from_tray(self):
+        self.showNormal()
+        self.activateWindow()
+
+    def _on_tray_activated(self, reason):
+        if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
+            if self.isVisible():
+                self.hide()
+            else:
+                self._restore_from_tray()
+
+    def _really_quit(self):
+        self._is_quitting = True
+        if hasattr(self, "tray_icon"):
+            self.tray_icon.hide()
         self.module_manager.stop_all()
-        super().closeEvent(event)
+        from PyQt6.QtWidgets import QApplication
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        if getattr(self, "_is_quitting", False):
+            self.module_manager.stop_all()
+            super().closeEvent(event)
+        else:
+            event.ignore()
+            self.hide()
+            if not getattr(self, "_tray_notified", False):
+                self._tray_notified = True
+                self.tray_icon.showMessage(
+                    "ZeroLink Hub",
+                    "ZeroLink is minimized to the system tray. Background services (ZeroClip, ZeroDrop, ZeroMix) are active.",
+                    QSystemTrayIcon.MessageIcon.Information,
+                    2500
+                )

@@ -340,6 +340,7 @@ class ConnectionsView(QWidget):
                  mod_zeromix: ZeroMixModule,
                  mod_zerodisplay=None,
                  mod_zerocam=None,
+                 mod_zeropad=None,
                  parent=None):
         super().__init__(parent)
         self.mod_zerocast = mod_zerocast
@@ -348,6 +349,7 @@ class ConnectionsView(QWidget):
         self.mod_zeromix = mod_zeromix
         self.mod_zerodisplay = mod_zerodisplay
         self.mod_zerocam = mod_zerocam
+        self.mod_zeropad = mod_zeropad
 
         self.cards: List[ModuleConnectionsCard] = []
 
@@ -366,6 +368,8 @@ class ConnectionsView(QWidget):
             self.mod_zerodisplay.server.clients_updated.connect(self.refresh_devices)
         if self.mod_zerocam and hasattr(self.mod_zerocam, "server"):
             self.mod_zerocam.server.clients_updated.connect(self.refresh_devices)
+        if self.mod_zeropad and hasattr(self.mod_zeropad, "server"):
+            self.mod_zeropad.server.clients_updated.connect(self.refresh_devices)
 
         # Auto-refresh timer for durations & live stats
         self.timer = QTimer(self)
@@ -520,7 +524,13 @@ class ConnectionsView(QWidget):
                 c["fps"] = f"{self.mod_zerocam.server.fps:.0f} FPS"
                 c["bitrate"] = f"{self.mod_zerocam.server.bitrate_mbps:.1f} Mbps"
 
-        all_clients = cast_clients + mix_clients + clip_clients + drop_clients + display_clients + cam_clients
+        pad_clients = self.mod_zeropad.server.get_connected_clients() if (self.mod_zeropad and hasattr(self.mod_zeropad, "server")) else []
+        for c in pad_clients:
+            c["module"] = "ZeroPad"
+            c["glyph"] = "🎮"
+            c["mode"] = "Macro Remote"
+
+        all_clients = cast_clients + mix_clients + clip_clients + drop_clients + display_clients + cam_clients + pad_clients
         total = len(all_clients)
         usb_count = sum(1 for c in all_clients if c.get("ip") in ("127.0.0.1", "localhost"))
         wifi_count = total - usb_count
@@ -535,6 +545,8 @@ class ConnectionsView(QWidget):
             services_list.append(self.mod_zerodisplay)
         if self.mod_zerocam:
             services_list.append(self.mod_zerocam)
+        if self.mod_zeropad:
+            services_list.append(self.mod_zeropad)
         active_count = sum(1 for s in services_list if getattr(s, "is_active", False))
         self.lbl_services_status.setText(f"Services: {active_count}/{len(services_list)} Online")
 
@@ -659,6 +671,20 @@ class ConnectionsView(QWidget):
             )
             self.cards.append(card_cam)
             self.cards_layout.addWidget(card_cam)
+
+        # Add ZeroPad card if available
+        if self.mod_zeropad:
+            card_pad = ModuleConnectionsCard(
+                title="ZeroPad (Media & Macro Remote)",
+                glyph="🎮",
+                port=self.mod_zeropad.port,
+                is_active=self.mod_zeropad.is_active,
+                clients=pad_clients,
+                on_disconnect_callback=lambda addr: self.mod_zeropad.server.disconnect_client(addr),
+                parent=self.cards_container
+            )
+            self.cards.append(card_pad)
+            self.cards_layout.addWidget(card_pad)
 
         self.cards_layout.addStretch()
 

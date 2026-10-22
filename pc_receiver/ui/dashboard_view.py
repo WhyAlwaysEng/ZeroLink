@@ -388,6 +388,23 @@ class DashboardView(QWidget):
         self.cards["zerocam"] = card_cam
         grid.addWidget(card_cam, 2, 1)
 
+        # ZeroPad
+        mod_pad = self.module_manager.get_module("zeropad")
+        pad_active = mod_pad.is_active if mod_pad else False
+        card_pad = ModuleCard(
+            module_id="zeropad",
+            title="ZeroPad",
+            glyph="🎮",
+            desc="Wireless PC Media & Macro Remote Controller. Use your phone as a Stream Deck for Windows audio, Discord mute, and shortcuts.",
+            is_enabled=pad_active,
+            is_available=True,
+            port_info="Port 8894 (TCP)"
+        )
+        card_pad.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_pad.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zeropad"] = card_pad
+        grid.addWidget(card_pad, 3, 0)
+
         layout.addLayout(grid)
         layout.addStretch()
 

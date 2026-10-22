@@ -17,6 +17,7 @@ import androidx.core.content.ContextCompat
 import com.zerocast.databinding.ActivityZeroCamBinding
 import com.zerocast.network.NetworkDiscovery
 import com.zerocast.util.ZeroLinkConfig
+import com.zerocast.capture.CameraH264Encoder
 import kotlinx.coroutines.*
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -47,6 +48,9 @@ class ZeroCamActivity : AppCompatActivity() {
     private var targetWidth = 1280
     private var targetHeight = 720
     private var jpegQuality = 65
+
+    private var h264Encoder: CameraH264Encoder? = null
+    private var useH264Hardware = true // GPU Hardware Encoder for 60 FPS Crystal Clarity
 
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
@@ -267,6 +271,31 @@ class ZeroCamActivity : AppCompatActivity() {
                     binding.tvCamStatus.text = if (isWired) "● LIVE (⚡ Wired USB Cable)" else "● LIVE (📡 Wi-Fi: $hostIp)"
                 }
 
+                // Initialize Hardware H.264 Encoder if enabled
+                if (useH264Hardware) {
+                    h264Encoder?.stop()
+                    h264Encoder = CameraH264Encoder(targetWidth, targetHeight, targetFps = 30, bitrateKbps = 5000) { nalBytes, isKeyframe, rotDeg ->
+                        val payloadLen = nalBytes.size
+                        val nowMs = System.currentTimeMillis()
+                        val flags: Short = if (isKeyframe) 0x03 else 0x01
+
+                        val packet = ByteArray(20 + payloadLen)
+                        val buf = ByteBuffer.wrap(packet)
+                        buf.put("ZCAM".toByteArray(Charsets.US_ASCII))
+                        buf.putInt(payloadLen)
+                        buf.putLong(nowMs)
+                        buf.putShort(rotDeg.toShort())
+                        buf.putShort(flags)
+                        System.arraycopy(nalBytes, 0, packet, 20, payloadLen)
+
+                        frameChannel.trySend(packet)
+
+                        frameCount++
+                        bytesThisSec += packet.size
+                    }
+                    h264Encoder?.start()
+                }
+
                 // Launch dedicated non-blocking network frame sender
                 senderJob = scope.launch {
                     for (packet in frameChannel) {
@@ -347,6 +376,26 @@ class ZeroCamActivity : AppCompatActivity() {
             return
         }
 
+        // Hardware H.264 Path: GPU encoding directly from camera YUV buffer (< 1ms CPU)
+        if (useH264Hardware && h264Encoder != null) {
+            h264Encoder?.encodeFrame(imageProxy)
+            val now = System.currentTimeMillis()
+            if (now - lastStatTime >= 1000) {
+                val dt = (now - lastStatTime) / 1000f
+                val fps = frameCount / dt
+                val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
+                val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
+                frameCount = 0
+                bytesThisSec = 0
+                lastStatTime = now
+                runOnUiThread {
+                    binding.tvCamFps.text = "⚡ H.264 ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+                }
+            }
+            imageProxy.close()
+            return
+        }
+
         val t0 = System.currentTimeMillis()
         try {
             val bitmap = imageProxy.toBitmap()
@@ -414,6 +463,8 @@ class ZeroCamActivity : AppCompatActivity() {
 
     private fun stopStream() {
         isStreaming = false
+        h264Encoder?.stop()
+        h264Encoder = null
         senderJob?.cancel()
         senderJob = null
         streamJob?.cancel()

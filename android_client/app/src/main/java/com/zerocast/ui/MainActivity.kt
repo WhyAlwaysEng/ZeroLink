@@ -65,5 +65,12 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ZeroCamActivity::class.java)
             startActivity(intent)
         }
+
+        // Module 7: ZeroPad (Stream Deck & PC Media Remote)
+        binding.cardModuleZeroPad.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, ZeroPadActivity::class.java)
+            startActivity(intent)
+        }
     }
 }
