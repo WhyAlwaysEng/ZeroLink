@@ -338,12 +338,16 @@ class ConnectionsView(QWidget):
                  mod_zerodrop: ZeroDropModule,
                  mod_zeroclip: ZeroClipModule,
                  mod_zeromix: ZeroMixModule,
+                 mod_zerodisplay=None,
+                 mod_zerocam=None,
                  parent=None):
         super().__init__(parent)
         self.mod_zerocast = mod_zerocast
         self.mod_zerodrop = mod_zerodrop
         self.mod_zeroclip = mod_zeroclip
         self.mod_zeromix = mod_zeromix
+        self.mod_zerodisplay = mod_zerodisplay
+        self.mod_zerocam = mod_zerocam
 
         self.cards: List[ModuleConnectionsCard] = []
 
@@ -358,6 +362,10 @@ class ConnectionsView(QWidget):
             self.mod_zeroclip.service.clients_updated.connect(self.refresh_devices)
         if hasattr(self.mod_zerodrop, "service"):
             self.mod_zerodrop.service.clients_updated.connect(self.refresh_devices)
+        if self.mod_zerodisplay and hasattr(self.mod_zerodisplay, "server"):
+            self.mod_zerodisplay.server.clients_updated.connect(self.refresh_devices)
+        if self.mod_zerocam and hasattr(self.mod_zerocam, "server"):
+            self.mod_zerocam.server.clients_updated.connect(self.refresh_devices)
 
         # Auto-refresh timer for durations & live stats
         self.timer = QTimer(self)
@@ -460,10 +468,14 @@ class ConnectionsView(QWidget):
             self.mod_zeroclip.service.disconnect_client(ip)
         if hasattr(self.mod_zerodrop, "service"):
             self.mod_zerodrop.service.disconnect_client(ip)
+        if self.mod_zerodisplay and hasattr(self.mod_zerodisplay, "server"):
+            self.mod_zerodisplay.server.disconnect_client(ip)
+        if self.mod_zerocam and hasattr(self.mod_zerocam, "server"):
+            self.mod_zerocam.server.disconnect_client(ip)
         self.refresh_devices()
 
     def refresh_devices(self):
-        """Polls connected clients across all 4 modules and reconstructs cards."""
+        """Polls connected clients across all modules and reconstructs cards."""
         # 1. Fetch clients from all services
         cast_clients = self.mod_zerocast.server.get_connected_clients() if hasattr(self.mod_zerocast, "server") else []
         for c in cast_clients:
@@ -492,7 +504,23 @@ class ConnectionsView(QWidget):
             c["glyph"] = "📁"
             c["mode"] = "File Drop"
 
-        all_clients = cast_clients + mix_clients + clip_clients + drop_clients
+        display_clients = self.mod_zerodisplay.server.get_connected_clients() if (self.mod_zerodisplay and hasattr(self.mod_zerodisplay, "server")) else []
+        for c in display_clients:
+            c["module"] = "ZeroDisplay"
+            c["glyph"] = "🖥️"
+            if hasattr(self.mod_zerodisplay, "server"):
+                c["fps"] = f"{self.mod_zerodisplay.server.fps:.0f} FPS"
+                c["bitrate"] = f"{self.mod_zerodisplay.server.bitrate_mbps:.1f} Mbps"
+
+        cam_clients = self.mod_zerocam.server.get_connected_clients() if (self.mod_zerocam and hasattr(self.mod_zerocam, "server")) else []
+        for c in cam_clients:
+            c["module"] = "ZeroCam"
+            c["glyph"] = "📷"
+            if hasattr(self.mod_zerocam, "server"):
+                c["fps"] = f"{self.mod_zerocam.server.fps:.0f} FPS"
+                c["bitrate"] = f"{self.mod_zerocam.server.bitrate_mbps:.1f} Mbps"
+
+        all_clients = cast_clients + mix_clients + clip_clients + drop_clients + display_clients + cam_clients
         total = len(all_clients)
         usb_count = sum(1 for c in all_clients if c.get("ip") in ("127.0.0.1", "localhost"))
         wifi_count = total - usb_count
@@ -502,13 +530,13 @@ class ConnectionsView(QWidget):
         self.lbl_wifi_clients.setText(f"📶 Wi-Fi LAN: {wifi_count}")
 
         # Count active modules
-        active_count = sum([
-            1 if getattr(self.mod_zerocast, "is_active", False) else 0,
-            1 if getattr(self.mod_zeromix, "is_active", False) else 0,
-            1 if getattr(self.mod_zeroclip, "is_active", False) else 0,
-            1 if getattr(self.mod_zerodrop, "is_active", False) else 0,
-        ])
-        self.lbl_services_status.setText(f"Services: {active_count}/4 Online")
+        services_list = [self.mod_zerocast, self.mod_zeromix, self.mod_zeroclip, self.mod_zerodrop]
+        if self.mod_zerodisplay:
+            services_list.append(self.mod_zerodisplay)
+        if self.mod_zerocam:
+            services_list.append(self.mod_zerocam)
+        active_count = sum(1 for s in services_list if getattr(s, "is_active", False))
+        self.lbl_services_status.setText(f"Services: {active_count}/{len(services_list)} Online")
 
         # Clear existing layout
         while self.cards_layout.count() > 0:
@@ -603,6 +631,34 @@ class ConnectionsView(QWidget):
         )
         self.cards.append(card_drop)
         self.cards_layout.addWidget(card_drop)
+
+        # Add ZeroDisplay card if available
+        if self.mod_zerodisplay:
+            card_display = ModuleConnectionsCard(
+                title="ZeroDisplay (Extended 2nd Monitor)",
+                glyph="🖥️",
+                port=self.mod_zerodisplay.port,
+                is_active=self.mod_zerodisplay.is_active,
+                clients=display_clients,
+                on_disconnect_callback=lambda addr: self.mod_zerodisplay.server.disconnect_client(addr),
+                parent=self.cards_container
+            )
+            self.cards.append(card_display)
+            self.cards_layout.addWidget(card_display)
+
+        # Add ZeroCam card if available
+        if self.mod_zerocam:
+            card_cam = ModuleConnectionsCard(
+                title="ZeroCam (Wireless 4K Webcam)",
+                glyph="📷",
+                port=self.mod_zerocam.port,
+                is_active=self.mod_zerocam.is_active,
+                clients=cam_clients,
+                on_disconnect_callback=lambda addr: self.mod_zerocam.server.disconnect_client(addr),
+                parent=self.cards_container
+            )
+            self.cards.append(card_cam)
+            self.cards_layout.addWidget(card_cam)
 
         self.cards_layout.addStretch()
 

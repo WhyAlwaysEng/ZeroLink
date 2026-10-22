@@ -19,6 +19,8 @@ from modules.zerocast.cast_module import ZeroCastModule
 from modules.zerodrop.drop_module import ZeroDropModule
 from modules.zeroclip.clip_module import ZeroClipModule
 from modules.zeromix.mix_module import ZeroMixModule
+from modules.zerodisplay.display_module import ZeroDisplayModule
+from modules.zerocam.cam_module import ZeroCamModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.theme import GLOBAL_APP_STYLESHEET
@@ -137,6 +139,16 @@ class MainWindow(QMainWindow):
         self.module_manager.register_module(self.mod_zeromix)
         self.mod_zeromix.start_service()
 
+        # ZeroDisplay Module (Wireless 2nd Monitor)
+        self.mod_zerodisplay = ZeroDisplayModule(port=8892, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zerodisplay)
+        self.mod_zerodisplay.start_service()
+
+        # ZeroCam Module (Wireless 4K Webcam)
+        self.mod_zerocam = ZeroCamModule(port=8893, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zerocam)
+        self.mod_zerocam.start_service()
+
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
         self.mod_zerocast.use_external_mixer = False
@@ -227,8 +239,18 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_mix)
         side_layout.addWidget(self.btn_nav_mix)
 
+        self.btn_nav_display = NavButton("ZeroDisplay", "🖥️", badge="NEW")
+        self.btn_nav_display.clicked.connect(lambda: self.stacked.setCurrentIndex(5))
+        self.nav_group.addButton(self.btn_nav_display)
+        side_layout.addWidget(self.btn_nav_display)
+
+        self.btn_nav_cam = NavButton("ZeroCam", "📷", badge="NEW")
+        self.btn_nav_cam.clicked.connect(lambda: self.stacked.setCurrentIndex(6))
+        self.nav_group.addButton(self.btn_nav_cam)
+        side_layout.addWidget(self.btn_nav_cam)
+
         self.btn_nav_connections = NavButton("Connections", "🔗")
-        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(5))
+        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(7))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
@@ -291,12 +313,22 @@ class MainWindow(QMainWindow):
         self.mix_widget = self.mod_zeromix.get_widget()
         self.stacked.addWidget(self.mix_widget)
 
-        # Page 5: Connections / Device Bridge
+        # Page 5: ZeroDisplay Viewport
+        self.display_widget = self.mod_zerodisplay.get_widget()
+        self.stacked.addWidget(self.display_widget)
+
+        # Page 6: ZeroCam Viewport
+        self.cam_widget = self.mod_zerocam.get_widget()
+        self.stacked.addWidget(self.cam_widget)
+
+        # Page 7: Connections / Device Bridge
         self.connections_view = ConnectionsView(
             self.mod_zerocast,
             self.mod_zerodrop,
             self.mod_zeroclip,
             self.mod_zeromix,
+            mod_zerodisplay=self.mod_zerodisplay,
+            mod_zerocam=self.mod_zerocam,
             parent=self
         )
         self.stacked.addWidget(self.connections_view)
@@ -343,8 +375,14 @@ class MainWindow(QMainWindow):
         elif module_id == "zeromix":
             self.stacked.setCurrentIndex(4)
             self.btn_nav_mix.setChecked(True)
-        elif module_id == "connections":
+        elif module_id == "zerodisplay":
             self.stacked.setCurrentIndex(5)
+            self.btn_nav_display.setChecked(True)
+        elif module_id == "zerocam":
+            self.stacked.setCurrentIndex(6)
+            self.btn_nav_cam.setChecked(True)
+        elif module_id == "connections":
+            self.stacked.setCurrentIndex(7)
             self.btn_nav_connections.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)

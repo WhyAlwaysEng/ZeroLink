@@ -51,5 +51,19 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ZeroMixActivity::class.java)
             startActivity(intent)
         }
+
+        // Module 5: ZeroDisplay (Extended 2nd Monitor)
+        binding.cardModuleZeroDisplay.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, ZeroDisplayActivity::class.java)
+            startActivity(intent)
+        }
+
+        // Module 6: ZeroCam (Wireless 4K Webcam)
+        binding.cardModuleZeroCam.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, ZeroCamActivity::class.java)
+            startActivity(intent)
+        }
     }
 }
