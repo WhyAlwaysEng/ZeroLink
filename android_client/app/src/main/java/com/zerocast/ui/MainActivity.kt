@@ -34,21 +34,15 @@ class MainActivity : AppCompatActivity() {
         // Module 2: ZeroDrop (File Transfer)
         binding.cardModuleZeroDrop.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            MaterialAlertDialogBuilder(this)
-                .setTitle("📁 ZeroDrop")
-                .setMessage("Local peer-to-peer file and directory transfers directly between PC and mobile storage over LAN or USB.\n\nComing soon in ZeroLink v1.1!")
-                .setPositiveButton("Got it", null)
-                .show()
+            val intent = Intent(this, ZeroDropActivity::class.java)
+            startActivity(intent)
         }
 
         // Module 3: ZeroClip (Universal Clipboard)
         binding.cardModuleZeroClip.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            MaterialAlertDialogBuilder(this)
-                .setTitle("📋 ZeroClip")
-                .setMessage("Real-time encrypted two-way clipboard text and image synchronization between PC and mobile device.\n\nComing soon in ZeroLink v1.1!")
-                .setPositiveButton("Got it", null)
-                .show()
+            val intent = Intent(this, ZeroClipActivity::class.java)
+            startActivity(intent)
         }
 
         // Module 4: ZeroPad (Virtual Controller)

@@ -16,6 +16,8 @@ from PyQt6.QtWidgets import (
 from core.module_manager import ModuleManager
 from core.updater import UpdateCheckWorker, CURRENT_VERSION
 from modules.zerocast.cast_module import ZeroCastModule
+from modules.zerodrop.drop_module import ZeroDropModule
+from modules.zeroclip.clip_module import ZeroClipModule
 from ui.dashboard_view import DashboardView
 from ui.theme import GLOBAL_APP_STYLESHEET
 
@@ -117,6 +119,16 @@ class MainWindow(QMainWindow):
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
         self.mod_zerocast.start_service()
+
+        # ZeroDrop Module
+        self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zerodrop)
+        self.mod_zerodrop.start_service()
+
+        # ZeroClip Module
+        self.mod_zeroclip = ZeroClipModule(port=8889, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zeroclip)
+        self.mod_zeroclip.start_service()
 
         self._setup_ui()
         self._bind_events()
@@ -245,15 +257,13 @@ class MainWindow(QMainWindow):
         self.mod_zerocast.toggle_fullscreen_requested.connect(self._toggle_fullscreen)
         self.stacked.addWidget(self.cast_widget)
 
-        # Page 2: ZeroDrop Preview
-        drop_page = self._create_placeholder_page("ZeroDrop — Fast File Sharing",
-                                                 "Peer-to-peer LAN / USB file and folder transfers directly between PC and mobile storage without internet.")
-        self.stacked.addWidget(drop_page)
+        # Page 2: ZeroDrop Viewport
+        self.drop_widget = self.mod_zerodrop.get_widget()
+        self.stacked.addWidget(self.drop_widget)
 
-        # Page 3: ZeroClip Preview
-        clip_page = self._create_placeholder_page("ZeroClip — Universal Clipboard",
-                                                 "Encrypted two-way clipboard sync. Copy text or links on PC and paste directly on mobile.")
-        self.stacked.addWidget(clip_page)
+        # Page 3: ZeroClip Viewport
+        self.clip_widget = self.mod_zeroclip.get_widget()
+        self.stacked.addWidget(self.clip_widget)
 
         main_layout.addWidget(self.stacked, 1)
 

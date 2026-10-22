@@ -71,6 +71,51 @@ class InputController:
     def send_home_key(self):
         self._run_adb_async(["shell", "input", "keyevent", "3"])
 
+    def send_recent_apps(self):
+        """Opens Android recent applications / overview."""
+        self._run_adb_async(["shell", "input", "keyevent", "187"])
+
+    def send_power_key(self):
+        """Locks or wakes the Android device."""
+        self._run_adb_async(["shell", "input", "keyevent", "26"])
+
+    def send_notifications(self):
+        """Expands the Android notification shade."""
+        self._run_adb_async(["shell", "cmd", "statusbar", "expand-notifications"])
+
+    def send_volume_up(self):
+        self._run_adb_async(["shell", "input", "keyevent", "24"])
+
+    def send_volume_down(self):
+        self._run_adb_async(["shell", "input", "keyevent", "25"])
+
+    def set_screen_dimmed(self, dim: bool):
+        """Dims the phone's physical screen to zero brightness to save power and heat during casting."""
+        if not self.adb_manager.is_available():
+            return
+
+        def _worker():
+            try:
+                if dim:
+                    # Save current brightness
+                    cmd = [self.adb_manager.adb_path, "shell", "settings", "get", "system", "screen_brightness"]
+                    res = subprocess.run(cmd, capture_output=True, text=True, timeout=2)
+                    val = res.stdout.strip()
+                    if val.isdigit():
+                        self._saved_brightness = int(val)
+                    else:
+                        self._saved_brightness = 100
+                    # Set manual brightness and set to 0
+                    subprocess.run([self.adb_manager.adb_path, "shell", "settings", "put", "system", "screen_brightness_mode", "0"], timeout=2)
+                    subprocess.run([self.adb_manager.adb_path, "shell", "settings", "put", "system", "screen_brightness", "0"], timeout=2)
+                else:
+                    target = getattr(self, "_saved_brightness", 120)
+                    subprocess.run([self.adb_manager.adb_path, "shell", "settings", "put", "system", "screen_brightness", str(target)], timeout=2)
+            except Exception:
+                pass
+
+        threading.Thread(target=_worker, daemon=True).start()
+
     def send_keyevent(self, keycode: int):
         """Sends an Android keycode (e.g. 66 for Enter, 67 for Backspace)."""
         self._run_adb_async(["shell", "input", "keyevent", str(keycode)])

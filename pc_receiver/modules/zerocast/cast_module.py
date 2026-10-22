@@ -296,6 +296,18 @@ class ModernVideoCanvas(QWidget):
             self.on_key_event("KEY", 61)
         elif key == Qt.Key.Key_Escape:
             self.on_key_event("KEY", 4)
+        elif key == Qt.Key.Key_F1:
+            self.on_key_event("KEY", 187)  # Recent Apps
+        elif key == Qt.Key.Key_F2:
+            self.on_key_event("KEY", 3)    # Home
+        elif key == Qt.Key.Key_F3:
+            self.on_key_event("NOTIF", 0)  # Notifications
+        elif key == Qt.Key.Key_F4:
+            self.on_key_event("KEY", 26)   # Power/Lock
+        elif key == Qt.Key.Key_F5:
+            self.on_key_event("KEY", 25)   # Vol Down
+        elif key == Qt.Key.Key_F6:
+            self.on_key_event("KEY", 24)   # Vol Up
         else:
             text = event.text()
             if text and text.isprintable():
@@ -640,6 +652,26 @@ class ZeroCastModule(BaseModule):
         self.chk_auto_popout.setToolTip("Automatically open in a floating window when phone connects")
         bar_layout.addWidget(self.chk_auto_popout)
 
+        # Screen Dim Button
+        self.btn_dim_screen = QPushButton("🌙 Dim Screen")
+        self.btn_dim_screen.setToolTip("Dim phone display to 0% brightness to save battery & prevent heating while casting")
+        self.btn_dim_screen.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+            }
+        """)
+        self.btn_dim_screen.clicked.connect(self._toggle_dim_screen)
+        bar_layout.addWidget(self.btn_dim_screen)
+
         # Screen Only Button (Pop-out mode only)
         self.btn_screen_only = QPushButton("🖥️ Screen Only")
         self.btn_screen_only.setToolTip("Hide toolbars and show pure screen only (Press Esc or click 'Show Controls' to restore)")
@@ -723,6 +755,23 @@ class ZeroCastModule(BaseModule):
         btn_home = QPushButton("○ Home")
         btn_home.clicked.connect(lambda: self.input_controller.send_key_event(3))
         bot_layout.addWidget(btn_home)
+
+        btn_recent = QPushButton("▢ Recent")
+        btn_recent.setToolTip("Recent Apps / App Switcher (F1)")
+        btn_recent.clicked.connect(self.input_controller.send_recent_apps)
+        bot_layout.addWidget(btn_recent)
+
+        btn_notify = QPushButton("🔔")
+        btn_notify.setFixedWidth(30)
+        btn_notify.setToolTip("Notification Shade (F3)")
+        btn_notify.clicked.connect(self.input_controller.send_notifications)
+        bot_layout.addWidget(btn_notify)
+
+        btn_power = QPushButton("🔒")
+        btn_power.setFixedWidth(30)
+        btn_power.setToolTip("Screen Lock / Power (F4)")
+        btn_power.clicked.connect(self.input_controller.send_power_key)
+        bot_layout.addWidget(btn_power)
 
         bot_layout.addSpacing(4)
 
@@ -856,6 +905,8 @@ class ZeroCastModule(BaseModule):
     def _handle_key_input(self, input_type: str, value):
         if input_type == "KEY":
             self.input_controller.send_key_event(value)
+        elif input_type == "NOTIF":
+            self.input_controller.send_notifications()
         elif input_type == "TEXT":
             self.input_controller.send_text(value)
 
@@ -1067,6 +1118,22 @@ class ZeroCastModule(BaseModule):
             self.log_label.setVisible(not is_compact)
         if hasattr(self, "combo_audio_dev") and self.combo_audio_dev:
             self.combo_audio_dev.setVisible(not is_compact)
+
+    def _toggle_dim_screen(self):
+        """Toggles phone screen dimming (brightness to 0 to save battery/heat)."""
+        self.is_screen_dimmed = not getattr(self, "is_screen_dimmed", False)
+        self.input_controller.set_screen_dimmed(self.is_screen_dimmed)
+        if hasattr(self, "btn_dim_screen") and self.btn_dim_screen:
+            if self.is_screen_dimmed:
+                self.btn_dim_screen.setText("☀️ Restore")
+                self.btn_dim_screen.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: 700; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
+                if self.log_label:
+                    self.log_label.setText("Phone screen dimmed (Power save active)")
+            else:
+                self.btn_dim_screen.setText("🌙 Dim Screen")
+                self.btn_dim_screen.setStyleSheet("background-color: #F3F4F6; color: #111827; border: 1px solid #D1D5DB; font-weight: 600; padding: 4px 8px; border-radius: 6px; font-size: 11px;")
+                if self.log_label:
+                    self.log_label.setText("Phone screen brightness restored")
 
     def toggle_screen_only(self):
         self.set_screen_only(not self.is_screen_only)
