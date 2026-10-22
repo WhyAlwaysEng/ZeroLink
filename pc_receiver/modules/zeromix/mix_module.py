@@ -586,7 +586,7 @@ class ZeroMixModule(BaseModule):
         inputs, outputs = self.engine.get_device_lists()
 
         # Temporarily block signals while repopulating
-        if self.combo_mic:
+        if self.combo_mic is not None:
             self.combo_mic.blockSignals(True)
             self.combo_mic.clear()
             for d in inputs:
@@ -597,7 +597,7 @@ class ZeroMixModule(BaseModule):
             self._select_combo_data(self.combo_mic, self.engine.input_mic_device)
             self.combo_mic.blockSignals(False)
 
-        if self.combo_monitor:
+        if self.combo_monitor is not None:
             self.combo_monitor.blockSignals(True)
             self.combo_monitor.clear()
             for d in outputs:
@@ -608,7 +608,7 @@ class ZeroMixModule(BaseModule):
             self._select_combo_data(self.combo_monitor, self.engine.output_monitor_device)
             self.combo_monitor.blockSignals(False)
 
-        if self.combo_broadcast:
+        if self.combo_broadcast is not None:
             self.combo_broadcast.blockSignals(True)
             self.combo_broadcast.clear()
             self.combo_broadcast.addItem("❌ None (Monitor in Headphones Only)", -1)
@@ -669,9 +669,9 @@ class ZeroMixModule(BaseModule):
             self.state_changed.emit(self.module_id, True)
 
     def _on_devices_changed(self):
-        mic_idx = self.combo_mic.currentData() if self.combo_mic else None
-        mon_idx = self.combo_monitor.currentData() if self.combo_monitor else None
-        bc_idx = self.combo_broadcast.currentData() if self.combo_broadcast else None
+        mic_idx = self.combo_mic.currentData() if self.combo_mic is not None else None
+        mon_idx = self.combo_monitor.currentData() if self.combo_monitor is not None else None
+        bc_idx = self.combo_broadcast.currentData() if self.combo_broadcast is not None else None
         if bc_idx == -1:
             bc_idx = None
         self.engine.set_devices(mic_idx, mon_idx, bc_idx)
