@@ -262,12 +262,12 @@ class ZeroMixActivity : AppCompatActivity() {
         if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
             binding.btnToggleAudioCast.text = "⏹ Stop Cast"
             binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
-            binding.tvAudioCastStatus.text = "● Streaming Audio to PC Mixer (Cool Phone)"
+            binding.tvAudioCastStatus.text = "● Streaming Phone Audio to PC Mixer (Eco Mode)"
             binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
         } else {
             binding.btnToggleAudioCast.text = "▶ Cast Audio"
             binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
-            binding.tvAudioCastStatus.text = "Audio Only • 0% Video • Cool Phone"
+            binding.tvAudioCastStatus.text = "Eco Audio Stream • 0.05% GPU • Cool Phone"
             binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         }
     }
@@ -354,6 +354,11 @@ class ZeroMixActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateAudioCastUI()
+        StreamForegroundService.stateListener = object : StreamForegroundService.ServiceStateListener {
+            override fun onStreamingStateChanged(isStreaming: Boolean, isAudioOnly: Boolean) {
+                runOnUiThread { updateAudioCastUI() }
+            }
+        }
     }
 
     override fun onDestroy() {

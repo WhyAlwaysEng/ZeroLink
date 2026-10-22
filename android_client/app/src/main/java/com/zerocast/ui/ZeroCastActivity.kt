@@ -24,6 +24,7 @@ import com.zerocast.network.NetworkDiscovery
 import com.zerocast.network.StreamSender
 import com.zerocast.service.FloatingOverlayService
 import com.zerocast.service.StreamForegroundService
+import com.zerocast.util.ZeroLinkConfig
 
 class ZeroCastActivity : AppCompatActivity() {
 
@@ -37,6 +38,17 @@ class ZeroCastActivity : AppCompatActivity() {
     private var nativeWidth = 1080
     private var nativeHeight = 2400
     private var nativeDpi = 420
+
+    private val recordAudioLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            launchScreenCapture()
+        } else {
+            Toast.makeText(this, "Audio permission denied. Casting screen without audio.", Toast.LENGTH_SHORT).show()
+            launchScreenCapture()
+        }
+    }
 
     private val mediaProjectionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -77,7 +89,44 @@ class ZeroCastActivity : AppCompatActivity() {
 
         detectNativeScreenSize()
         setupSpinners()
+        restoreSettings()
         setupListeners()
+    }
+
+    private fun restoreSettings() {
+        val ip = ZeroLinkConfig.getServerIp(this)
+        binding.etServerIp.setText(ip)
+        val port = ZeroLinkConfig.getCastPort(this)
+        binding.etPort.setText(port.toString())
+
+        val resIdx = ZeroLinkConfig.getCastResolution(this)
+        if (resIdx < binding.spinnerResolution.count) {
+            binding.spinnerResolution.setSelection(resIdx)
+        }
+
+        val fpsIdx = ZeroLinkConfig.getCastFps(this)
+        if (fpsIdx < binding.spinnerFps.count) {
+            binding.spinnerFps.setSelection(fpsIdx)
+        }
+
+        val bitrateIdx = ZeroLinkConfig.getCastBitrate(this)
+        if (bitrateIdx < binding.spinnerBitrate.count) {
+            binding.spinnerBitrate.setSelection(bitrateIdx)
+        }
+
+        binding.chkAudio.isChecked = ZeroLinkConfig.getCastAudio(this)
+        binding.switchDimScreen.isChecked = ZeroLinkConfig.getCastDimScreen(this)
+    }
+
+    private fun saveSettings() {
+        ZeroLinkConfig.setServerIp(this, binding.etServerIp.text.toString().trim())
+        val port = binding.etPort.text.toString().trim().toIntOrNull() ?: 8888
+        ZeroLinkConfig.setCastPort(this, port)
+        ZeroLinkConfig.setCastResolution(this, binding.spinnerResolution.selectedItemPosition)
+        ZeroLinkConfig.setCastFps(this, binding.spinnerFps.selectedItemPosition)
+        ZeroLinkConfig.setCastBitrate(this, binding.spinnerBitrate.selectedItemPosition)
+        ZeroLinkConfig.setCastAudio(this, binding.chkAudio.isChecked)
+        ZeroLinkConfig.setCastDimScreen(this, binding.switchDimScreen.isChecked)
     }
 
     private fun detectNativeScreenSize() {
@@ -199,6 +248,7 @@ class ZeroCastActivity : AppCompatActivity() {
     }
 
     private fun startStreamFlow() {
+        saveSettings()
         if (binding.rbCameraBack.isChecked || binding.rbCameraFront.isChecked) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
@@ -206,9 +256,18 @@ class ZeroCastActivity : AppCompatActivity() {
             }
             startCameraStream()
         } else {
-            val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+            if (binding.chkAudio.isChecked &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                recordAudioLauncher.launch(Manifest.permission.RECORD_AUDIO)
+            } else {
+                launchScreenCapture()
+            }
         }
+    }
+
+    private fun launchScreenCapture() {
+        val projectionManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjectionLauncher.launch(projectionManager.createScreenCaptureIntent())
     }
 
     private fun startScreenStreamService(resultCode: Int, data: Intent) {
@@ -317,8 +376,31 @@ class ZeroCastActivity : AppCompatActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 1. Sync streaming state with active background service
+        val isServiceStreaming = StreamForegroundService.isStreaming && !StreamForegroundService.isAudioOnly
+        updateUiState(isServiceStreaming)
+
+        // 2. Register listener for background state changes
+        StreamForegroundService.stateListener = object : StreamForegroundService.ServiceStateListener {
+            override fun onStreamingStateChanged(streaming: Boolean, audioOnly: Boolean) {
+                runOnUiThread {
+                    updateUiState(streaming && !audioOnly)
+                }
+            }
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        saveSettings()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        saveSettings()
+        StreamForegroundService.stateListener = null
         discovery?.stopDiscovery()
     }
 }

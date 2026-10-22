@@ -154,6 +154,8 @@ class ZeroClipActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        val savedIp = ZeroLinkConfig.getServerIp(this)
+        binding.etServerIp.setText(savedIp)
         updateCurrentClipboardDisplay()
     }
 

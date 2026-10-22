@@ -873,18 +873,21 @@ class ZeroCastModule(BaseModule):
         try:
             cfg = json.loads(config_str)
             codec = cfg.get("codec", "")
-            if codec == "AUDIO_ONLY":
+            if codec in ("AUDIO_ONLY", "AUDIO_ONLY_ECO"):
                 self.is_audio_only_stream = True
                 if self.status_pill:
                     self.status_pill.setText("● AUDIO STREAM")
                     self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
                 if self.log_label:
                     model = cfg.get("device_model", "Android")
-                    self.log_label.setText(f"Audio-Only Cast: {model}")
+                    self.log_label.setText(f"Audio Cast: {model} (Eco)")
+            else:
+                self.is_audio_only_stream = False
         except Exception:
             pass
 
     def _on_client_disconnected(self):
+        self.is_audio_only_stream = False
         if self.status_pill:
             self.status_pill.setText("● READY" if self.is_active else "○ INACTIVE")
             self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #141414; border: 1px solid #282828; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
@@ -896,6 +899,10 @@ class ZeroCastModule(BaseModule):
 
     def _on_frame_received(self, payload: bytes, frame_type: int, timestamp_us: int):
         if not self.is_active:
+            return
+
+        if getattr(self, "is_audio_only_stream", False):
+            # In audio-only eco mode, ignore incoming video frames so they don't display on screen or pop out
             return
 
         if frame_type == 0x02:  # TYPE_VIDEO_H264
@@ -922,7 +929,8 @@ class ZeroCastModule(BaseModule):
     def _on_audio_received(self, pcm_data: bytes):
         if self.is_active:
             self.audio_pcm_received.emit(pcm_data)
-            if not self.use_external_mixer and self.audio_player:
+            # Only play directly to default speaker if it's NOT an audio-only stream for ZeroMix
+            if not getattr(self, "is_audio_only_stream", False) and not self.use_external_mixer and self.audio_player:
                 self.audio_player.play_chunk(pcm_data)
 
     def _handle_reverse_input(self, action: str, nx: float, ny: float):

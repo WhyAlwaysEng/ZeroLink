@@ -7,6 +7,7 @@ import os
 import time
 import math
 import threading
+import collections
 from typing import Optional, List, Dict, Tuple
 import numpy as np
 import sounddevice as sd
@@ -83,6 +84,11 @@ class AudioMixerEngine(QObject):
         self._out_monitor_stream: Optional[sd.OutputStream] = None
         self._out_broadcast_stream: Optional[sd.OutputStream] = None
 
+        # Output ring queues for non-blocking PortAudio callbacks
+        self._out_lock = threading.Lock()
+        self._monitor_queue = collections.deque(maxlen=16)
+        self._broadcast_queue = collections.deque(maxlen=16)
+
         # Level smoothing for VU meters
         self._peak_mic = 0.0
         self._peak_music = 0.0
@@ -131,45 +137,86 @@ class AudioMixerEngine(QObject):
             print(f"[ZeroMix] Error querying devices: {e}")
         return inputs, outputs
 
+    def _monitor_out_callback(self, outdata, frames, time_info, status):
+        with self._out_lock:
+            if self._monitor_queue:
+                chunk = self._monitor_queue.popleft()
+                if len(chunk) == frames:
+                    outdata[:] = chunk
+                    return
+                elif len(chunk) > frames:
+                    outdata[:] = chunk[:frames]
+                    self._monitor_queue.appendleft(chunk[frames:])
+                    return
+        outdata.fill(0)
+
+    def _broadcast_out_callback(self, outdata, frames, time_info, status):
+        with self._out_lock:
+            if self._broadcast_queue:
+                chunk = self._broadcast_queue.popleft()
+                if len(chunk) == frames:
+                    outdata[:] = chunk
+                    return
+                elif len(chunk) > frames:
+                    outdata[:] = chunk[:frames]
+                    self._broadcast_queue.appendleft(chunk[frames:])
+                    return
+        outdata.fill(0)
+
     def start(self) -> bool:
         if self.is_running:
             return True
 
         try:
-            # Setup output monitor stream (Headphones)
+            # Setup output monitor stream (Headphones) using non-blocking callback
             if self.output_monitor_device is not None:
-                self._out_monitor_stream = sd.OutputStream(
-                    samplerate=self.sample_rate,
-                    blocksize=self.block_size,
-                    device=self.output_monitor_device,
-                    channels=2,
-                    dtype='float32'
-                )
-                self._out_monitor_stream.start()
+                try:
+                    self._out_monitor_stream = sd.OutputStream(
+                        samplerate=self.sample_rate,
+                        blocksize=self.block_size,
+                        device=self.output_monitor_device,
+                        channels=2,
+                        dtype='float32',
+                        callback=self._monitor_out_callback
+                    )
+                    self._out_monitor_stream.start()
+                except Exception as e:
+                    print(f"[ZeroMix] Warning: Monitor output stream failed: {e}")
+                    self._out_monitor_stream = None
 
             # Setup output broadcast stream (Virtual Cable / Discord Mic)
             if self.output_broadcast_device is not None:
-                self._out_broadcast_stream = sd.OutputStream(
-                    samplerate=self.sample_rate,
-                    blocksize=self.block_size,
-                    device=self.output_broadcast_device,
-                    channels=2,
-                    dtype='float32'
-                )
-                self._out_broadcast_stream.start()
+                try:
+                    self._out_broadcast_stream = sd.OutputStream(
+                        samplerate=self.sample_rate,
+                        blocksize=self.block_size,
+                        device=self.output_broadcast_device,
+                        channels=2,
+                        dtype='float32',
+                        callback=self._broadcast_out_callback
+                    )
+                    self._out_broadcast_stream.start()
+                except Exception as e:
+                    print(f"[ZeroMix] Warning: Broadcast output stream failed: {e}")
+                    self._out_broadcast_stream = None
 
             # Setup input mic stream
             if self.input_mic_device is not None:
-                self._in_stream = sd.InputStream(
-                    samplerate=self.sample_rate,
-                    blocksize=self.block_size,
-                    device=self.input_mic_device,
-                    channels=1,
-                    dtype='float32',
-                    callback=self._audio_callback
-                )
-                self._in_stream.start()
-            else:
+                try:
+                    self._in_stream = sd.InputStream(
+                        samplerate=self.sample_rate,
+                        blocksize=self.block_size,
+                        device=self.input_mic_device,
+                        channels=1,
+                        dtype='float32',
+                        callback=self._audio_callback
+                    )
+                    self._in_stream.start()
+                except Exception as e:
+                    print(f"[ZeroMix] Warning: Input mic stream failed: {e}")
+                    self._in_stream = None
+
+            if self._in_stream is None:
                 # If no mic, still run a clock generator thread to mix music & soundboard
                 self._clock_thread = threading.Thread(target=self._clock_loop, daemon=True)
                 self._clock_thread.start()
@@ -183,6 +230,10 @@ class AudioMixerEngine(QObject):
 
     def stop(self) -> bool:
         self.is_running = False
+        with self._out_lock:
+            self._monitor_queue.clear()
+            self._broadcast_queue.clear()
+
         try:
             if self._in_stream:
                 self._in_stream.stop()
@@ -335,18 +386,10 @@ class AudioMixerEngine(QObject):
         monitor_mix = monitor_mic_chunk + monitor_music_chunk + monitor_sound_chunk
         np.clip(monitor_mix, -1.0, 1.0, out=monitor_mix)
 
-        # Write to outputs
-        try:
-            if self._out_monitor_stream:
-                self._out_monitor_stream.write(monitor_mix)
-        except Exception:
-            pass
-
-        try:
-            if self._out_broadcast_stream:
-                self._out_broadcast_stream.write(broadcast_mix)
-        except Exception:
-            pass
+        # Push to output ring queues for callback streams
+        with self._out_lock:
+            self._monitor_queue.append(monitor_mix.copy())
+            self._broadcast_queue.append(broadcast_mix.copy())
 
         # Update VU meter levels with gentle decay
         self._peak_mic = max(peak_mic, self._peak_mic * 0.85)

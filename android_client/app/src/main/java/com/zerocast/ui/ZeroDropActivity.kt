@@ -266,6 +266,13 @@ class ZeroDropActivity : AppCompatActivity() {
         return MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext) ?: "*/*"
     }
 
+    override fun onResume() {
+        super.onResume()
+        val savedIp = ZeroLinkConfig.getServerIp(this)
+        binding.etServerIp.setText(savedIp)
+        loadExistingReceivedFiles()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         transferManager.stopReceiveWorker()

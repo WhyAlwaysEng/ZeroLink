@@ -138,7 +138,7 @@ class MainWindow(QMainWindow):
 
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
-        self.mod_zerocast.use_external_mixer = self.mod_zeromix.is_active
+        self.mod_zerocast.use_external_mixer = False
         self.mod_zeromix.state_changed.connect(self._on_zeromix_state_changed)
 
         self._setup_ui()
