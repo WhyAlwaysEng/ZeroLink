@@ -91,6 +91,20 @@ class AudioPlayer:
         if self.sink:
             self.sink.setVolume(self.current_volume)
 
+    def is_muted(self) -> bool:
+        return self.current_volume == 0.0
+
+    def toggle_mute(self) -> bool:
+        """Toggles between mute (0.0) and previous volume level."""
+        if self.current_volume > 0.0:
+            self._unmute_volume = self.current_volume
+            self.set_volume(0.0)
+            return True
+        else:
+            prev = getattr(self, "_unmute_volume", 1.0)
+            self.set_volume(prev if prev > 0.0 else 1.0)
+            return False
+
     def play_chunk(self, pcm_data: bytes):
         """Alias for write_pcm."""
         self.write_pcm(pcm_data)

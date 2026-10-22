@@ -12,11 +12,11 @@ from typing import Optional
 from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, pyqtSignal, QUrl
 from PyQt6.QtGui import (
     QImage, QPixmap, QPainter, QColor, QFont, QMouseEvent, QKeyEvent,
-    QPen, QBrush, QKeySequence, QShortcut, QDesktopServices
+    QPen, QBrush, QKeySequence, QShortcut, QDesktopServices, QTransform
 )
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QMessageBox, QComboBox, QDialog
+    QFrame, QMessageBox, QComboBox, QDialog, QSlider
 )
 
 from core.base_module import BaseModule
@@ -49,6 +49,7 @@ class ModernVideoCanvas(QWidget):
         self.setMouseTracking(True)
         self.current_pixmap: QPixmap = QPixmap()
         self.show_hud = True
+        self.rotation_angle = 0
         self.stats: TelemetryStats = TelemetryStats()
         self.resolution_text = "Idle"
         self.codec_text = "None"
@@ -63,20 +64,29 @@ class ModernVideoCanvas(QWidget):
         p.setColor(self.backgroundRole(), QColor("#000000"))
         self.setPalette(p)
 
+    def set_rotation(self, angle: int):
+        """Sets manual rotation angle (0, 90, 180, 270 degrees)."""
+        self.rotation_angle = angle % 360
+        self.update()
+
     def update_frame(self, pixmap: QPixmap, stats: TelemetryStats, codec_name: str = "MJPEG"):
         self.current_pixmap = pixmap
         self.stats = stats
         self.codec_text = codec_name
         if not pixmap.isNull():
-            self.resolution_text = f"{pixmap.width()}x{pixmap.height()}"
+            is_swapped = self.rotation_angle in (90, 270)
+            w = pixmap.height() if is_swapped else pixmap.width()
+            h = pixmap.width() if is_swapped else pixmap.height()
+            self.resolution_text = f"{w}x{h}"
         self.update()
 
     def get_video_rect(self) -> QRect:
         if self.current_pixmap.isNull():
             return QRect(0, 0, self.width(), self.height())
 
-        pw = self.current_pixmap.width()
-        ph = self.current_pixmap.height()
+        is_swapped = self.rotation_angle in (90, 270)
+        pw = self.current_pixmap.height() if is_swapped else self.current_pixmap.width()
+        ph = self.current_pixmap.width() if is_swapped else self.current_pixmap.height()
         ww = self.width()
         wh = self.height()
 
@@ -102,7 +112,14 @@ class ModernVideoCanvas(QWidget):
 
         if not self.current_pixmap.isNull():
             v_rect = self.get_video_rect()
-            painter.drawPixmap(v_rect, self.current_pixmap)
+            if self.rotation_angle != 0:
+                rotated = self.current_pixmap.transformed(
+                    QTransform().rotate(self.rotation_angle),
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                painter.drawPixmap(v_rect, rotated)
+            else:
+                painter.drawPixmap(v_rect, self.current_pixmap)
         else:
             self._draw_standby_screen(painter)
 
@@ -203,8 +220,22 @@ class ModernVideoCanvas(QWidget):
         v_rect = self.get_video_rect()
         if not v_rect.contains(pos):
             return None
-        norm_x = (pos.x() - v_rect.x()) / v_rect.width()
-        norm_y = (pos.y() - v_rect.y()) / v_rect.height()
+        click_x = (pos.x() - v_rect.x()) / v_rect.width()
+        click_y = (pos.y() - v_rect.y()) / v_rect.height()
+
+        if self.rotation_angle == 90:
+            norm_x = click_y
+            norm_y = 1.0 - click_x
+        elif self.rotation_angle == 180:
+            norm_x = 1.0 - click_x
+            norm_y = 1.0 - click_y
+        elif self.rotation_angle == 270:
+            norm_x = 1.0 - click_y
+            norm_y = click_x
+        else:
+            norm_x = click_x
+            norm_y = click_y
+
         return max(0.0, min(1.0, norm_x)), max(0.0, min(1.0, norm_y))
 
     def mousePressEvent(self, event: QMouseEvent):
@@ -275,6 +306,11 @@ class ZeroCastModule(BaseModule):
         self.usb_pill: Optional[QLabel] = None
         self.combo_audio_dev: Optional[QComboBox] = None
         self.btn_vcam: Optional[QPushButton] = None
+        self.btn_audio: Optional[QPushButton] = None
+        self.slider_volume: Optional[QSlider] = None
+        self.lbl_volume: Optional[QLabel] = None
+        self.combo_rotate: Optional[QComboBox] = None
+        self._prev_volume: int = 100
 
         self._bind_events()
         self._init_usb_tunnel()
@@ -430,6 +466,16 @@ class ZeroCastModule(BaseModule):
         self.btn_vcam.clicked.connect(self._toggle_virtual_cam)
         bar_layout.addWidget(self.btn_vcam)
 
+        # Manual Orientation Selector
+        self.combo_rotate = QComboBox()
+        self.combo_rotate.addItem("🔄 Auto / 0°", 0)
+        self.combo_rotate.addItem("🔄 90° Landscape", 90)
+        self.combo_rotate.addItem("🔄 180° Inverted", 180)
+        self.combo_rotate.addItem("🔄 270° Landscape", 270)
+        self.combo_rotate.setToolTip("Force manual orientation (0°, 90°, 180°, 270°)")
+        self.combo_rotate.currentIndexChanged.connect(self._on_rotation_changed)
+        bar_layout.addWidget(self.combo_rotate)
+
         self.btn_snapshot = QPushButton("Snapshot")
         self.btn_snapshot.clicked.connect(self._take_snapshot)
         bar_layout.addWidget(self.btn_snapshot)
@@ -471,9 +517,47 @@ class ZeroCastModule(BaseModule):
 
         bot_layout.addSpacing(6)
 
-        self.btn_audio = QPushButton("Audio: ON")
+        # Volume Controls
+        self.btn_audio = QPushButton("🔊")
+        self.btn_audio.setFixedWidth(36)
+        self.btn_audio.setToolTip("Click to Mute / Unmute")
         self.btn_audio.clicked.connect(self._toggle_audio)
         bot_layout.addWidget(self.btn_audio)
+
+        self.slider_volume = QSlider(Qt.Orientation.Horizontal)
+        self.slider_volume.setRange(0, 100)
+        self.slider_volume.setValue(100)
+        self.slider_volume.setFixedWidth(85)
+        self.slider_volume.setToolTip("Volume: 100%")
+        self.slider_volume.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: none;
+                height: 4px;
+                background: #E5E7EB;
+                border-radius: 2px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #111827;
+                border-radius: 2px;
+            }
+            QSlider::handle:horizontal {
+                background: #111827;
+                border: 2px solid #FFFFFF;
+                width: 12px;
+                margin-top: -4px;
+                margin-bottom: -4px;
+                border-radius: 6px;
+            }
+            QSlider::handle:horizontal:hover {
+                background: #000000;
+            }
+        """)
+        self.slider_volume.valueChanged.connect(self._on_volume_changed)
+        bot_layout.addWidget(self.slider_volume)
+
+        self.lbl_volume = QLabel("100%")
+        self.lbl_volume.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 600; min-width: 32px;")
+        bot_layout.addWidget(self.lbl_volume)
 
         self.combo_audio_dev = QComboBox()
         self._populate_audio_devices()
@@ -572,9 +656,53 @@ class ZeroCastModule(BaseModule):
         if device:
             self.audio_player.set_device(device)
 
+    def _on_volume_changed(self, val: int):
+        vol = val / 100.0
+        self.audio_player.set_volume(vol)
+        if self.lbl_volume:
+            self.lbl_volume.setText(f"{val}%")
+        if self.slider_volume:
+            self.slider_volume.setToolTip(f"Volume: {val}%")
+        if self.btn_audio:
+            if val == 0:
+                self.btn_audio.setText("🔇")
+            elif val < 50:
+                self.btn_audio.setText("🔉")
+            else:
+                self.btn_audio.setText("🔊")
+
     def _toggle_audio(self):
-        is_muted = self.audio_player.toggle_mute()
-        self.btn_audio.setText("Audio: MUTED" if is_muted else "Audio: ON")
+        if not self.slider_volume:
+            return
+        if self.slider_volume.value() > 0:
+            self._prev_volume = self.slider_volume.value()
+            self.slider_volume.setValue(0)
+        else:
+            prev = getattr(self, "_prev_volume", 100)
+            self.slider_volume.setValue(prev if prev > 0 else 100)
+
+    def _on_rotation_changed(self, idx: int):
+        if not self.combo_rotate or not self.canvas:
+            return
+        angle = self.combo_rotate.itemData(idx)
+        if angle is None:
+            angle = 0
+        self.canvas.set_rotation(angle)
+
+        # Force sync with Android device via ADB if connected
+        if self.adb_manager.is_available():
+            if angle == 0:
+                # Re-enable accelerometer rotation
+                self.input_controller._run_adb_async(["shell", "settings", "put", "system", "accelerometer_rotation", "1"])
+            else:
+                # Lock rotation: 0=portrait, 1=landscape 90, 2=inverted 180, 3=landscape 270
+                adb_rot = {90: 1, 180: 2, 270: 3}.get(angle, 0)
+                self.input_controller._run_adb_async(["shell", "settings", "put", "system", "accelerometer_rotation", "0"])
+                self.input_controller._run_adb_async(["shell", "settings", "put", "system", "user_rotation", str(adb_rot)])
+
+        if self.log_label:
+            mode_str = "Landscape" if angle in (90, 270) else "Portrait"
+            self.log_label.setText(f"Orientation: {angle}° ({mode_str})")
 
     def _toggle_hud(self):
         self.canvas.show_hud = self.btn_hud.isChecked()

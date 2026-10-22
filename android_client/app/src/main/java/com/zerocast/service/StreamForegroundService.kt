@@ -4,6 +4,7 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
@@ -31,6 +32,7 @@ class StreamForegroundService : LifecycleService() {
 
         const val ACTION_START_SCREEN = "com.zerocast.action.START_SCREEN"
         const val ACTION_STOP = "com.zerocast.action.STOP"
+        const val ACTION_TOGGLE_ORIENTATION = "com.zerocast.action.TOGGLE_ORIENTATION"
 
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
@@ -82,9 +84,17 @@ class StreamForegroundService : LifecycleService() {
         when (intent?.action) {
             ACTION_START_SCREEN -> handleStartScreen(intent)
             ACTION_STOP -> stopStreaming()
+            ACTION_TOGGLE_ORIENTATION -> handleToggleOrientation()
         }
 
         return START_NOT_STICKY
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        if (isStreaming) {
+            checkOrientationChanged()
+        }
     }
 
     private fun handleStartScreen(intent: Intent) {
@@ -231,11 +241,16 @@ class StreamForegroundService : LifecycleService() {
 
     private fun checkOrientationChanged() {
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        val rot = wm.defaultDisplay.rotation
-        if (rot == lastRotation) return
-        lastRotation = rot
+        val rot = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            display?.rotation ?: Surface.ROTATION_0
+        } else {
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.rotation
+        }
+        val isConfigLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val isRotLandscape = rot == Surface.ROTATION_90 || rot == Surface.ROTATION_270
+        val isLandscape = isConfigLandscape || isRotLandscape
 
-        val isLandscape = rot == Surface.ROTATION_90 || rot == Surface.ROTATION_270
         val targetW = if (isLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
         val targetH = if (isLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
 
@@ -255,8 +270,31 @@ class StreamForegroundService : LifecycleService() {
                 if (isStreaming && mediaProjection != null) {
                     startVideoEncoder(targetW, targetH)
                 }
-            }, 250) // Small debounce for Android window manager to settle
+            }, 200) // Small debounce for Android window manager to settle
         }
+    }
+
+    private fun handleToggleOrientation() {
+        if (!isStreaming || mediaProjection == null) return
+        val isCurrentlyLandscape = currentActiveWidth > currentActiveHeight
+        val newW = if (isCurrentlyLandscape) minOf(baseWidth, baseHeight) else maxOf(baseWidth, baseHeight)
+        val newH = if (isCurrentlyLandscape) maxOf(baseWidth, baseHeight) else minOf(baseWidth, baseHeight)
+
+        Log.d(TAG, "Manual toggle orientation requested: ${currentActiveWidth}x${currentActiveHeight} -> ${newW}x${newH}")
+        currentActiveWidth = newW
+        currentActiveHeight = newH
+
+        screenCaptureH264Manager?.stop()
+        screenCaptureH264Manager = null
+
+        screenCaptureManager?.stop()
+        screenCaptureManager = null
+
+        mainHandler.postDelayed({
+            if (isStreaming && mediaProjection != null) {
+                startVideoEncoder(newW, newH)
+            }
+        }, 150)
     }
 
     private fun startForegroundWithNotification() {
@@ -270,11 +308,22 @@ class StreamForegroundService : LifecycleService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        val rotateIntent = Intent(this, StreamForegroundService::class.java).apply {
+            action = ACTION_TOGGLE_ORIENTATION
+        }
+        val rotatePendingIntent = PendingIntent.getService(
+            this,
+            1,
+            rotateIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("ZeroCast Streaming")
+            .setContentTitle("ZeroLink Streaming")
             .setContentText("Screen mirroring is actively streaming to PC")
             .setSmallIcon(android.R.drawable.presence_video_online)
             .setOngoing(true)
+            .addAction(android.R.drawable.ic_menu_rotate, "Rotate 90°", rotatePendingIntent)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Stream", stopPendingIntent)
             .build()
 
