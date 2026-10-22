@@ -17,7 +17,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QMessageBox, QComboBox, QDialog, QSlider, QMainWindow,
-    QStackedWidget, QCheckBox, QGraphicsDropShadowEffect, QSizePolicy
+    QStackedWidget, QCheckBox, QGraphicsDropShadowEffect, QSizePolicy, QMenu
 )
 
 from core.base_module import BaseModule
@@ -57,6 +57,7 @@ class ModernVideoCanvas(QWidget):
         self.input_enabled = True
         self.on_touch_event = None
         self.on_key_event = None
+        self.on_context_menu = None
         self.is_module_active = True
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
@@ -65,6 +66,27 @@ class ModernVideoCanvas(QWidget):
         p = self.palette()
         p.setColor(self.backgroundRole(), QColor("#000000"))
         self.setPalette(p)
+
+        # Floating Overlay Button (shown in Screen-Only mode)
+        self.overlay_btn = QPushButton("⛶ Show Controls", self)
+        self.overlay_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.overlay_btn.setToolTip("Restore top and bottom bars (or press Esc)")
+        self.overlay_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(17, 24, 39, 0.82);
+                color: #FFFFFF;
+                border: 1px solid rgba(255, 255, 255, 0.28);
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.96);
+                border-color: rgba(255, 255, 255, 0.6);
+            }
+        """)
+        self.overlay_btn.setVisible(False)
 
     def set_rotation(self, angle: int):
         """Sets manual rotation angle (0, 90, 180, 270 degrees)."""
@@ -281,6 +303,19 @@ class ModernVideoCanvas(QWidget):
             else:
                 super().keyPressEvent(event)
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "overlay_btn") and self.overlay_btn:
+            bw = 118
+            bh = 30
+            self.overlay_btn.setGeometry(self.width() - bw - 14, 14, bw, bh)
+
+    def contextMenuEvent(self, event):
+        if hasattr(self, "on_context_menu") and self.on_context_menu:
+            self.on_context_menu(event.globalPos())
+        else:
+            super().contextMenuEvent(event)
+
 
 class ZeroCastPopoutWindow(QMainWindow):
     """Independent floating window for ZeroCast streaming session."""
@@ -345,6 +380,8 @@ class ZeroCastPopoutWindow(QMainWindow):
     def _exit_fullscreen_on_esc(self):
         if self.is_fullscreen:
             self._toggle_fullscreen()
+        elif hasattr(self.cast_module, "is_screen_only") and self.cast_module.is_screen_only:
+            self.cast_module.set_screen_only(False)
 
     def closeEvent(self, event):
         event.ignore()
@@ -387,13 +424,17 @@ class ZeroCastModule(BaseModule):
 
         # Detachable Popout State
         self.is_popped_out: bool = False
+        self.is_screen_only: bool = False
         self.popout_window: Optional[ZeroCastPopoutWindow] = None
         self._stacked_container: Optional[QStackedWidget] = None
         self._dock_container: Optional[QWidget] = None
         self._dock_layout: Optional[QVBoxLayout] = None
         self._content_widget: Optional[QWidget] = None
         self._placeholder_widget: Optional[QWidget] = None
+        self.top_bar: Optional[QFrame] = None
+        self.bottom_bar: Optional[QFrame] = None
         self.btn_popout: Optional[QPushButton] = None
+        self.btn_screen_only: Optional[QPushButton] = None
         self.chk_auto_popout: Optional[QCheckBox] = None
 
         self._bind_events()
@@ -535,6 +576,7 @@ class ZeroCastModule(BaseModule):
         # Header Bar
         top_bar = QFrame()
         top_bar.setStyleSheet("background-color: #FFFFFF; border-bottom: 1px solid #E5E7EB;")
+        self.top_bar = top_bar
         bar_layout = QHBoxLayout(top_bar)
         bar_layout.setContentsMargins(14, 8, 14, 8)
         bar_layout.setSpacing(8)
@@ -598,6 +640,28 @@ class ZeroCastModule(BaseModule):
         self.chk_auto_popout.setToolTip("Automatically open in a floating window when phone connects")
         bar_layout.addWidget(self.chk_auto_popout)
 
+        # Screen Only Button (Pop-out mode only)
+        self.btn_screen_only = QPushButton("🖥️ Screen Only")
+        self.btn_screen_only.setToolTip("Hide toolbars and show pure screen only (Press Esc or click 'Show Controls' to restore)")
+        self.btn_screen_only.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+        """)
+        self.btn_screen_only.clicked.connect(lambda: self.set_screen_only(True))
+        self.btn_screen_only.setVisible(False)
+        bar_layout.addWidget(self.btn_screen_only)
+
         # Manual Pop-out Button
         self.btn_popout = QPushButton("↗ Pop-out")
         self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
@@ -634,11 +698,14 @@ class ZeroCastModule(BaseModule):
         self.canvas.on_touch_event = self._handle_reverse_input
         self.canvas.on_key_event = self._handle_key_input
         self.canvas.double_clicked.connect(self.toggle_fullscreen_requested.emit)
+        self.canvas.overlay_btn.clicked.connect(lambda: self.set_screen_only(False))
+        self.canvas.on_context_menu = self._show_canvas_context_menu
         layout.addWidget(self.canvas, 1)
 
         # Bottom Bar Dock
         bottom_bar = QFrame()
         bottom_bar.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E5E7EB;")
+        self.bottom_bar = bottom_bar
         bot_layout = QHBoxLayout(bottom_bar)
         bot_layout.setContentsMargins(14, 6, 14, 6)
         bot_layout.setSpacing(8)
@@ -992,12 +1059,86 @@ class ZeroCastModule(BaseModule):
             self.btn_snapshot.setVisible(not is_compact)
         if hasattr(self, "btn_pin") and self.btn_pin:
             self.btn_pin.setVisible(is_compact)
+        if hasattr(self, "btn_screen_only") and self.btn_screen_only:
+            self.btn_screen_only.setVisible(is_compact)
 
         # Bottom bar
         if hasattr(self, "log_label") and self.log_label:
             self.log_label.setVisible(not is_compact)
         if hasattr(self, "combo_audio_dev") and self.combo_audio_dev:
             self.combo_audio_dev.setVisible(not is_compact)
+
+    def toggle_screen_only(self):
+        self.set_screen_only(not self.is_screen_only)
+
+    def set_screen_only(self, enabled: bool):
+        """Toggles pure screen mode (hiding top/bottom bars for unobstructed viewing)."""
+        self.is_screen_only = enabled
+
+        if hasattr(self, "top_bar") and self.top_bar:
+            self.top_bar.setVisible(not enabled)
+        if hasattr(self, "bottom_bar") and self.bottom_bar:
+            self.bottom_bar.setVisible(not enabled)
+
+        if hasattr(self.canvas, "overlay_btn") and self.canvas.overlay_btn:
+            self.canvas.overlay_btn.setVisible(enabled)
+
+        if self.popout_window:
+            if enabled:
+                self.popout_window.setMinimumSize(180, 240)
+            else:
+                self.popout_window.setMinimumSize(360, 500)
+
+        if not enabled and self.is_popped_out:
+            self._set_compact_mode(True)
+
+    def _show_canvas_context_menu(self, pos: QPoint):
+        """Minimalist right-click context menu on video viewport."""
+        menu = QMenu(self.canvas)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #FFFFFF;
+                color: #111827;
+                border: 1px solid #E5E7EB;
+                border-radius: 8px;
+                padding: 4px;
+            }
+            QMenu::item {
+                padding: 6px 18px;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QMenu::item:selected {
+                background-color: #F3F4F6;
+                color: #000000;
+            }
+            QMenu::separator {
+                height: 1px;
+                background: #E5E7EB;
+                margin: 4px 8px;
+            }
+        """)
+
+        if self.is_popped_out:
+            if self.is_screen_only:
+                act_screen = menu.addAction("⛶ Show Controls")
+                act_screen.triggered.connect(lambda: self.set_screen_only(False))
+            else:
+                act_screen = menu.addAction("🖥️ Screen Only")
+                act_screen.triggered.connect(lambda: self.set_screen_only(True))
+
+            is_pinned = self.popout_window.is_pinned if self.popout_window else False
+            act_pin = menu.addAction("📌 Always on Top" if not is_pinned else "📌 Unpin Window")
+            act_pin.triggered.connect(lambda: self.popout_window.toggle_pin() if self.popout_window else None)
+
+            act_dock = menu.addAction("↙ Dock Back to Hub")
+            act_dock.triggered.connect(self.dock_back)
+            menu.addSeparator()
+
+        act_snap = menu.addAction("📸 Take Snapshot")
+        act_snap.triggered.connect(self._take_snapshot)
+
+        menu.exec(pos)
 
     def pop_out(self):
         """Detaches the ZeroCast streaming viewport into an independent floating window."""
@@ -1044,6 +1185,8 @@ class ZeroCastModule(BaseModule):
         if not self.is_popped_out or not self._content_widget:
             return
         self.is_popped_out = False
+        if self.is_screen_only:
+            self.set_screen_only(False)
 
         if self.popout_window:
             self.popout_window.takeCentralWidget()
