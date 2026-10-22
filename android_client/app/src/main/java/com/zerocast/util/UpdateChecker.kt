@@ -4,7 +4,6 @@ import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.zerocast.BuildConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -19,14 +18,25 @@ object UpdateChecker {
 
     private const val GITHUB_REPO = "WhyAlwaysEng/ZeroCast"
     private const val RELEASES_API = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
+    private const val FALLBACK_VERSION = "1.0.0"
+
+    private fun getAppVersion(activity: Activity): String {
+        return try {
+            val pInfo = activity.packageManager.getPackageInfo(activity.packageName, 0)
+            pInfo.versionName ?: FALLBACK_VERSION
+        } catch (e: Exception) {
+            FALLBACK_VERSION
+        }
+    }
 
     fun checkForUpdates(activity: Activity) {
+        val currentVersion = getAppVersion(activity)
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val url = URL(RELEASES_API)
                 val conn = url.openConnection() as HttpURLConnection
                 conn.requestMethod = "GET"
-                conn.setRequestProperty("User-Agent", "ZeroCast-Android/${BuildConfig.VERSION_NAME}")
+                conn.setRequestProperty("User-Agent", "ZeroCast-Android/$currentVersion")
                 conn.setRequestProperty("Accept", "application/vnd.github.v3+json")
                 conn.connectTimeout = 4000
                 conn.readTimeout = 4000
@@ -41,10 +51,10 @@ object UpdateChecker {
                     val htmlUrl = json.optString("html_url", "https://github.com/$GITHUB_REPO/releases")
                     val releaseNotes = json.optString("body", "")
 
-                    if (isNewerVersion(tagName, BuildConfig.VERSION_NAME)) {
+                    if (isNewerVersion(tagName, currentVersion)) {
                         withContext(Dispatchers.Main) {
                             if (!activity.isFinishing && !activity.isDestroyed) {
-                                showUpdateDialog(activity, tagName, htmlUrl, releaseNotes)
+                                showUpdateDialog(activity, tagName, htmlUrl, releaseNotes, currentVersion)
                             }
                         }
                     }
@@ -74,11 +84,17 @@ object UpdateChecker {
         return clean.split(".").mapNotNull { it.toIntOrNull() }
     }
 
-    private fun showUpdateDialog(activity: Activity, tag: String, downloadUrl: String, notes: String) {
+    private fun showUpdateDialog(
+        activity: Activity,
+        tag: String,
+        downloadUrl: String,
+        notes: String,
+        currentVersion: String
+    ) {
         val snippet = if (notes.length > 200) notes.take(200) + "..." else notes
         val message = StringBuilder()
             .append("A new version of ZeroCast is ready on GitHub.\n\n")
-            .append("• Current: v${BuildConfig.VERSION_NAME}\n")
+            .append("• Current: v$currentVersion\n")
             .append("• Latest: $tag\n")
         if (snippet.isNotBlank()) {
             message.append("\nNotes:\n$snippet")
