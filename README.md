@@ -7,8 +7,8 @@
 ### **Ultra-Low Latency Native Android Screen & Audio Mirroring Engine**
 *High-Performance GPU H.264 Acceleration • Studio PCM Internal Audio • Virtual Camera (OBS/Discord) • Reverse Control*
 
-[![Release](https://img.shields.io/badge/Release-v1.0.0-00E676?style=for-the-badge&logo=android)](https://github.com/)
-[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-38BDF8?style=for-the-badge&logo=windows)](https://github.com/)
+[![Release](https://img.shields.io/badge/Release-v1.0.0-00E676?style=for-the-badge&logo=android)](https://github.com/WhyAlwaysEng/ZeroCast/releases)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20Windows-38BDF8?style=for-the-badge&logo=windows)](https://github.com/WhyAlwaysEng/ZeroCast)
 [![License](https://img.shields.io/badge/License-MIT-blueviolet?style=for-the-badge)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python)](https://python.org)
 [![Kotlin](https://img.shields.io/badge/Kotlin-1.9%2B-7F52FF?style=for-the-badge&logo=kotlin)](https://kotlinlang.org)
@@ -29,6 +29,7 @@ ZeroCast is an open-source, ultra-low latency screen mirroring and internal audi
 - 🖱️ **Full Reverse Touch & Keyboard Injection**: Click, drag, and swipe the phone from your PC screen with automatic ADB tunneling. Type directly using your physical PC keyboard.
 - 📊 **Floating Mobile Performance HUD**: Drag-and-drop floating pill displaying live CPU %, RAM %, and Battery Temp on your phone, with tap-to-shrink Ghost Mode (completely invisible on PC).
 - 🌙 **Auto-Dim Screen Saver**: Dims phone backlight to 1% while streaming to eliminate heat and save 40–50% battery, while the PC mirror stays 100% vibrant.
+- 🚀 **Built-in GitHub Auto-Update Checker**: Both PC receiver and mobile client automatically detect new GitHub releases and provide one-click updates.
 
 ---
 

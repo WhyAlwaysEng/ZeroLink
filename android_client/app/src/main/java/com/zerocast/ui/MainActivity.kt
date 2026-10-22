@@ -24,6 +24,7 @@ import com.zerocast.network.NetworkDiscovery
 import com.zerocast.network.StreamSender
 import com.zerocast.service.FloatingOverlayService
 import com.zerocast.service.StreamForegroundService
+import com.zerocast.util.UpdateChecker
 
 class MainActivity : AppCompatActivity() {
 
@@ -79,6 +80,9 @@ class MainActivity : AppCompatActivity() {
         detectNativeScreenSize()
         setupSpinners()
         setupListeners()
+
+        // Asynchronously check for GitHub updates
+        UpdateChecker.checkForUpdates(this)
     }
 
     private fun detectNativeScreenSize() {

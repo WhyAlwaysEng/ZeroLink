@@ -37,6 +37,7 @@ from core.discovery import LanDiscoveryService
 from core.input_controller import InputController
 from core.virtual_cam import VirtualCameraManager
 from core.protocol import TYPE_VIDEO_MJPEG
+from core.updater import UpdateCheckWorker, CURRENT_VERSION
 
 try:
     import qrcode
@@ -389,6 +390,12 @@ class MainWindow(QMainWindow):
         self.usb_timer.timeout.connect(self._check_usb_device_status)
         self.usb_timer.start(3000)
 
+        # Check for GitHub Releases Update asynchronously after launch
+        self.latest_release_url = f"https://github.com/WhyAlwaysEng/ZeroCast/releases"
+        self.latest_release_tag = ""
+        self.latest_release_notes = ""
+        QTimer.singleShot(2500, self._check_for_updates)
+
     def _setup_ui(self):
         self.setStyleSheet("""
             QMainWindow {
@@ -527,6 +534,27 @@ class MainWindow(QMainWindow):
         self.btn_fullscreen.setToolTip("Toggle Fullscreen (F11)")
         self.btn_fullscreen.clicked.connect(self._toggle_fullscreen)
         bar_layout.addWidget(self.btn_fullscreen)
+
+        # Auto-Update Indicator Button (Hidden by default, shown if new release found)
+        self.btn_update = QPushButton("🚀 Update")
+        self.btn_update.setToolTip("A new version is available on GitHub")
+        self.btn_update.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00E676, stop:1 #38BDF8);
+                color: #0B0D13;
+                font-weight: 800;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background: #FFFFFF;
+                color: #000000;
+            }
+        """)
+        self.btn_update.setVisible(False)
+        self.btn_update.clicked.connect(self._on_update_clicked)
+        bar_layout.addWidget(self.btn_update)
 
         main_layout.addWidget(self.top_bar)
 
@@ -863,6 +891,39 @@ class MainWindow(QMainWindow):
                 self._on_status_changed(f"Virtual Camera ACTIVE: Select '{self.virtual_cam.device_name}' in Discord / Zoom / OBS")
             else:
                 QMessageBox.critical(self, "Virtual Camera Error", f"Failed to start virtual camera: {self.virtual_cam.device_name}")
+
+    def _check_for_updates(self):
+        """Asynchronously queries GitHub Releases for updates."""
+        self.update_worker = UpdateCheckWorker(CURRENT_VERSION, self)
+        self.update_worker.update_available.connect(self._on_update_available)
+        self.update_worker.start()
+
+    def _on_update_available(self, tag_name: str, html_url: str, notes: str):
+        self.latest_release_url = html_url
+        self.latest_release_tag = tag_name
+        self.latest_release_notes = notes
+        self.btn_update.setText(f"🚀 {tag_name}")
+        self.btn_update.setToolTip(f"New version {tag_name} is available on GitHub! Click to update.")
+        self.btn_update.setVisible(True)
+        self._on_status_changed(f"🎉 Update available: {tag_name} (Click top '🚀 {tag_name}' button)")
+
+    def _on_update_clicked(self):
+        from PyQt6.QtGui import QDesktopServices
+        from PyQt6.QtCore import QUrl
+        box = QMessageBox(self)
+        box.setWindowTitle(f"ZeroCast Update Available")
+        box.setText(f"<h3>🎉 New Version Available: {self.latest_release_tag}</h3>"
+                    f"<p>Current Version: <b>v{CURRENT_VERSION}</b></p>"
+                    f"<p>Would you like to open the GitHub Releases page to download the latest release?</p>")
+        if self.latest_release_notes:
+            preview_notes = self.latest_release_notes[:350]
+            box.setInformativeText(f"Release Notes:\n{preview_notes}")
+        download_btn = box.addButton("Open Download Page", QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        box.exec()
+
+        if box.clickedButton() == download_btn:
+            QDesktopServices.openUrl(QUrl(self.latest_release_url))
 
     def closeEvent(self, event):
         self.discovery.stop()
