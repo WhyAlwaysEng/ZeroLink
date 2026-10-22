@@ -205,6 +205,7 @@ class ZeroMixModule(BaseModule):
         self.combo_mic: Optional[QComboBox] = None
         self.combo_monitor: Optional[QComboBox] = None
         self.combo_broadcast: Optional[QComboBox] = None
+        self.btn_mute_monitor: Optional[QPushButton] = None
 
         # Soundboard grid
         self.soundboard_layout: Optional[QGridLayout] = None
@@ -338,6 +339,20 @@ class ZeroMixModule(BaseModule):
         self.combo_monitor = QComboBox()
         self.combo_monitor.currentIndexChanged.connect(self._on_devices_changed)
         col_mon.addWidget(self.combo_monitor)
+
+        self.btn_mute_monitor = QPushButton("🔇 Mute Monitor (Discord Test Mode)")
+        self.btn_mute_monitor.setCheckable(True)
+        self.btn_mute_monitor.setChecked(getattr(self.engine, "mute_monitor", False))
+        self.btn_mute_monitor.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6; color: #374151; border: 1px solid #D1D5DB;
+                border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 600;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        self.btn_mute_monitor.toggled.connect(self._on_mute_monitor_toggled)
+        col_mon.addWidget(self.btn_mute_monitor)
+
         dev_layout.addLayout(col_mon, 1)
 
         # Broadcast Device (Virtual Mic)
@@ -403,6 +418,10 @@ class ZeroMixModule(BaseModule):
         chk_hear_mic.setStyleSheet("color: #6B7280; font-size: 11px;")
         chk_hear_mic.toggled.connect(lambda on: self.engine.set_monitor_mic(on))
         self.strip_mic.layout().addWidget(chk_hear_mic)
+
+        lbl_mic_echo_hint = QLabel("(Keep OFF when testing mic in Discord to avoid echo)")
+        lbl_mic_echo_hint.setStyleSheet("color: #9CA3AF; font-size: 10px; font-style: italic;")
+        self.strip_mic.layout().addWidget(lbl_mic_echo_hint)
         stems_layout.addWidget(self.strip_mic, 1)
 
         # Strip Music / Phone Cast
@@ -589,23 +608,31 @@ class ZeroMixModule(BaseModule):
         if self.combo_mic is not None:
             self.combo_mic.blockSignals(True)
             self.combo_mic.clear()
+            self.combo_mic.addItem("❌ None (Microphone Disabled)", -1)
             for d in inputs:
                 clean = d["name"]
                 if len(clean) > 40:
                     clean = clean[:37] + "..."
                 self.combo_mic.addItem(f"🎤 {clean}", d["index"])
-            self._select_combo_data(self.combo_mic, self.engine.input_mic_device)
+            if self.engine.input_mic_device is None:
+                self.combo_mic.setCurrentIndex(0)
+            else:
+                self._select_combo_data(self.combo_mic, self.engine.input_mic_device)
             self.combo_mic.blockSignals(False)
 
         if self.combo_monitor is not None:
             self.combo_monitor.blockSignals(True)
             self.combo_monitor.clear()
+            self.combo_monitor.addItem("❌ None (Monitor Disabled / No Feedback)", -1)
             for d in outputs:
                 clean = d["name"]
                 if len(clean) > 40:
                     clean = clean[:37] + "..."
                 self.combo_monitor.addItem(f"🎧 {clean}", d["index"])
-            self._select_combo_data(self.combo_monitor, self.engine.output_monitor_device)
+            if self.engine.output_monitor_device is None:
+                self.combo_monitor.setCurrentIndex(0)
+            else:
+                self._select_combo_data(self.combo_monitor, self.engine.output_monitor_device)
             self.combo_monitor.blockSignals(False)
 
         if self.combo_broadcast is not None:
@@ -636,7 +663,10 @@ class ZeroMixModule(BaseModule):
             for label, idx in physical_outputs:
                 self.combo_broadcast.addItem(label, idx)
 
-            self._select_combo_data(self.combo_broadcast, self.engine.output_broadcast_device)
+            if self.engine.output_broadcast_device is None:
+                self.combo_broadcast.setCurrentIndex(0)
+            else:
+                self._select_combo_data(self.combo_broadcast, self.engine.output_broadcast_device)
             self.combo_broadcast.blockSignals(False)
 
             if hasattr(self, "lbl_virtual_status"):
@@ -669,6 +699,37 @@ class ZeroMixModule(BaseModule):
             self.state_changed.emit(self.module_id, True)
 
     def _on_devices_changed(self):
+        mic_idx = self.combo_mic.currentData() if self.combo_mic is not None else None
+        mon_idx = self.combo_monitor.currentData() if self.combo_monitor is not None else None
+        bc_idx = self.combo_broadcast.currentData() if self.combo_broadcast is not None else None
+        if mic_idx == -1:
+            mic_idx = None
+        if mon_idx == -1:
+            mon_idx = None
+        if bc_idx == -1:
+            bc_idx = None
+        self.engine.set_devices(mic_idx, mon_idx, bc_idx)
+
+    def _on_mute_monitor_toggled(self, checked: bool):
+        self.engine.set_monitor_mute(checked)
+        if self.btn_mute_monitor:
+            if checked:
+                self.btn_mute_monitor.setText("🔇 Monitor MUTED (Discord Test Mode)")
+                self.btn_mute_monitor.setStyleSheet("""
+                    QPushButton {
+                        background-color: #FEE2E2; color: #DC2626; border: 1px solid #F87171;
+                        border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 700;
+                    }
+                """)
+            else:
+                self.btn_mute_monitor.setText("🔇 Mute Monitor (Discord Test Mode)")
+                self.btn_mute_monitor.setStyleSheet("""
+                    QPushButton {
+                        background-color: #F3F4F6; color: #374151; border: 1px solid #D1D5DB;
+                        border-radius: 6px; padding: 4px 8px; font-size: 10px; font-weight: 600;
+                    }
+                    QPushButton:hover { background-color: #E5E7EB; }
+                """)
         mic_idx = self.combo_mic.currentData() if self.combo_mic is not None else None
         mon_idx = self.combo_monitor.currentData() if self.combo_monitor is not None else None
         bc_idx = self.combo_broadcast.currentData() if self.combo_broadcast is not None else None

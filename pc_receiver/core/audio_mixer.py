@@ -53,6 +53,7 @@ class AudioMixerEngine(QObject):
         self.monitor_mic = False          # False = don't echo own voice
         self.monitor_music = True
         self.monitor_soundboard = True
+        self.mute_monitor = False         # Master monitor mute toggle (useful when testing in Discord)
 
         # Smart Auto-Ducking Configuration
         self.ducking_enabled = True
@@ -108,15 +109,29 @@ class AudioMixerEngine(QObject):
 
     def _init_default_devices(self):
         try:
-            defaults = sd.default.device
-            if defaults[0] is not None and defaults[0] >= 0:
-                self.input_mic_device = int(defaults[0])
-            if defaults[1] is not None and defaults[1] >= 0:
-                self.output_monitor_device = int(defaults[1])
-
-            # Auto-detect Virtual Cable / AudioRelay / Steam if available for broadcast
+            apis = sd.query_hostapis()
+            wasapi_idx = next((i for i, a in enumerate(apis) if "WASAPI" in a["name"].upper()), None)
             devices = sd.query_devices()
-            for idx, dev in enumerate(devices):
+
+            if wasapi_idx is not None:
+                wasapi_info = apis[wasapi_idx]
+                def_in = wasapi_info.get("default_input")
+                def_out = wasapi_info.get("default_output")
+                if def_in is not None and def_in >= 0:
+                    self.input_mic_device = int(def_in)
+                if def_out is not None and def_out >= 0:
+                    self.output_monitor_device = int(def_out)
+                target_devices = [(i, d) for i, d in enumerate(devices) if d.get("hostapi") == wasapi_idx]
+            else:
+                defaults = sd.default.device
+                if defaults[0] is not None and defaults[0] >= 0:
+                    self.input_mic_device = int(defaults[0])
+                if defaults[1] is not None and defaults[1] >= 0:
+                    self.output_monitor_device = int(defaults[1])
+                target_devices = list(enumerate(devices))
+
+            # Auto-detect Virtual Cable / AudioRelay for broadcast
+            for idx, dev in target_devices:
                 name = dev.get("name", "").lower()
                 if dev.get("max_output_channels", 0) > 0:
                     if "cable input" in name or "virtual" in name or "line out" in name:
@@ -126,27 +141,51 @@ class AudioMixerEngine(QObject):
             print(f"[ZeroMix] Device init warning: {e}")
 
     def get_device_lists(self) -> Tuple[List[Dict], List[Dict]]:
-        """Returns (input_devices, output_devices) available on the host system."""
+        """Returns (input_devices, output_devices) available on the host system.
+        Filters for active Windows WASAPI endpoints to show only real, connected, active devices.
+        """
         inputs = []
         outputs = []
         try:
+            apis = sd.query_hostapis()
+            wasapi_idx = next((i for i, a in enumerate(apis) if "WASAPI" in a["name"].upper()), None)
+
             devices = sd.query_devices()
-            for idx, dev in enumerate(devices):
-                # Clean up unicode characters
+            target_devices = []
+            if wasapi_idx is not None:
+                target_devices = [(i, d) for i, d in enumerate(devices) if d.get("hostapi") == wasapi_idx]
+            if not target_devices:
+                target_devices = list(enumerate(devices))
+
+            seen_in_names = set()
+            seen_out_names = set()
+
+            for idx, dev in target_devices:
                 raw_name = dev.get("name", f"Device {idx}")
                 clean_name = raw_name.encode("ascii", "replace").decode("ascii").strip()
+
+                # Filter out system driver proxies / broken endpoints
+                clean_lower = clean_name.lower()
+                if "@system32" in clean_lower or "sound mapper" in clean_lower or "primary sound" in clean_lower:
+                    continue
+
                 in_ch = dev.get("max_input_channels", 0)
                 out_ch = dev.get("max_output_channels", 0)
 
-                if in_ch > 0:
+                if in_ch > 0 and clean_name not in seen_in_names:
+                    seen_in_names.add(clean_name)
                     inputs.append({"index": idx, "name": clean_name, "channels": in_ch})
-                if out_ch > 0:
+                if out_ch > 0 and clean_name not in seen_out_names:
+                    seen_out_names.add(clean_name)
                     outputs.append({"index": idx, "name": clean_name, "channels": out_ch})
         except Exception as e:
             print(f"[ZeroMix] Error querying devices: {e}")
         return inputs, outputs
 
     def _monitor_out_callback(self, outdata, frames, time_info, status):
+        if getattr(self, "mute_monitor", False):
+            outdata.fill(0)
+            return
         with self._out_lock:
             if self._monitor_queue:
                 chunk = self._monitor_queue.popleft()
@@ -551,6 +590,9 @@ class AudioMixerEngine(QObject):
 
     # Configuration Setters
     def set_devices(self, mic_idx: Optional[int], monitor_idx: Optional[int], broadcast_idx: Optional[int]):
+        mic_idx = None if mic_idx is not None and mic_idx < 0 else mic_idx
+        monitor_idx = None if monitor_idx is not None and monitor_idx < 0 else monitor_idx
+        broadcast_idx = None if broadcast_idx is not None and broadcast_idx < 0 else broadcast_idx
         was_running = self.is_running
         if was_running:
             self.stop()
@@ -559,6 +601,10 @@ class AudioMixerEngine(QObject):
         self.output_broadcast_device = broadcast_idx
         if was_running:
             self.start()
+
+    def set_monitor_mute(self, muted: bool):
+        self.mute_monitor = muted
+        self.state_changed.emit()
 
     def set_mic_volume(self, pct: int):
         self.vol_mic = max(0.0, min(1.5, pct / 100.0))
