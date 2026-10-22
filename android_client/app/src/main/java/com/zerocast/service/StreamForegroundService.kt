@@ -31,6 +31,7 @@ class StreamForegroundService : LifecycleService() {
         private const val CHANNEL_ID = "zerocast_stream_channel"
 
         const val ACTION_START_SCREEN = "com.zerocast.action.START_SCREEN"
+        const val ACTION_START_AUDIO_ONLY = "com.zerocast.action.START_AUDIO_ONLY"
         const val ACTION_STOP = "com.zerocast.action.STOP"
         const val ACTION_TOGGLE_ORIENTATION = "com.zerocast.action.TOGGLE_ORIENTATION"
 
@@ -48,6 +49,8 @@ class StreamForegroundService : LifecycleService() {
         const val EXTRA_BITRATE_KBPS = "extra_bitrate_kbps"
 
         var isStreaming = false
+            private set
+        var isAudioOnly = false
             private set
     }
 
@@ -83,6 +86,7 @@ class StreamForegroundService : LifecycleService() {
 
         when (intent?.action) {
             ACTION_START_SCREEN -> handleStartScreen(intent)
+            ACTION_START_AUDIO_ONLY -> handleStartAudioOnly(intent)
             ACTION_STOP -> stopStreaming()
             ACTION_TOGGLE_ORIENTATION -> handleToggleOrientation()
         }
@@ -95,6 +99,61 @@ class StreamForegroundService : LifecycleService() {
         if (isStreaming) {
             checkOrientationChanged()
         }
+    }
+
+    private fun handleStartAudioOnly(intent: Intent) {
+        val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
+        val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
+        val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
+        val port = intent.getIntExtra(EXTRA_PORT, 8888)
+
+        if (resultCode != Activity.RESULT_OK || resultData == null) {
+            Log.e(TAG, "Invalid MediaProjection intent data for audio-only cast")
+            stopSelf()
+            return
+        }
+
+        isAudioOnly = true
+        startForegroundWithNotification(isAudioOnly = true)
+
+        val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        mediaProjection = mpManager.getMediaProjection(resultCode, resultData).apply {
+            registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.d(TAG, "MediaProjection stopped by system")
+                    stopStreaming()
+                }
+            }, null)
+        }
+
+        streamSender = StreamSender(host, port, dropLateFrames = false, listener = object : StreamSender.StreamListener {
+            override fun onConnected() {
+                Log.d(TAG, "Audio-only cast connected to PC: $host:$port")
+            }
+
+            override fun onDisconnected(reason: String?) {
+                Log.d(TAG, "Audio cast disconnected: $reason")
+                stopStreaming()
+            }
+
+            override fun onControlPacketReceived(payload: ByteArray) {
+                Log.d(TAG, "Audio cast control packet (${payload.size} bytes)")
+            }
+
+            override fun onError(error: Throwable) {
+                Log.e(TAG, "Audio cast network error: ${error.message}")
+            }
+        })
+        streamSender?.start()
+
+        val mp = mediaProjection ?: return
+        val sender = streamSender ?: return
+        audioCaptureManager = AudioCaptureManager(mp, sender).apply {
+            start()
+        }
+
+        isStreaming = true
+        Log.d(TAG, "Audio-Only Cast started successfully (0% Video / No Heat).")
     }
 
     private fun handleStartScreen(intent: Intent) {
@@ -300,7 +359,7 @@ class StreamForegroundService : LifecycleService() {
         }
     }
 
-    private fun startForegroundWithNotification() {
+    private fun startForegroundWithNotification(isAudioOnly: Boolean = false) {
         val stopIntent = Intent(this, StreamForegroundService::class.java).apply {
             action = ACTION_STOP
         }
@@ -311,24 +370,30 @@ class StreamForegroundService : LifecycleService() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
-        val rotateIntent = Intent(this, StreamForegroundService::class.java).apply {
-            action = ACTION_TOGGLE_ORIENTATION
-        }
-        val rotatePendingIntent = PendingIntent.getService(
-            this,
-            1,
-            rotateIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
+        val title = if (isAudioOnly) "ZeroMix Audio Cast" else "ZeroLink Streaming"
+        val text = if (isAudioOnly) "Audio-only streaming to PC (0% Video / Battery Saver)" else "Screen mirroring is actively streaming to PC"
 
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("ZeroLink Streaming")
-            .setContentText("Screen mirroring is actively streaming to PC")
-            .setSmallIcon(android.R.drawable.presence_video_online)
+        val notifBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setSmallIcon(if (isAudioOnly) android.R.drawable.ic_media_play else android.R.drawable.presence_video_online)
             .setOngoing(true)
-            .addAction(android.R.drawable.ic_menu_rotate, "Rotate 90°", rotatePendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Stream", stopPendingIntent)
-            .build()
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Cast", stopPendingIntent)
+
+        if (!isAudioOnly) {
+            val rotateIntent = Intent(this, StreamForegroundService::class.java).apply {
+                action = ACTION_TOGGLE_ORIENTATION
+            }
+            val rotatePendingIntent = PendingIntent.getService(
+                this,
+                1,
+                rotateIntent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            )
+            notifBuilder.addAction(android.R.drawable.ic_menu_rotate, "Rotate 90°", rotatePendingIntent)
+        }
+
+        val notification = notifBuilder.build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -343,6 +408,7 @@ class StreamForegroundService : LifecycleService() {
 
     private fun stopStreaming() {
         isStreaming = false
+        isAudioOnly = false
 
         if (displayListener != null) {
             val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager

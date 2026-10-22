@@ -1,11 +1,17 @@
 package com.zerocast.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.Intent
+import android.content.res.ColorStateList
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.zerocast.R
@@ -15,6 +21,7 @@ import com.zerocast.network.NetworkDiscovery
 import com.zerocast.network.SoundboardItem
 import com.zerocast.network.ZeroMixManager
 import com.zerocast.network.ZeroMixState
+import com.zerocast.service.StreamForegroundService
 import com.zerocast.util.ZeroLinkConfig
 
 class ZeroMixActivity : AppCompatActivity() {
@@ -24,6 +31,16 @@ class ZeroMixActivity : AppCompatActivity() {
     private var discovery: NetworkDiscovery? = null
 
     private var isUserDragging = false
+
+    private val audioCaptureLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            startAudioOnlyService(result.resultCode, result.data!!)
+        } else {
+            Toast.makeText(this, "Audio cast permission cancelled", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -165,6 +182,61 @@ class ZeroMixActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             mixManager?.stopSound()
         }
+
+        // Phone Audio Cast (Audio-Only)
+        binding.btnToggleAudioCast.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
+                stopAudioOnlyService()
+            } else {
+                val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                audioCaptureLauncher.launch(mpManager.createScreenCaptureIntent())
+            }
+        }
+    }
+
+    private fun startAudioOnlyService(resultCode: Int, data: Intent) {
+        val host = binding.etServerIp.text.toString().trim()
+        if (host.isEmpty()) {
+            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        ZeroLinkConfig.setServerIp(this, host)
+
+        val intent = Intent(this, StreamForegroundService::class.java).apply {
+            action = StreamForegroundService.ACTION_START_AUDIO_ONLY
+            putExtra(StreamForegroundService.EXTRA_RESULT_CODE, resultCode)
+            putExtra(StreamForegroundService.EXTRA_RESULT_DATA, data)
+            putExtra(StreamForegroundService.EXTRA_HOST, host)
+            putExtra(StreamForegroundService.EXTRA_PORT, ZeroLinkConfig.DEFAULT_CAST_PORT)
+        }
+        ContextCompat.startForegroundService(this, intent)
+        updateAudioCastUI()
+        Toast.makeText(this, "📱 Audio-only cast started (No Video / No Heat)", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopAudioOnlyService() {
+        val intent = Intent(this, StreamForegroundService::class.java).apply {
+            action = StreamForegroundService.ACTION_STOP
+        }
+        startService(intent)
+        updateAudioCastUI()
+        Toast.makeText(this, "Audio cast stopped", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun updateAudioCastUI() {
+        if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
+            binding.btnToggleAudioCast.text = "⏹ Stop Cast"
+            binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
+            binding.tvAudioCastStatus.text = "● Streaming Audio to PC Mixer (Cool Phone)"
+            binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+        } else {
+            binding.btnToggleAudioCast.text = "▶ Cast Audio"
+            binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
+            binding.tvAudioCastStatus.text = "Audio Only • 0% Video • Cool Phone"
+            binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+        }
     }
 
     private fun startConnect() {
@@ -244,6 +316,11 @@ class ZeroMixActivity : AppCompatActivity() {
 
             currentRow?.addView(padBinding.root)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        updateAudioCastUI()
     }
 
     override fun onDestroy() {
