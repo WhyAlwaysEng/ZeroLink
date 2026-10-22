@@ -17,7 +17,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QMessageBox, QComboBox, QDialog, QSlider, QMainWindow,
-    QStackedWidget, QCheckBox, QGraphicsDropShadowEffect
+    QStackedWidget, QCheckBox, QGraphicsDropShadowEffect, QSizePolicy
 )
 
 from core.base_module import BaseModule
@@ -61,6 +61,7 @@ class ModernVideoCanvas(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
         self.setAutoFillBackground(True)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         p = self.palette()
         p.setColor(self.backgroundRole(), QColor("#000000"))
         self.setPalette(p)
@@ -519,12 +520,14 @@ class ZeroCastModule(BaseModule):
 
         # Page 0: Embedded Dock Container
         self._dock_container = QWidget()
+        self._dock_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._dock_layout = QVBoxLayout(self._dock_container)
         self._dock_layout.setContentsMargins(0, 0, 0, 0)
         self._dock_layout.setSpacing(0)
 
         # Content widget containing top bar, canvas, and bottom bar
         self._content_widget = QWidget()
+        self._content_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         layout = QVBoxLayout(self._content_widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
@@ -1024,6 +1027,18 @@ class ZeroCastModule(BaseModule):
         if self.log_label:
             self.log_label.setText("ZeroCast floating in standalone window")
 
+    def _force_dock_relayout(self):
+        """Forces the content widget and layout to completely fill the dock container."""
+        if not self.is_popped_out and self._dock_container and self._content_widget:
+            target_rect = self._dock_container.rect()
+            if target_rect.isValid() and not target_rect.isEmpty():
+                self._content_widget.setGeometry(target_rect)
+            if self._dock_layout:
+                self._dock_layout.invalidate()
+                self._dock_layout.activate()
+            if self.canvas:
+                self.canvas.update()
+
     def dock_back(self):
         """Re-attaches the ZeroCast streaming viewport back into the main Hub."""
         if not self.is_popped_out or not self._content_widget:
@@ -1039,16 +1054,28 @@ class ZeroCastModule(BaseModule):
             self.btn_popout.setText("↗ Pop-out")
             self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
 
+        # Switch to dock page first so dock_container is visible
+        if self._stacked_container:
+            self._stacked_container.setCurrentIndex(0)
+
+        # Re-attach content widget into dock layout
         self._content_widget.setParent(self._dock_container)
         if self._dock_layout:
             self._dock_layout.addWidget(self._content_widget)
+
+        # Force immediate relayout to match container size
+        self._force_dock_relayout()
+        QTimer.singleShot(0, self._force_dock_relayout)
 
         self._content_widget.show()
         self.canvas.show()
         self.canvas.update()
 
-        if self._stacked_container:
-            self._stacked_container.setCurrentIndex(0)
+        # Bring main Hub window to front
+        main_win = self._widget.window() if self._widget else None
+        if main_win and main_win != self.popout_window:
+            main_win.raise_()
+            main_win.activateWindow()
 
         if self.log_label:
             self.log_label.setText("ZeroCast docked back to Hub")
