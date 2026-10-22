@@ -51,6 +51,8 @@ class ZeroCamActivity : AppCompatActivity() {
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
     private var streamJob: Job? = null
+    private var senderJob: Job? = null
+    private var frameChannel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val scope = CoroutineScope(Dispatchers.IO)
 
     private var discovery: NetworkDiscovery? = null
@@ -169,6 +171,7 @@ class ZeroCamActivity : AppCompatActivity() {
         }, ContextCompat.getMainExecutor(this))
     }
 
+    @androidx.annotation.OptIn(androidx.camera.camera2.interop.ExperimentalCamera2Interop::class)
     private fun bindCameraUseCases() {
         val provider = cameraProvider ?: return
         val cameraSelector = if (useFrontCamera) {
@@ -180,18 +183,36 @@ class ZeroCamActivity : AppCompatActivity() {
         val targetSize = android.util.Size(targetWidth, targetHeight)
 
         @Suppress("DEPRECATION")
-        val preview = Preview.Builder()
+        val previewBuilder = Preview.Builder()
             .setTargetResolution(targetSize)
-            .build()
-            .also {
-                it.setSurfaceProvider(binding.cameraPreviewView.surfaceProvider)
-            }
+
+        // Lock to 30 FPS Range to avoid HAL throttling down to 5-10 FPS in indoor lighting
+        val previewExt = androidx.camera.camera2.interop.Camera2Interop.Extender(previewBuilder)
+        previewExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+            android.util.Range(30, 30)
+        )
+        previewExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE,
+            android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE
+        )
+
+        val preview = previewBuilder.build().also {
+            it.setSurfaceProvider(binding.cameraPreviewView.surfaceProvider)
+        }
 
         @Suppress("DEPRECATION")
-        val imageAnalysis = ImageAnalysis.Builder()
+        val imageAnalysisBuilder = ImageAnalysis.Builder()
             .setTargetResolution(targetSize)
             .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-            .build()
+
+        val analysisExt = androidx.camera.camera2.interop.Camera2Interop.Extender(imageAnalysisBuilder)
+        analysisExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
+            android.util.Range(30, 30)
+        )
+
+        val imageAnalysis = imageAnalysisBuilder.build()
 
         imageAnalysis.setAnalyzer(cameraExecutor!!) { imageProxy ->
             processFrameForStream(imageProxy)
@@ -242,6 +263,19 @@ class ZeroCamActivity : AppCompatActivity() {
                 withContext(Dispatchers.Main) {
                     binding.btnCamStreamToggle.text = "Stop Webcam Stream"
                     binding.tvCamStatus.text = "● LIVE (Broadcasting to PC)"
+                }
+
+                // Launch dedicated non-blocking network frame sender
+                senderJob = scope.launch {
+                    for (packet in frameChannel) {
+                        val out = outStream ?: break
+                        try {
+                            out.write(packet)
+                            out.flush()
+                        } catch (e: Exception) {
+                            break
+                        }
+                    }
                 }
 
                 // Listen for control commands from PC
@@ -306,7 +340,7 @@ class ZeroCamActivity : AppCompatActivity() {
     }
 
     private fun processFrameForStream(imageProxy: ImageProxy) {
-        if (!isStreaming || outStream == null) {
+        if (!isStreaming) {
             imageProxy.close()
             return
         }
@@ -318,23 +352,21 @@ class ZeroCamActivity : AppCompatActivity() {
             val jpegBytes = baos.toByteArray()
             bitmap.recycle()
 
-            // Construct [ZCAM][Length (4B)][Timestamp (8B)][Bytes]
+            // Construct [ZCAM][Length (4B)][Timestamp (8B)][Rotation (2B)][Flags (2B)][Bytes]
             val payloadLen = jpegBytes.size
             val nowMs = System.currentTimeMillis()
+            val rotationDeg = imageProxy.imageInfo.rotationDegrees
 
-            val header = ByteBuffer.allocate(16)
-            header.put("ZCAM".toByteArray(Charsets.US_ASCII))
-            header.putInt(payloadLen)
-            header.putLong(nowMs)
+            val packet = ByteArray(20 + payloadLen)
+            val buf = ByteBuffer.wrap(packet)
+            buf.put("ZCAM".toByteArray(Charsets.US_ASCII))
+            buf.putInt(payloadLen)
+            buf.putLong(nowMs)
+            buf.putShort(rotationDeg.toShort())
+            buf.putShort(0.toShort())
+            System.arraycopy(jpegBytes, 0, packet, 20, payloadLen)
 
-            val out = outStream
-            if (out != null) {
-                synchronized(out) {
-                    out.write(header.array())
-                    out.write(jpegBytes)
-                    out.flush()
-                }
-            }
+            frameChannel.trySend(packet)
 
             frameCount++
             val now = System.currentTimeMillis()
@@ -356,6 +388,8 @@ class ZeroCamActivity : AppCompatActivity() {
 
     private fun stopStream() {
         isStreaming = false
+        senderJob?.cancel()
+        senderJob = null
         streamJob?.cancel()
         streamJob = null
         try {

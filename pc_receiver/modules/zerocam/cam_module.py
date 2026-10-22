@@ -342,6 +342,24 @@ class ZeroCamModule(BaseModule):
         chk_flip_v.toggled.connect(lambda checked: setattr(self.server, "flip_vertical", checked))
         a_layout.addWidget(chk_flip_v)
 
+        # Orientation / Rotation Control
+        rot_row = QHBoxLayout()
+        rot_row.addWidget(QLabel("Orientation:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        btn_rotate = QPushButton("🔄 Rotate +90°")
+        btn_rotate.setStyleSheet("padding: 5px 12px; font-size: 11px; font-weight: 600;")
+        lbl_rot_status = QLabel("Auto (0°)")
+        lbl_rot_status.setStyleSheet("color: #6B7280; font-size: 10px;")
+
+        def _cycle_rotation():
+            self.server.manual_rotation = (self.server.manual_rotation + 90) % 360
+            lbl_rot_status.setText(f"Manual Offset: +{self.server.manual_rotation}°")
+
+        btn_rotate.clicked.connect(_cycle_rotation)
+        rot_row.addWidget(btn_rotate)
+        rot_row.addWidget(lbl_rot_status)
+        rot_row.addStretch()
+        a_layout.addLayout(rot_row)
+
         # Detail Enhancer / Sharpness
         sh_row = QHBoxLayout()
         sh_row.addWidget(QLabel("Detail Sharpness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))

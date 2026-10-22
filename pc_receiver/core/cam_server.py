@@ -49,6 +49,7 @@ class CamServer(QObject):
         self.flip_horizontal = True     # Mirror camera (standard for webcams)
         self.flip_vertical = False
         self.rotation_degrees = 0       # 0, 90, 180, 270
+        self.manual_rotation = 0        # 0, 90, 180, 270 manual override offset
         self.brightness = 0             # -100 to 100
         self.contrast = 1.0             # 0.5 to 2.0
         self.sharpness = 0.5            # 0.0 to 1.5 Detail enhancer / unsharp mask
@@ -193,11 +194,11 @@ class CamServer(QObject):
 
                 # Support both binary packet and text JSON handshake
                 if magic_read == self.MAGIC:
-                    # Read length (4B) and timestamp (8B)
-                    header = self._recv_exact(client_sock, 12)
+                    # Read length (4B), timestamp (8B), rotation (2B), flags (2B) = 16B
+                    header = self._recv_exact(client_sock, 16)
                     if not header:
                         break
-                    payload_len, timestamp = struct.unpack("!IQ", header)
+                    payload_len, timestamp, rotation_deg, flags = struct.unpack("!IQhh", header)
 
                     if payload_len <= 0 or payload_len > 15 * 1024 * 1024:
                         continue
@@ -207,9 +208,9 @@ class CamServer(QObject):
                     if not frame_data:
                         break
 
-                    self._process_camera_frame(frame_data)
+                    self._process_camera_frame(frame_data, rotation_deg)
                     self._frame_count += 1
-                    self._bytes_received += (16 + payload_len)
+                    self._bytes_received += (20 + payload_len)
 
                 elif magic_read.startswith(b"{"):
                     # JSON line handshake
@@ -263,25 +264,27 @@ class CamServer(QObject):
             received += n
         return bytes(view)
 
-    def _process_camera_frame(self, frame_bytes: bytes):
+    def _process_camera_frame(self, frame_bytes: bytes, rotation_deg: int = 0):
         """Decodes, filters, and broadcasts frame to GUI and Virtual Webcam."""
         np_arr = np.frombuffer(frame_bytes, np.uint8)
         bgr = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
         if bgr is None:
             return
 
+        # Combine auto sensor rotation with manual override
+        effective_rot = (rotation_deg + self.manual_rotation + self.rotation_degrees) % 360
+        if effective_rot == 90:
+            bgr = cv2.rotate(bgr, cv2.ROTATE_90_CLOCKWISE)
+        elif effective_rot == 180:
+            bgr = cv2.rotate(bgr, cv2.ROTATE_180)
+        elif effective_rot == 270:
+            bgr = cv2.rotate(bgr, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
         # Image transforms
         if self.flip_horizontal:
             bgr = cv2.flip(bgr, 1)
         if self.flip_vertical:
             bgr = cv2.flip(bgr, 0)
-
-        if self.rotation_degrees == 90:
-            bgr = cv2.rotate(bgr, cv2.ROTATE_90_CLOCKWISE)
-        elif self.rotation_degrees == 180:
-            bgr = cv2.rotate(bgr, cv2.ROTATE_180)
-        elif self.rotation_degrees == 270:
-            bgr = cv2.rotate(bgr, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
         # Brightness / Contrast
         if self.contrast != 1.0 or self.brightness != 0:
