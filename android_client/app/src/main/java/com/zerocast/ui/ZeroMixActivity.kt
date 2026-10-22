@@ -1,8 +1,10 @@
 package com.zerocast.ui
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
@@ -31,6 +33,16 @@ class ZeroMixActivity : AppCompatActivity() {
     private var discovery: NetworkDiscovery? = null
 
     private var isUserDragging = false
+
+    private val recordAudioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            launchAudioProjection()
+        } else {
+            Toast.makeText(this, "Microphone/Audio permission required for audio cast", Toast.LENGTH_LONG).show()
+        }
+    }
 
     private val audioCaptureLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -74,6 +86,15 @@ class ZeroMixActivity : AppCompatActivity() {
 
         // Auto-connect
         startConnect()
+
+        // Sync with background streaming service state
+        StreamForegroundService.stateListener = object : StreamForegroundService.ServiceStateListener {
+            override fun onStreamingStateChanged(isStreaming: Boolean, isAudioOnly: Boolean) {
+                runOnUiThread {
+                    updateAudioCastUI()
+                }
+            }
+        }
     }
 
     private fun setupListeners() {
@@ -189,10 +210,22 @@ class ZeroMixActivity : AppCompatActivity() {
             if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
                 stopAudioOnlyService()
             } else {
-                val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                audioCaptureLauncher.launch(mpManager.createScreenCaptureIntent())
+                requestAudioCast()
             }
         }
+    }
+
+    private fun requestAudioCast() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            launchAudioProjection()
+        } else {
+            recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
+    private fun launchAudioProjection() {
+        val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        audioCaptureLauncher.launch(mpManager.createScreenCaptureIntent())
     }
 
     private fun startAudioOnlyService(resultCode: Int, data: Intent) {
@@ -325,6 +358,7 @@ class ZeroMixActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        StreamForegroundService.stateListener = null
         mixManager?.stop()
     }
 }

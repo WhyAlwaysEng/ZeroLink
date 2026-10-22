@@ -94,13 +94,9 @@ class StreamSender(
             }
         }
 
-        if (dropLateFrames) {
-            if (!frameQueue.offer(packet)) {
-                frameQueue.poll() // Drop older frame to preserve real-time latency
-                frameQueue.offer(packet)
-            }
-        } else {
-            frameQueue.put(packet)
+        if (!frameQueue.offer(packet)) {
+            frameQueue.poll() // Drop oldest packet to prevent backpressure blocking
+            frameQueue.offer(packet)
         }
     }
 

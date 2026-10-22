@@ -544,6 +544,7 @@ class ZeroCastModule(BaseModule):
         self.server.client_disconnected.connect(self._on_client_disconnected)
         self.server.frame_received.connect(self._on_frame_received)
         self.server.audio_received.connect(self._on_audio_received)
+        self.server.config_received.connect(self._on_config_received)
         self.server.status_changed.connect(lambda s: self.status_changed.emit(self.module_id, s))
 
     def _init_usb_tunnel(self):
@@ -851,6 +852,7 @@ class ZeroCastModule(BaseModule):
             self.state_changed.emit(self.module_id, True)
 
     def _on_client_connected(self, client_info: str):
+        self.is_audio_only_stream = False
         if self.status_pill:
             self.status_pill.setText("● STREAMING")
             self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
@@ -860,7 +862,27 @@ class ZeroCastModule(BaseModule):
         self.h264_decoder.reset()
 
         if self.chk_auto_popout and self.chk_auto_popout.isChecked() and not self.is_popped_out:
-            QTimer.singleShot(150, self.pop_out)
+            QTimer.singleShot(250, self._maybe_auto_popout)
+
+    def _maybe_auto_popout(self):
+        if self.chk_auto_popout and self.chk_auto_popout.isChecked() and not self.is_popped_out:
+            if not getattr(self, "is_audio_only_stream", False):
+                self.pop_out()
+
+    def _on_config_received(self, config_str: str):
+        try:
+            cfg = json.loads(config_str)
+            codec = cfg.get("codec", "")
+            if codec == "AUDIO_ONLY":
+                self.is_audio_only_stream = True
+                if self.status_pill:
+                    self.status_pill.setText("● AUDIO STREAM")
+                    self.status_pill.setStyleSheet("color: #FFFFFF; background-color: #1A1A1A; border: 1px solid #444444; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
+                if self.log_label:
+                    model = cfg.get("device_model", "Android")
+                    self.log_label.setText(f"Audio-Only Cast: {model}")
+        except Exception:
+            pass
 
     def _on_client_disconnected(self):
         if self.status_pill:

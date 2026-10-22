@@ -5,7 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.content.res.Configuration
+import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.hardware.display.VirtualDisplay
+import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
@@ -22,8 +25,13 @@ import com.zerocast.capture.AudioCaptureManager
 import com.zerocast.capture.ScreenCaptureH264Manager
 import com.zerocast.capture.ScreenCaptureManager
 import com.zerocast.network.StreamSender
+import com.zerocast.protocol.PacketHeader
 
 class StreamForegroundService : LifecycleService() {
+
+    interface ServiceStateListener {
+        fun onStreamingStateChanged(isStreaming: Boolean, isAudioOnly: Boolean)
+    }
 
     companion object {
         private const val TAG = "StreamService"
@@ -52,6 +60,8 @@ class StreamForegroundService : LifecycleService() {
             private set
         var isAudioOnly = false
             private set
+
+        var stateListener: ServiceStateListener? = null
     }
 
     private var wakeLock: PowerManager.WakeLock? = null
@@ -60,6 +70,8 @@ class StreamForegroundService : LifecycleService() {
     private var screenCaptureH264Manager: ScreenCaptureH264Manager? = null
     private var audioCaptureManager: AudioCaptureManager? = null
     private var streamSender: StreamSender? = null
+    private var dummyImageReader: ImageReader? = null
+    private var dummyVirtualDisplay: VirtualDisplay? = null
 
     // Stored streaming config for dynamic rotation switching
     private var baseWidth = 1080
@@ -101,6 +113,12 @@ class StreamForegroundService : LifecycleService() {
         }
     }
 
+    private fun notifyStateChanged() {
+        mainHandler.post {
+            stateListener?.onStreamingStateChanged(isStreaming, isAudioOnly)
+        }
+    }
+
     private fun handleStartAudioOnly(intent: Intent) {
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
@@ -114,6 +132,7 @@ class StreamForegroundService : LifecycleService() {
         }
 
         isAudioOnly = true
+        acquireWakeLock()
         startForegroundWithNotification(isAudioOnly = true)
 
         val mpManager = getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -126,14 +145,41 @@ class StreamForegroundService : LifecycleService() {
             }, null)
         }
 
+        val mp = mediaProjection
+        if (mp == null) {
+            Log.e(TAG, "Failed to initialize MediaProjection for audio cast")
+            stopStreaming()
+            return
+        }
+
+        // CRITICAL FIX FOR ANDROID 14+:
+        // Android 14 revokes MediaProjection sessions that lack a registered VirtualDisplay.
+        // We create an ultra-lightweight 16x16 dummy VirtualDisplay (0% GPU / 0% CPU / zero frame streaming)
+        // to maintain the MediaProjection session alive for AudioPlaybackCapture.
+        try {
+            val reader = ImageReader.newInstance(16, 16, PixelFormat.RGBA_8888, 2)
+            dummyImageReader = reader
+            dummyVirtualDisplay = mp.createVirtualDisplay(
+                "ZeroMix-AudioDummyDisplay",
+                16, 16, 1,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface,
+                null,
+                null
+            )
+            Log.d(TAG, "Created dummy 16x16 VirtualDisplay for MediaProjection compliance.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Warning: Failed to create dummy VirtualDisplay: ${e.message}", e)
+        }
+
         streamSender = StreamSender(host, port, dropLateFrames = false, listener = object : StreamSender.StreamListener {
             override fun onConnected() {
                 Log.d(TAG, "Audio-only cast connected to PC: $host:$port")
+                sendAudioOnlyConfig()
             }
 
             override fun onDisconnected(reason: String?) {
                 Log.d(TAG, "Audio cast disconnected: $reason")
-                stopStreaming()
             }
 
             override fun onControlPacketReceived(payload: ByteArray) {
@@ -142,18 +188,41 @@ class StreamForegroundService : LifecycleService() {
 
             override fun onError(error: Throwable) {
                 Log.e(TAG, "Audio cast network error: ${error.message}")
+                mainHandler.post {
+                    val msg = if (error is java.net.ConnectException) {
+                        "⚠️ Connection refused: Ensure ZeroCast module is ENABLED on PC"
+                    } else {
+                        "Audio Cast Error: ${error.localizedMessage ?: "Failed"}"
+                    }
+                    android.widget.Toast.makeText(applicationContext, msg, android.widget.Toast.LENGTH_LONG).show()
+                }
+                stopStreaming()
             }
         })
         streamSender?.start()
 
-        val mp = mediaProjection ?: return
         val sender = streamSender ?: return
         audioCaptureManager = AudioCaptureManager(mp, sender).apply {
             start()
         }
 
         isStreaming = true
+        notifyStateChanged()
         Log.d(TAG, "Audio-Only Cast started successfully (0% Video / No Heat).")
+    }
+
+    private fun sendAudioOnlyConfig() {
+        val configJson = """
+            {
+                "codec": "AUDIO_ONLY",
+                "width": 0,
+                "height": 0,
+                "fps": 0,
+                "device_model": "${android.os.Build.MODEL}"
+            }
+        """.trimIndent()
+        val payload = configJson.toByteArray(Charsets.UTF_8)
+        streamSender?.enqueueFrame(PacketHeader.TYPE_CONFIG_JSON, 0, payload)
     }
 
     private fun handleStartScreen(intent: Intent) {
@@ -251,6 +320,7 @@ class StreamForegroundService : LifecycleService() {
         registerOrientationListener()
 
         isStreaming = true
+        notifyStateChanged()
         Log.d(TAG, "Streaming service running: ${currentActiveWidth}x${currentActiveHeight} (H.264=$isH264Mode, Landscape=$isLandscape).")
     }
 
@@ -409,12 +479,19 @@ class StreamForegroundService : LifecycleService() {
     private fun stopStreaming() {
         isStreaming = false
         isAudioOnly = false
+        notifyStateChanged()
 
         if (displayListener != null) {
             val dm = getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
             dm.unregisterDisplayListener(displayListener)
             displayListener = null
         }
+
+        dummyVirtualDisplay?.release()
+        dummyVirtualDisplay = null
+
+        dummyImageReader?.close()
+        dummyImageReader = null
 
         screenCaptureH264Manager?.stop()
         screenCaptureH264Manager = null

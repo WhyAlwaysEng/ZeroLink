@@ -53,22 +53,42 @@ class AudioCaptureManager(
                 AudioFormat.ENCODING_PCM_16BIT
             )
 
-            audioRecord = AudioRecord.Builder()
+            val bufferSize = if (minBufferSize > 0) {
+                maxOf(minBufferSize * 2, 48000 * 4 / 2)
+            } else {
+                96000
+            }
+
+            val record = AudioRecord.Builder()
                 .setAudioPlaybackCaptureConfig(config)
                 .setAudioFormat(audioFormat)
-                .setBufferSizeInBytes(minBufferSize.coerceAtLeast(48000 * 4 / 2))
+                .setBufferSizeInBytes(bufferSize)
                 .build()
 
-            audioRecord?.startRecording()
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                Log.e(TAG, "AudioRecord initialization failed! State: ${record.state}")
+                record.release()
+                stop()
+                return
+            }
+
+            audioRecord = record
+            record.startRecording()
 
             recordThread = Thread({
                 // 4096 bytes matches Android Audio HAL buffer quantum, preventing sample drops and robotic distortion
                 val buffer = ByteArray(4096)
-                while (isRecording.get() && audioRecord?.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
-                    val read = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                while (isRecording.get() && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
+                    val read = record.read(buffer, 0, buffer.size)
                     if (read > 0) {
                         val pcmChunk = if (read == buffer.size) buffer else buffer.copyOf(read)
                         streamSender.enqueueFrame(PacketHeader.TYPE_AUDIO, 0, pcmChunk)
+                    } else {
+                        try {
+                            Thread.sleep(10)
+                        } catch (_: InterruptedException) {
+                            break
+                        }
                     }
                 }
             }, "ZeroCast-AudioCapture")
