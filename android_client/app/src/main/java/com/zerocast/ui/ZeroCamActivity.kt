@@ -274,7 +274,7 @@ class ZeroCamActivity : AppCompatActivity() {
                 // Initialize Hardware H.264 Encoder if enabled
                 if (useH264Hardware) {
                     h264Encoder?.stop()
-                    h264Encoder = CameraH264Encoder(targetWidth, targetHeight, targetFps = 30, bitrateKbps = 5000) { nalBytes, isKeyframe, rotDeg ->
+                    val enc = CameraH264Encoder(targetWidth, targetHeight, targetFps = 30, bitrateKbps = 5000) { nalBytes, isKeyframe, rotDeg ->
                         val payloadLen = nalBytes.size
                         val nowMs = System.currentTimeMillis()
                         val flags: Short = if (isKeyframe) 0x03 else 0x01
@@ -293,7 +293,14 @@ class ZeroCamActivity : AppCompatActivity() {
                         frameCount++
                         bytesThisSec += packet.size
                     }
-                    h264Encoder?.start()
+                    val ok = enc.start()
+                    if (ok) {
+                        h264Encoder = enc
+                        Log.i(TAG, "Hardware H.264 Encoder successfully started")
+                    } else {
+                        Log.w(TAG, "Hardware H.264 Encoder start failed; using high-speed dynamic JPEG stream")
+                        h264Encoder = null
+                    }
                 }
 
                 // Launch dedicated non-blocking network frame sender
@@ -377,23 +384,27 @@ class ZeroCamActivity : AppCompatActivity() {
         }
 
         // Hardware H.264 Path: GPU encoding directly from camera YUV buffer (< 1ms CPU)
-        if (useH264Hardware && h264Encoder != null) {
-            h264Encoder?.encodeFrame(imageProxy)
-            val now = System.currentTimeMillis()
-            if (now - lastStatTime >= 1000) {
-                val dt = (now - lastStatTime) / 1000f
-                val fps = frameCount / dt
-                val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
-                val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
-                frameCount = 0
-                bytesThisSec = 0
-                lastStatTime = now
-                runOnUiThread {
-                    binding.tvCamFps.text = "⚡ H.264 ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+        if (useH264Hardware && h264Encoder?.isAvailable() == true) {
+            try {
+                h264Encoder?.encodeFrame(imageProxy)
+                val now = System.currentTimeMillis()
+                if (now - lastStatTime >= 1000) {
+                    val dt = (now - lastStatTime) / 1000f
+                    val fps = frameCount / dt
+                    val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
+                    val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
+                    frameCount = 0
+                    bytesThisSec = 0
+                    lastStatTime = now
+                    runOnUiThread {
+                        binding.tvCamFps.text = "⚡ H.264 ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+                    }
                 }
+                imageProxy.close()
+                return
+            } catch (e: Exception) {
+                Log.e(TAG, "Hardware H.264 encode error, fallback to JPEG: ${e.message}")
             }
-            imageProxy.close()
-            return
         }
 
         val t0 = System.currentTimeMillis()

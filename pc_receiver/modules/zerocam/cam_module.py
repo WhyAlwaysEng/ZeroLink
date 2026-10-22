@@ -432,10 +432,13 @@ class ZeroCamModule(BaseModule):
     def _on_frame_ready(self, q_img: QImage):
         self._last_qimage = q_img
         if self.preview_lbl:
+            target_size = self.preview_lbl.size()
+            if target_size.width() <= 10 or target_size.height() <= 10:
+                target_size = self.preview_lbl.minimumSize()
             pix = QPixmap.fromImage(q_img)
             self.preview_lbl.setPixmap(
                 pix.scaled(
-                    self.preview_lbl.size(),
+                    target_size,
                     Qt.AspectRatioMode.KeepAspectRatio,
                     Qt.TransformationMode.FastTransformation
                 )

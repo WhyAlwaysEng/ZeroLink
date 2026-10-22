@@ -27,15 +27,22 @@ class CameraH264Encoder(
     private var spsPpsBuffer: ByteArray? = null
     private var currentRotationDeg = 0
 
-    fun start() {
-        if (isRunning.getAndSet(true)) return
+    fun start(): Boolean {
+        if (isRunning.getAndSet(true)) return true
 
         try {
             val alignedWidth = (width + 1) and 1.inv()
             val alignedHeight = (height + 1) and 1.inv()
 
+            val encoder = MediaCodec.createEncoderByType(MIME_TYPE)
+            val caps = encoder.codecInfo.getCapabilitiesForType(MIME_TYPE)
+            val colorFormat = caps.colorFormats.firstOrNull {
+                it == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar ||
+                it == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar
+            } ?: MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar
+
             val format = MediaFormat.createVideoFormat(MIME_TYPE, alignedWidth, alignedHeight).apply {
-                setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible)
+                setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
                 setInteger(MediaFormat.KEY_BIT_RATE, bitrateKbps * 1000)
                 setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
@@ -43,9 +50,9 @@ class CameraH264Encoder(
                 setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
             }
 
-            mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE)
-            mediaCodec?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-            mediaCodec?.start()
+            encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+            encoder.start()
+            mediaCodec = encoder
 
             requestKeyFrame()
 
@@ -54,12 +61,16 @@ class CameraH264Encoder(
             }, "ZeroCam-H264Drain")
             drainThread?.start()
 
-            Log.i(TAG, "Hardware H.264 Baseline Camera Encoder started: ${alignedWidth}x${alignedHeight} @ ${targetFps}fps")
+            Log.i(TAG, "Hardware H.264 Baseline Camera Encoder started: ${alignedWidth}x${alignedHeight} @ ${targetFps}fps (format=$colorFormat)")
+            return true
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start H.264 camera encoder: ${e.message}")
             stop()
+            return false
         }
     }
+
+    fun isAvailable(): Boolean = isRunning.get() && mediaCodec != null
 
     fun requestKeyFrame() {
         try {
@@ -153,21 +164,21 @@ class CameraH264Encoder(
                         val isConfig = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0
                         val isKeyframe = (bufferInfo.flags and MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0
 
-                        if (isConfig) {
-                            spsPpsBuffer = chunk
-                        }
-
                         val hasStartCode = chunk.size >= 4 && chunk[0] == 0.toByte() && chunk[1] == 0.toByte() &&
                                 ((chunk[2] == 1.toByte()) || (chunk[2] == 0.toByte() && chunk[3] == 1.toByte()))
                         val nalu = if (hasStartCode) chunk else byteArrayOf(0, 0, 0, 1) + chunk
 
-                        val payload = if (isKeyframe && spsPpsBuffer != null && !isConfig) {
-                            spsPpsBuffer!! + nalu
+                        if (isConfig) {
+                            spsPpsBuffer = nalu
+                            onNalPacket(nalu, true, currentRotationDeg)
                         } else {
-                            nalu
+                            val payload = if (isKeyframe && spsPpsBuffer != null) {
+                                spsPpsBuffer!! + nalu
+                            } else {
+                                nalu
+                            }
+                            onNalPacket(payload, isKeyframe, currentRotationDeg)
                         }
-
-                        onNalPacket(payload, isKeyframe, currentRotationDeg)
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
                 }

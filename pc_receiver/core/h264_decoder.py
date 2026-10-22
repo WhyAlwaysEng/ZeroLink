@@ -51,22 +51,23 @@ class H264Decoder:
 
         images = []
         try:
-            packet = av.Packet(h264_data)
-            frames = self.codec.decode(packet)
-            for frame in frames:
-                # Fast SIMD C-level RGB24 conversion (reformat)
-                rgb = frame.reformat(format='rgb24')
-                plane = rgb.planes[0]
+            packets = self.codec.parse(h264_data)
+            for packet in packets:
+                frames = self.codec.decode(packet)
+                for frame in frames:
+                    # Fast SIMD C-level RGB24 conversion (reformat)
+                    rgb = frame.reformat(format='rgb24')
+                    plane = rgb.planes[0]
 
-                qimg = QImage(
-                    plane,
-                    rgb.width,
-                    rgb.height,
-                    plane.line_size,
-                    QImage.Format.Format_RGB888
-                ).copy()
-                images.append(qimg)
+                    qimg = QImage(
+                        plane,
+                        rgb.width,
+                        rgb.height,
+                        plane.line_size,
+                        QImage.Format.Format_RGB888
+                    ).copy()
+                    images.append(qimg)
         except Exception:
-            self._init_decoder()
+            pass
 
         return images
