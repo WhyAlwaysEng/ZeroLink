@@ -243,24 +243,6 @@ Register your module in `pc_receiver/core/module_manager.py`—it will automatic
 
 ---
 
-## 🌐 Creating a Brand New GitHub Repository
-
-To push this codebase to a fresh, independent GitHub repository:
-
-```powershell
-# 1. Update the git remote to your new repository URL:
-git remote set-url origin https://github.com/<your-username>/ZeroLink.git
-
-# 2. Or create it directly with GitHub CLI (gh):
-gh repo create ZeroLink --public --source=. --remote=origin --push
-
-# 3. Push all code to main:
-git branch -M main
-git push -u origin main
-```
-
----
-
 ## 📜 License
 
 ZeroLink is open-source software licensed under the [MIT License](LICENSE).
