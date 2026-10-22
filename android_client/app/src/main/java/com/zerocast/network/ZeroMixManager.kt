@@ -43,7 +43,8 @@ class ZeroMixManager(
     private var socket: Socket? = null
     private var writer: PrintWriter? = null
     private var connectionJob: Job? = null
-    private var isConnected = false
+    var isConnected = false
+        private set
 
     fun start(host: String, port: Int = 8891) {
         stop()
@@ -62,8 +63,12 @@ class ZeroMixManager(
                     onStatusChanged(true, "● CONNECTED TO PC")
                 }
 
-                // Request initial state
-                sendCommand(JSONObject().apply { put("action", "GET_STATE") })
+                // Register client with device model and request initial state
+                sendCommand(JSONObject().apply {
+                    put("action", "CONNECT")
+                    put("device_model", android.os.Build.MODEL)
+                    put("model", android.os.Build.MODEL)
+                })
 
                 val reader = BufferedReader(InputStreamReader(s.getInputStream(), "UTF-8"))
                 while (isActive && isConnected) {

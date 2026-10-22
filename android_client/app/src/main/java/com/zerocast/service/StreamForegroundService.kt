@@ -258,6 +258,18 @@ class StreamForegroundService : LifecycleService() {
         streamSender = StreamSender(host, port, dropLateFrames = false, listener = object : StreamSender.StreamListener {
             override fun onConnected() {
                 Log.d(TAG, "Connected to PC: $host:$port")
+                val configJson = """
+                    {
+                        "type": "CONFIG",
+                        "codec": "${if (isH264Mode) "H.264" else "MJPEG"}",
+                        "width": $baseWidth,
+                        "height": $baseHeight,
+                        "fps": $streamFps,
+                        "device_model": "${android.os.Build.MODEL}",
+                        "mode": "Screen Mirror"
+                    }
+                """.trimIndent()
+                streamSender?.enqueueFrame(PacketHeader.TYPE_CONFIG_JSON, 0, configJson.toByteArray(Charsets.UTF_8))
             }
 
             override fun onDisconnected(reason: String?) {

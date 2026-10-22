@@ -19,6 +19,7 @@ class FileTransferService(QObject):
     transfer_completed = pyqtSignal(str, str, str)         # filename, direction ('SENT' or 'RECEIVED'), file_path
     transfer_failed = pyqtSignal(str, str)                 # filename, error_message
     client_count_changed = pyqtSignal(int)
+    clients_updated = pyqtSignal()
 
     def __init__(self, port: int = 8890, download_dir: Optional[str] = None, adb_manager: Optional[AdbManager] = None, parent=None):
         super().__init__(parent)
@@ -31,6 +32,7 @@ class FileTransferService(QObject):
 
         self._server_sock: Optional[socket.socket] = None
         self._receiver_clients: List[socket.socket] = []
+        self._client_info: dict = {}
         self._lock = threading.Lock()
         self._transfer_lock = threading.Lock()
         self._server_thread: Optional[threading.Thread] = None
@@ -67,6 +69,7 @@ class FileTransferService(QObject):
                 except Exception:
                     pass
             self._receiver_clients.clear()
+            self._client_info.clear()
 
         if self._server_sock:
             try:
@@ -76,6 +79,7 @@ class FileTransferService(QObject):
             self._server_sock = None
 
         self.client_count_changed.emit(0)
+        self.clients_updated.emit()
         return True
 
     def _accept_loop(self):
@@ -107,10 +111,30 @@ class FileTransferService(QObject):
 
             if action == "REGISTER_RECEIVER":
                 # Mobile device registering as persistent receiver for files pushed from PC
+                try:
+                    peer = sock.getpeername()
+                    addr_str = f"{peer[0]}:{peer[1]}"
+                    ip_str = peer[0]
+                    port_int = peer[1]
+                except Exception:
+                    addr_str = "Unknown"
+                    ip_str = "127.0.0.1"
+                    port_int = 0
+
+                model = meta.get("device_model") or meta.get("model") or "ZeroDrop Receiver"
                 sock.sendall(json.dumps({"status": "REGISTERED"}).encode("utf-8") + b"\n")
                 with self._lock:
                     self._receiver_clients.append(sock)
+                    self._client_info[sock] = {
+                        "addr": addr_str,
+                        "ip": ip_str,
+                        "port": port_int,
+                        "model": model,
+                        "mode": "File Drop Receiver",
+                        "connected_at": time.time()
+                    }
                 self.client_count_changed.emit(len(self._receiver_clients))
+                self.clients_updated.emit()
 
                 # Monitor socket for disconnect
                 self._monitor_receiver(sock)
@@ -153,11 +177,41 @@ class FileTransferService(QObject):
         with self._lock:
             if sock in self._receiver_clients:
                 self._receiver_clients.remove(sock)
+            if sock in self._client_info:
+                del self._client_info[sock]
             try:
                 sock.close()
             except Exception:
                 pass
         self.client_count_changed.emit(len(self._receiver_clients))
+        self.clients_updated.emit()
+
+    def get_connected_clients(self) -> List[dict]:
+        """Returns list of currently connected ZeroDrop receiver clients."""
+        with self._lock:
+            return [dict(v) for v in self._client_info.values()]
+
+    def disconnect_client(self, addr: str):
+        """Disconnects a receiver client by addr (IP:port or IP)."""
+        with self._lock:
+            target_sock = None
+            for sock, info in list(self._client_info.items()):
+                if info.get("addr") == addr or info.get("ip") == addr:
+                    target_sock = sock
+                    break
+        if target_sock:
+            with self._lock:
+                if target_sock in self._receiver_clients:
+                    self._receiver_clients.remove(target_sock)
+                if target_sock in self._client_info:
+                    del self._client_info[target_sock]
+            try:
+                target_sock.close()
+            except Exception:
+                pass
+            self.client_count_changed.emit(len(self._receiver_clients))
+            self.clients_updated.emit()
+
 
     def _receive_file_from_mobile(self, sock: socket.socket, meta: dict, initial_data: bytes):
         """Handles an incoming file upload from mobile device to PC."""

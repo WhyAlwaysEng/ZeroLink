@@ -17,6 +17,7 @@ from core.adb_helper import AdbManager
 class ClipboardService(QObject):
     clip_received = pyqtSignal(str, str, float)  # text, source ('PC' or 'PHONE'), timestamp
     client_count_changed = pyqtSignal(int)
+    clients_updated = pyqtSignal()
 
     def __init__(self, port: int = 8889, adb_manager: Optional[AdbManager] = None, parent=None):
         super().__init__(parent)
@@ -27,6 +28,7 @@ class ClipboardService(QObject):
 
         self._server_sock: Optional[socket.socket] = None
         self._clients: List[socket.socket] = []
+        self._client_info: dict = {}
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
 
@@ -81,6 +83,7 @@ class ClipboardService(QObject):
                 except Exception:
                     pass
             self._clients.clear()
+            self._client_info.clear()
 
         if self._server_sock:
             try:
@@ -90,6 +93,7 @@ class ClipboardService(QObject):
             self._server_sock = None
 
         self.client_count_changed.emit(0)
+        self.clients_updated.emit()
         return True
 
     def _server_loop(self):
@@ -102,7 +106,16 @@ class ClipboardService(QObject):
                         client_sock.setblocking(False)
                         with self._lock:
                             self._clients.append(client_sock)
+                            self._client_info[client_sock] = {
+                                "addr": f"{addr[0]}:{addr[1]}",
+                                "ip": addr[0],
+                                "port": addr[1],
+                                "model": "ZeroClip Client",
+                                "mode": "Live Clipboard Sync",
+                                "connected_at": time.time()
+                            }
                         self.client_count_changed.emit(len(self._clients))
+                        self.clients_updated.emit()
                     else:
                         self._read_client_data(s)
             except Exception:
@@ -124,6 +137,10 @@ class ClipboardService(QObject):
                     msg = json.loads(line)
                     action = msg.get("action")
                     if action == "SYNC_CLIP":
+                        model = msg.get("device_model") or msg.get("model")
+                        if model and sock in self._client_info:
+                            self._client_info[sock]["model"] = model
+                            self.clients_updated.emit()
                         text = msg.get("text", "")
                         source = msg.get("source", "PHONE")
                         ts = msg.get("timestamp", time.time())
@@ -149,11 +166,14 @@ class ClipboardService(QObject):
         with self._lock:
             if sock in self._clients:
                 self._clients.remove(sock)
-                try:
-                    sock.close()
-                except Exception:
-                    pass
+            if sock in self._client_info:
+                del self._client_info[sock]
+            try:
+                sock.close()
+            except Exception:
+                pass
         self.client_count_changed.emit(len(self._clients))
+        self.clients_updated.emit()
 
     def _on_local_clipboard_changed(self):
         if not self.sync_enabled or not self.is_running:
@@ -200,10 +220,30 @@ class ClipboardService(QObject):
             for d in dead:
                 if d in self._clients:
                     self._clients.remove(d)
-                    try:
-                        d.close()
-                    except Exception:
-                        pass
+                if d in self._client_info:
+                    del self._client_info[d]
+                try:
+                    d.close()
+                except Exception:
+                    pass
 
         if dead:
             self.client_count_changed.emit(len(self._clients))
+            self.clients_updated.emit()
+
+    def get_connected_clients(self) -> List[dict]:
+        """Returns list of currently connected ZeroClip clients."""
+        with self._lock:
+            return [dict(v) for v in self._client_info.values()]
+
+    def disconnect_client(self, addr: str):
+        """Disconnects a client by addr (IP:port or IP)."""
+        with self._lock:
+            target_sock = None
+            for sock, info in list(self._client_info.items()):
+                if info.get("addr") == addr or info.get("ip") == addr:
+                    target_sock = sock
+                    break
+        if target_sock:
+            self._remove_client(target_sock)
+

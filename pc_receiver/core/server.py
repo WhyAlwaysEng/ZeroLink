@@ -5,7 +5,8 @@ Handles incoming Android client connections, 16-byte protocol parsing, and frame
 import socket
 import threading
 import time
-from typing import Optional
+import json
+from typing import Optional, List, Dict
 from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.protocol import (
@@ -23,6 +24,7 @@ class StreamServer(QObject):
     # Signals for Qt UI thread
     client_connected = pyqtSignal(str)          # Client IP:port
     client_disconnected = pyqtSignal()
+    clients_updated = pyqtSignal()              # Emitted when active client list changes
     frame_received = pyqtSignal(bytes, int, int) # payload, type, timestamp_us
     audio_received = pyqtSignal(bytes)           # raw PCM audio
     config_received = pyqtSignal(str)            # JSON config string
@@ -37,6 +39,7 @@ class StreamServer(QObject):
         self._client_sock: Optional[socket.socket] = None
         self._listen_thread: Optional[threading.Thread] = None
         self._client_thread: Optional[threading.Thread] = None
+        self.current_client_info: Optional[Dict] = None
 
     def start(self):
         """Starts the TCP listener thread."""
@@ -114,11 +117,23 @@ class StreamServer(QObject):
                 
                 self._close_client()
                 self._client_sock = client
+                self.current_client_info = {
+                    "addr": f"{addr[0]}:{addr[1]}",
+                    "ip": addr[0],
+                    "port": addr[1],
+                    "model": "Android Client",
+                    "mode": "Screen Mirror",
+                    "codec": "H.264",
+                    "connected_at": time.time()
+                }
                 self.client_connected.emit(f"{addr[0]}:{addr[1]}")
+                self.clients_updated.emit()
 
                 # Handle client traffic
                 self._handle_client(client)
+                self.current_client_info = None
                 self.client_disconnected.emit()
+                self.clients_updated.emit()
                 self.status_changed.emit("Client disconnected. Waiting for connection...")
         except Exception as e:
             if self.is_running:
@@ -179,8 +194,30 @@ class StreamServer(QObject):
                     self.audio_received.emit(payload)
                 elif packet_type == TYPE_CONFIG_JSON:
                     try:
-                        self.config_received.emit(payload.decode("utf-8"))
+                        cfg_str = payload.decode("utf-8")
+                        self.config_received.emit(cfg_str)
+                        cfg = json.loads(cfg_str)
+                        if self.current_client_info:
+                            model = cfg.get("device_model") or cfg.get("model")
+                            if model:
+                                self.current_client_info["model"] = model
+                            if "codec" in cfg:
+                                self.current_client_info["codec"] = cfg["codec"]
+                            if "mode" in cfg:
+                                self.current_client_info["mode"] = cfg["mode"]
+                            self.clients_updated.emit()
                     except Exception:
                         pass
             except Exception:
                 break
+
+    def get_connected_clients(self) -> List[Dict]:
+        """Returns list of currently connected streaming clients."""
+        if self.current_client_info:
+            return [dict(self.current_client_info)]
+        return []
+
+    def disconnect_client(self, addr: Optional[str] = None):
+        """Forcefully disconnects current stream client."""
+        self._close_client()
+

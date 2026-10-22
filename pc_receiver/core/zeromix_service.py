@@ -16,6 +16,7 @@ from core.audio_mixer import AudioMixerEngine
 
 class ZeroMixService(QObject):
     client_count_changed = pyqtSignal(int)
+    clients_updated = pyqtSignal()
 
     def __init__(self, engine: AudioMixerEngine, port: int = 8891, adb_manager: Optional[AdbManager] = None, parent=None):
         super().__init__(parent)
@@ -26,6 +27,7 @@ class ZeroMixService(QObject):
 
         self._server_sock: Optional[socket.socket] = None
         self._clients: List[socket.socket] = []
+        self._client_info: Dict[socket.socket, Dict] = {}
         self._lock = threading.Lock()
         self._server_thread: Optional[threading.Thread] = None
 
@@ -65,6 +67,7 @@ class ZeroMixService(QObject):
                 except Exception:
                     pass
             self._clients.clear()
+            self._client_info.clear()
 
         if self._server_sock:
             try:
@@ -74,6 +77,7 @@ class ZeroMixService(QObject):
             self._server_sock = None
 
         self.client_count_changed.emit(0)
+        self.clients_updated.emit()
         return True
 
     def _server_loop(self):
@@ -86,7 +90,16 @@ class ZeroMixService(QObject):
                         client_sock.setblocking(False)
                         with self._lock:
                             self._clients.append(client_sock)
+                            self._client_info[client_sock] = {
+                                "addr": f"{addr[0]}:{addr[1]}",
+                                "ip": addr[0],
+                                "port": addr[1],
+                                "model": "ZeroMix Remote",
+                                "mode": "Mixer & Soundboard Remote",
+                                "connected_at": time.time()
+                            }
                         self.client_count_changed.emit(len(self._clients))
+                        self.clients_updated.emit()
                         # Send initial state immediately
                         self._send_to_client(client_sock, self._get_full_state_payload())
                     else:
@@ -118,6 +131,10 @@ class ZeroMixService(QObject):
         action = msg.get("action")
 
         if action in ("GET_STATE", "CONNECT"):
+            model = msg.get("device_model") or msg.get("model")
+            if model and sock in self._client_info:
+                self._client_info[sock]["model"] = model
+                self.clients_updated.emit()
             self._send_to_client(sock, self._get_full_state_payload())
 
         elif action in ("GET_SOUNDS", "REFRESH_SOUNDS"):
@@ -205,7 +222,12 @@ class ZeroMixService(QObject):
                 except Exception:
                     pass
         if dead:
+            with self._lock:
+                for d in dead:
+                    if d in self._client_info:
+                        del self._client_info[d]
             self.client_count_changed.emit(len(self._clients))
+            self.clients_updated.emit()
 
     def _send_to_client(self, sock: socket.socket, payload: Dict):
         try:
@@ -218,8 +240,28 @@ class ZeroMixService(QObject):
         with self._lock:
             if sock in self._clients:
                 self._clients.remove(sock)
+            if sock in self._client_info:
+                del self._client_info[sock]
             try:
                 sock.close()
             except Exception:
                 pass
         self.client_count_changed.emit(len(self._clients))
+        self.clients_updated.emit()
+
+    def get_connected_clients(self) -> List[Dict]:
+        """Returns list of currently connected ZeroMix remote clients."""
+        with self._lock:
+            return [dict(v) for v in self._client_info.values()]
+
+    def disconnect_client(self, addr: str):
+        """Disconnects a client by addr (IP:port or IP)."""
+        with self._lock:
+            target_sock = None
+            for sock, info in list(self._client_info.items()):
+                if info.get("addr") == addr or info.get("ip") == addr:
+                    target_sock = sock
+                    break
+        if target_sock:
+            self._remove_client(target_sock)
+

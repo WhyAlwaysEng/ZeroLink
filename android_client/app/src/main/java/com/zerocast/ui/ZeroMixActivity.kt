@@ -71,10 +71,12 @@ class ZeroMixActivity : AppCompatActivity() {
                 binding.tvMixStatus.text = msg
                 if (isConnected) {
                     binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                    binding.btnConnect.text = "Connected"
+                    binding.btnConnect.text = "Disconnect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
                     binding.btnConnect.text = "Connect"
+                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             },
             onStateUpdated = { state ->
@@ -105,7 +107,11 @@ class ZeroMixActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            startConnect()
+            if (mixManager?.isConnected == true) {
+                mixManager?.stop()
+            } else {
+                startConnect()
+            }
         }
 
         binding.btnModeUsb.setOnClickListener {

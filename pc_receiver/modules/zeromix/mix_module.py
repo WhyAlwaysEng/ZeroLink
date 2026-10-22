@@ -4,8 +4,8 @@ Virtual Audio Mixer with Smart Auto-Ducking, Separate Monitoring & Mobile Sound 
 
 import os
 from typing import Optional, List, Dict
-from PyQt6.QtCore import Qt, pyqtSignal, QTimer
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QTimer, QUrl
+from PyQt6.QtGui import QFont, QColor, QDesktopServices
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QSlider, QProgressBar, QScrollArea, QFileDialog,
@@ -316,46 +316,75 @@ class ZeroMixModule(BaseModule):
 
         # Device Selection Card
         dev_card = QFrame()
-        dev_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 12px; }")
-        dev_layout = QHBoxLayout(dev_card)
-        dev_layout.setSpacing(14)
+        dev_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 14px; }")
+        dev_card_vbox = QVBoxLayout(dev_card)
+        dev_card_vbox.setSpacing(10)
 
-        # Inputs and outputs list
-        inputs, outputs = self.engine.get_device_lists()
+        dev_layout = QHBoxLayout()
+        dev_layout.setSpacing(14)
 
         # Mic Device
         col_mic = QVBoxLayout()
         col_mic.addWidget(QLabel("🎤 Microphone Input:", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_mic = QComboBox()
-        for d in inputs:
-            self.combo_mic.addItem(f"{d['name'][:30]}", d["index"])
-        self._select_combo_data(self.combo_mic, self.engine.input_mic_device)
         self.combo_mic.currentIndexChanged.connect(self._on_devices_changed)
         col_mic.addWidget(self.combo_mic)
         dev_layout.addLayout(col_mic, 1)
 
         # Monitor Device
         col_mon = QVBoxLayout()
-        col_mon.addWidget(QLabel("🎧 Monitor (Your Headphones):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
+        col_mon.addWidget(QLabel("🎧 Monitor (Headphones):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_monitor = QComboBox()
-        for d in outputs:
-            self.combo_monitor.addItem(f"{d['name'][:30]}", d["index"])
-        self._select_combo_data(self.combo_monitor, self.engine.output_monitor_device)
         self.combo_monitor.currentIndexChanged.connect(self._on_devices_changed)
         col_mon.addWidget(self.combo_monitor)
         dev_layout.addLayout(col_mon, 1)
 
-        # Broadcast Device
+        # Broadcast Device (Virtual Mic)
         col_bc = QVBoxLayout()
         col_bc.addWidget(QLabel("📡 Virtual Mic (Discord/Game Output):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_broadcast = QComboBox()
-        self.combo_broadcast.addItem("None (Monitor Only)", -1)
-        for d in outputs:
-            self.combo_broadcast.addItem(f"{d['name'][:30]}", d["index"])
-        self._select_combo_data(self.combo_broadcast, self.engine.output_broadcast_device)
         self.combo_broadcast.currentIndexChanged.connect(self._on_devices_changed)
         col_bc.addWidget(self.combo_broadcast)
         dev_layout.addLayout(col_bc, 1)
+
+        dev_card_vbox.addLayout(dev_layout)
+
+        # Virtual Mic Guidance & Helper Bar
+        helper_bar = QHBoxLayout()
+        helper_bar.setContentsMargins(2, 2, 2, 2)
+        helper_bar.setSpacing(10)
+
+        self.lbl_virtual_status = QLabel("")
+        self.lbl_virtual_status.setStyleSheet("font-size: 11px; color: #4B5563;")
+        self.lbl_virtual_status.setWordWrap(True)
+        helper_bar.addWidget(self.lbl_virtual_status, 1)
+
+        btn_get_cable = QPushButton("📥 Get Free VB-Audio Cable")
+        btn_get_cable.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6; color: #1F2937; border: 1px solid #D1D5DB;
+                border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        btn_get_cable.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://vb-audio.com/Cable/")))
+        helper_bar.addWidget(btn_get_cable)
+
+        btn_refresh_devs = QPushButton("🔄 Refresh Devices")
+        btn_refresh_devs.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6; color: #1F2937; border: 1px solid #D1D5DB;
+                border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        btn_refresh_devs.clicked.connect(self._populate_devices_combos)
+        helper_bar.addWidget(btn_refresh_devs)
+
+        dev_card_vbox.addLayout(helper_bar)
+
+        # Initial populate
+        self._populate_devices_combos()
 
         content_layout.addWidget(dev_card)
 
@@ -507,6 +536,77 @@ class ZeroMixModule(BaseModule):
         root_layout.addWidget(scroll, 1)
 
         self._widget = container
+
+    def _populate_devices_combos(self):
+        """Discovers host audio devices and categorizes Virtual Mic cables at top."""
+        inputs, outputs = self.engine.get_device_lists()
+
+        # Temporarily block signals while repopulating
+        if self.combo_mic:
+            self.combo_mic.blockSignals(True)
+            self.combo_mic.clear()
+            for d in inputs:
+                clean = d["name"]
+                if len(clean) > 40:
+                    clean = clean[:37] + "..."
+                self.combo_mic.addItem(f"🎤 {clean}", d["index"])
+            self._select_combo_data(self.combo_mic, self.engine.input_mic_device)
+            self.combo_mic.blockSignals(False)
+
+        if self.combo_monitor:
+            self.combo_monitor.blockSignals(True)
+            self.combo_monitor.clear()
+            for d in outputs:
+                clean = d["name"]
+                if len(clean) > 40:
+                    clean = clean[:37] + "..."
+                self.combo_monitor.addItem(f"🎧 {clean}", d["index"])
+            self._select_combo_data(self.combo_monitor, self.engine.output_monitor_device)
+            self.combo_monitor.blockSignals(False)
+
+        if self.combo_broadcast:
+            self.combo_broadcast.blockSignals(True)
+            self.combo_broadcast.clear()
+            self.combo_broadcast.addItem("❌ None (Monitor in Headphones Only)", -1)
+
+            # Categorize outputs into Virtual vs Physical
+            virtual_outputs = []
+            physical_outputs = []
+            virtual_keywords = ["cable", "virtual", "audiorelay", "voicemeeter", "steam streaming", "line out"]
+
+            for d in outputs:
+                name_lower = d["name"].lower()
+                clean = d["name"]
+                if len(clean) > 40:
+                    clean = clean[:37] + "..."
+                if any(kw in name_lower for kw in virtual_keywords):
+                    virtual_outputs.append((f"✨ [VIRTUAL MIC] {clean}", d["index"]))
+                else:
+                    physical_outputs.append((f"🔊 {clean}", d["index"]))
+
+            # Add virtual outputs first (highlighted)
+            for label, idx in virtual_outputs:
+                self.combo_broadcast.addItem(label, idx)
+
+            # Add physical outputs
+            for label, idx in physical_outputs:
+                self.combo_broadcast.addItem(label, idx)
+
+            self._select_combo_data(self.combo_broadcast, self.engine.output_broadcast_device)
+            self.combo_broadcast.blockSignals(False)
+
+            if hasattr(self, "lbl_virtual_status"):
+                if virtual_outputs:
+                    first_name = virtual_outputs[0][0].replace("✨ [VIRTUAL MIC] ", "")
+                    self.lbl_virtual_status.setText(
+                        f"✅ <b>{len(virtual_outputs)} Virtual Audio Device(s) detected</b> ({first_name}). In Discord / Games, select this cable as your Microphone!"
+                    )
+                    self.lbl_virtual_status.setStyleSheet("color: #059669; font-size: 11px;")
+                else:
+                    self.lbl_virtual_status.setText(
+                        "ℹ️ <b>No Virtual Cable found:</b> To broadcast your mix into Discord/Games as a microphone, install VB-Audio Virtual Cable (Free)."
+                    )
+                    self.lbl_virtual_status.setStyleSheet("color: #D97706; font-size: 11px;")
 
     def _select_combo_data(self, combo: QComboBox, data_val: Optional[int]):
         if data_val is None:

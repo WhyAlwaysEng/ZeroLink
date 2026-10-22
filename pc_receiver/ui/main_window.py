@@ -20,6 +20,7 @@ from modules.zerodrop.drop_module import ZeroDropModule
 from modules.zeroclip.clip_module import ZeroClipModule
 from modules.zeromix.mix_module import ZeroMixModule
 from ui.dashboard_view import DashboardView
+from ui.connections_view import ConnectionsView
 from ui.theme import GLOBAL_APP_STYLESHEET
 
 
@@ -226,6 +227,11 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_mix)
         side_layout.addWidget(self.btn_nav_mix)
 
+        self.btn_nav_connections = NavButton("Connections", "🔗")
+        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(5))
+        self.nav_group.addButton(self.btn_nav_connections)
+        side_layout.addWidget(self.btn_nav_connections)
+
         side_layout.addStretch()
 
         # Update Pill
@@ -285,6 +291,16 @@ class MainWindow(QMainWindow):
         self.mix_widget = self.mod_zeromix.get_widget()
         self.stacked.addWidget(self.mix_widget)
 
+        # Page 5: Connections / Device Bridge
+        self.connections_view = ConnectionsView(
+            self.mod_zerocast,
+            self.mod_zerodrop,
+            self.mod_zeroclip,
+            self.mod_zeromix,
+            parent=self
+        )
+        self.stacked.addWidget(self.connections_view)
+
         main_layout.addWidget(self.stacked, 1)
 
     def _create_placeholder_page(self, title: str, subtitle: str) -> QWidget:
@@ -327,6 +343,9 @@ class MainWindow(QMainWindow):
         elif module_id == "zeromix":
             self.stacked.setCurrentIndex(4)
             self.btn_nav_mix.setChecked(True)
+        elif module_id == "connections":
+            self.stacked.setCurrentIndex(5)
+            self.btn_nav_connections.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)
             self.btn_nav_dashboard.setChecked(True)
