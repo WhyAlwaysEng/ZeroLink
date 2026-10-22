@@ -384,24 +384,31 @@ class ZeroCamActivity : AppCompatActivity() {
         }
 
         // Hardware H.264 Path: GPU encoding directly from camera YUV buffer (< 1ms CPU)
-        if (useH264Hardware && h264Encoder?.isAvailable() == true) {
+        val enc = h264Encoder
+        if (useH264Hardware && enc?.isAvailable() == true) {
             try {
-                h264Encoder?.encodeFrame(imageProxy)
-                val now = System.currentTimeMillis()
-                if (now - lastStatTime >= 1000) {
-                    val dt = (now - lastStatTime) / 1000f
-                    val fps = frameCount / dt
-                    val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
-                    val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
-                    frameCount = 0
-                    bytesThisSec = 0
-                    lastStatTime = now
-                    runOnUiThread {
-                        binding.tvCamFps.text = "⚡ H.264 ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+                enc.encodeFrame(imageProxy)
+                if (enc.inputFramesCount >= 25 && enc.outputFramesCount == 0L) {
+                    Log.w(TAG, "Hardware encoder produced no output in 25 frames, switching to dynamic JPEG stream")
+                    enc.stop()
+                    h264Encoder = null
+                } else {
+                    val now = System.currentTimeMillis()
+                    if (now - lastStatTime >= 1000) {
+                        val dt = (now - lastStatTime) / 1000f
+                        val fps = frameCount / dt
+                        val avgKb = if (frameCount > 0) (bytesThisSec / frameCount / 1024) else 0
+                        val mbps = (bytesThisSec * 8f) / (dt * 1_000_000f)
+                        frameCount = 0
+                        bytesThisSec = 0
+                        lastStatTime = now
+                        runOnUiThread {
+                            binding.tvCamFps.text = "⚡ H.264 ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+                        }
                     }
+                    imageProxy.close()
+                    return
                 }
-                imageProxy.close()
-                return
             } catch (e: Exception) {
                 Log.e(TAG, "Hardware H.264 encode error, fallback to JPEG: ${e.message}")
             }

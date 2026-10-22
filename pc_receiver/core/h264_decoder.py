@@ -3,6 +3,7 @@ Decodes video/avc NAL units with zero-latency baseline mode and fast C-level RGB
 """
 
 from typing import List
+import numpy as np
 from PyQt6.QtGui import QImage
 
 try:
@@ -22,7 +23,8 @@ class H264Decoder:
             return
         try:
             codec = av.CodecContext.create('h264', 'r')
-            codec.options = {'flags': 'low_delay', 'tune': 'zerolatency'}
+            codec.flags |= av.codec.context.Flags.low_delay
+            codec.options = {'tune': 'zerolatency'}
             codec.thread_type = 'SLICE'
             codec.thread_count = 1
             codec.open()
@@ -51,23 +53,35 @@ class H264Decoder:
 
         images = []
         try:
-            packets = self.codec.parse(h264_data)
-            for packet in packets:
-                frames = self.codec.decode(packet)
-                for frame in frames:
-                    # Fast SIMD C-level RGB24 conversion (reformat)
-                    rgb = frame.reformat(format='rgb24')
-                    plane = rgb.planes[0]
-
-                    qimg = QImage(
-                        plane,
-                        rgb.width,
-                        rgb.height,
-                        plane.line_size,
-                        QImage.Format.Format_RGB888
-                    ).copy()
-                    images.append(qimg)
+            packet = av.Packet(h264_data)
+            frames = self.codec.decode(packet)
+            for frame in frames:
+                rgb = frame.to_ndarray(format='rgb24')
+                h, w, ch = rgb.shape
+                qimg = QImage(rgb.data, w, h, ch * w, QImage.Format.Format_RGB888).copy()
+                images.append(qimg)
         except Exception:
+            # Parameter sets (SPS/PPS) or incomplete slices can raise an error in avcodec_send_packet.
+            # Do NOT reset the decoder so that macroblock reference chains remain intact.
             pass
 
         return images
+
+    def decode_to_bgr(self, h264_data: bytes) -> List[np.ndarray]:
+        """Decodes raw H.264 NAL bytes and returns decoded OpenCV BGR numpy arrays."""
+        if not self.codec:
+            self._init_decoder()
+            if not self.codec:
+                return []
+
+        bgr_frames = []
+        try:
+            packet = av.Packet(h264_data)
+            frames = self.codec.decode(packet)
+            for frame in frames:
+                bgr = frame.to_ndarray(format='bgr24')
+                bgr_frames.append(bgr)
+        except Exception:
+            pass
+
+        return bgr_frames

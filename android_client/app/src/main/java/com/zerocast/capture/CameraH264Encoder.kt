@@ -26,6 +26,8 @@ class CameraH264Encoder(
     private var drainThread: Thread? = null
     private var spsPpsBuffer: ByteArray? = null
     private var currentRotationDeg = 0
+    var outputFramesCount = 0L
+    var inputFramesCount = 0L
 
     fun start(): Boolean {
         if (isRunning.getAndSet(true)) return true
@@ -86,6 +88,7 @@ class CameraH264Encoder(
         if (!isRunning.get() || codec == null) return
 
         try {
+            inputFramesCount++
             currentRotationDeg = imageProxy.imageInfo.rotationDegrees
             val inputIndex = codec.dequeueInputBuffer(5_000)
             if (inputIndex >= 0) {
@@ -177,7 +180,8 @@ class CameraH264Encoder(
                             } else {
                                 nalu
                             }
-                            onNalPacket(payload, isKeyframe, currentRotationDeg)
+                            outputFramesCount++
+                        onNalPacket(payload, isKeyframe, currentRotationDeg)
                         }
                     }
                     codec.releaseOutputBuffer(outputIndex, false)

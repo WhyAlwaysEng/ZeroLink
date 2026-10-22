@@ -339,13 +339,8 @@ class CamServer(QObject):
             from core.h264_decoder import H264Decoder
             self._h264_decoder = H264Decoder()
 
-        images = self._h264_decoder.decode(nal_bytes)
-        for q_img in images:
-            w, h = q_img.width(), q_img.height()
-            ptr = q_img.bits()
-            ptr.setsize(h * w * 3)
-            rgb_arr = np.frombuffer(ptr, np.uint8).reshape((h, w, 3))
-            bgr = cv2.cvtColor(rgb_arr, cv2.COLOR_RGB2BGR)
+        bgr_frames = self._h264_decoder.decode_to_bgr(nal_bytes)
+        for bgr in bgr_frames:
             self._post_process_and_emit(bgr, rotation_deg)
 
     def send_control_command(self, cmd: Dict):
