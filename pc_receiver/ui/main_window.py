@@ -151,7 +151,7 @@ class MainWindow(QMainWindow):
         logo_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
         if os.path.exists(logo_path):
             logo_lbl = QLabel()
-            pix = QPixmap(logo_path).scaled(26, 26, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+            pix = QPixmap(logo_path).scaled(30, 30, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             logo_lbl.setPixmap(pix)
             brand_row.addWidget(logo_lbl)
 
