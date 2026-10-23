@@ -801,6 +801,7 @@ class ZeroExplorerModule(BaseModule):
         self._is_active = True
         self.state_changed.emit(self.module_id, True)
         self.status_changed.emit(self.module_id, f"Client ready for port {self.port}")
+        self.connect_and_sync()
         return True
 
     def stop_service(self) -> bool:
@@ -812,7 +813,6 @@ class ZeroExplorerModule(BaseModule):
     def get_widget(self) -> QWidget:
         if self._widget is None:
             self._widget = self._create_ui()
-            QTimer.singleShot(1000, self.connect_and_sync)
         return self._widget
 
     def _create_ui(self) -> QWidget:

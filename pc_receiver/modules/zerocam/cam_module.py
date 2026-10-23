@@ -399,7 +399,6 @@ class ZeroCamModule(BaseModule):
         slider_contrast.valueChanged.connect(lambda val: setattr(self.server, "contrast", val / 100.0))
         co_row.addWidget(slider_contrast)
         a_layout.addLayout(co_row)
-        a_layout.addLayout(co_row)
 
         right_col.addWidget(adj_card)
 

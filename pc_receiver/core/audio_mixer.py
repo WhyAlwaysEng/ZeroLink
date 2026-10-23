@@ -235,17 +235,19 @@ class AudioMixerEngine(QObject):
             # Setup output broadcast stream (Virtual Cable / Discord Mic)
             if self.output_broadcast_device is not None:
                 try:
+                    dev_info = sd.query_devices(self.output_broadcast_device)
+                    b_sr = int(dev_info.get("default_samplerate", self.sample_rate))
+                    ch = min(2, max(1, dev_info.get("max_output_channels", 2)))
                     self._out_broadcast_stream = sd.OutputStream(
-                        samplerate=self.sample_rate,
+                        samplerate=b_sr,
                         blocksize=self.block_size,
                         device=self.output_broadcast_device,
-                        channels=2,
+                        channels=ch,
                         dtype='float32',
                         callback=self._broadcast_out_callback
                     )
                     self._out_broadcast_stream.start()
-                except Exception as e:
-                    print(f"[ZeroMix] Warning: Broadcast output stream failed: {e}")
+                except Exception:
                     self._out_broadcast_stream = None
 
             # Setup input mic stream

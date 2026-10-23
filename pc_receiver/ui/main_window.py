@@ -122,45 +122,30 @@ class MainWindow(QMainWindow):
         # Module Manager
         self.module_manager = ModuleManager(self)
 
-        # Core ZeroCast Module
+        # Register Ecosystem Modules (On-Demand Activation: Services start only when used)
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
-        self.mod_zerocast.start_service()
 
-        # ZeroDrop Module
         self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerodrop)
-        self.mod_zerodrop.start_service()
 
-        # ZeroClip Module
         self.mod_zeroclip = ZeroClipModule(port=8889, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zeroclip)
-        self.mod_zeroclip.start_service()
 
-        # ZeroMix Module
         self.mod_zeromix = ZeroMixModule(port=8891, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zeromix)
-        self.mod_zeromix.start_service()
 
-        # ZeroDisplay Module (Wireless 2nd Monitor)
         self.mod_zerodisplay = ZeroDisplayModule(port=8892, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerodisplay)
-        self.mod_zerodisplay.start_service()
 
-        # ZeroCam Module (Wireless 4K Webcam)
         self.mod_zerocam = ZeroCamModule(port=8893, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocam)
-        self.mod_zerocam.start_service()
 
-        # ZeroPad Module (Wireless Media & Macro Remote)
         self.mod_zeropad = ZeroPadModule(port=8894, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zeropad)
-        self.mod_zeropad.start_service()
 
-        # ZeroExplorer Module (Phone Gallery & Storage Manager)
         self.mod_zeroexplorer = ZeroExplorerModule(port=8896, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zeroexplorer)
-        self.mod_zeroexplorer.start_service()
 
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
@@ -405,6 +390,12 @@ class MainWindow(QMainWindow):
         self.mod_zeropad.server.client_connected.connect(lambda _: self._on_navigate_to_module("zeropad"))
 
     def _on_navigate_to_module(self, module_id: str):
+        # On-Demand: Activate module service when navigated to
+        if module_id not in ["dashboard", "connections"]:
+            mod = self.module_manager.get_module(module_id)
+            if mod and not mod.is_active:
+                self.module_manager.toggle_module(module_id, True)
+
         if module_id == "zerocast":
             self.stacked.setCurrentIndex(1)
             self.btn_nav_cast.setChecked(True)
