@@ -220,6 +220,8 @@ class ZeroMixModule(BaseModule):
         self.engine.mute_changed.connect(self._on_engine_mute_changed)
         self.engine.ducking_config_changed.connect(self._on_engine_ducking_config_changed)
         self.engine.voice_effect_changed.connect(self._on_voice_effect_changed)
+        self.engine.dsp_gate_state_changed.connect(self._on_dsp_gate_state_changed)
+        self.engine.mic_test_state_changed.connect(self._on_mic_test_state_changed)
         self.service.client_count_changed.connect(self._on_client_count_changed)
 
     @property
@@ -399,6 +401,41 @@ class ZeroMixModule(BaseModule):
 
         dev_card_vbox.addLayout(helper_bar)
 
+        # Headphone Monitoring & Sidetone Bar
+        mon_box = QFrame()
+        mon_box.setStyleSheet("background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 4px 10px;")
+        mon_l = QHBoxLayout(mon_box)
+        mon_l.setContentsMargins(4, 4, 4, 4)
+        mon_l.setSpacing(12)
+
+        self.chk_sidetone = QCheckBox("🎧 Sidetone (Hear My Voice)")
+        self.chk_sidetone.setChecked(self.engine.monitor_mic)
+        self.chk_sidetone.setStyleSheet("font-weight: 600; font-size: 11px; color: #111827;")
+        self.chk_sidetone.toggled.connect(self._on_sidetone_toggled)
+        mon_l.addWidget(self.chk_sidetone)
+
+        self.lbl_sidetone_vol = QLabel("Vol: 90%")
+        self.lbl_sidetone_vol.setStyleSheet("font-size: 10px; color: #6B7280; font-weight: 600;")
+        mon_l.addWidget(self.lbl_sidetone_vol)
+
+        self.slider_sidetone = QSlider(Qt.Orientation.Horizontal)
+        self.slider_sidetone.setRange(0, 150)
+        self.slider_sidetone.setValue(int(self.engine.monitor_sidetone_volume * 100))
+        self.slider_sidetone.setFixedWidth(100)
+        self.slider_sidetone.valueChanged.connect(self._on_sidetone_vol_changed)
+        mon_l.addWidget(self.slider_sidetone)
+
+        mon_l.addStretch()
+
+        self.chk_master_mon = QCheckBox("📢 Listen to Master (Broadcast Output)")
+        self.chk_master_mon.setChecked(self.engine.monitor_master_mode)
+        self.chk_master_mon.setStyleSheet("font-weight: 700; font-size: 11px; color: #111827;")
+        self.chk_master_mon.setToolTip("Hear exactly what Discord or your livestream hears (all tracks mixed together with Ducking)")
+        self.chk_master_mon.toggled.connect(self._on_master_mon_toggled)
+        mon_l.addWidget(self.chk_master_mon)
+
+        dev_card_vbox.addWidget(mon_box)
+
         # Initial populate
         self._populate_devices_combos()
 
@@ -413,15 +450,9 @@ class ZeroMixModule(BaseModule):
         self.strip_mic.volume_changed.connect(lambda v: self.engine.set_mic_volume(v))
         self.strip_mic.mute_toggled.connect(lambda m: self.engine.set_mic_mute(m))
 
-        chk_hear_mic = QCheckBox("Hear myself in headphones")
-        chk_hear_mic.setChecked(self.engine.monitor_mic)
-        chk_hear_mic.setStyleSheet("color: #6B7280; font-size: 11px;")
-        chk_hear_mic.toggled.connect(lambda on: self.engine.set_monitor_mic(on))
-        self.strip_mic.layout().addWidget(chk_hear_mic)
-
-        lbl_mic_echo_hint = QLabel("(Keep OFF when testing mic in Discord to avoid echo)")
-        lbl_mic_echo_hint.setStyleSheet("color: #9CA3AF; font-size: 10px; font-style: italic;")
-        self.strip_mic.layout().addWidget(lbl_mic_echo_hint)
+        self.lbl_strip_gate = QLabel("● Gate: Open (Speaking)")
+        self.lbl_strip_gate.setStyleSheet("color: #059669; font-size: 10px; font-weight: 600; padding: 2px 0;")
+        self.strip_mic.layout().addWidget(self.lbl_strip_gate)
         stems_layout.addWidget(self.strip_mic, 1)
 
         # Strip Music / Phone Cast
@@ -459,6 +490,121 @@ class ZeroMixModule(BaseModule):
         stems_layout.addWidget(self.strip_sound, 1)
 
         content_layout.addLayout(stems_layout)
+
+        # ==================== Studio Microphone DSP & Noise Filters Card ====================
+        dsp_card = QFrame()
+        dsp_card.setStyleSheet("QFrame { background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px; }")
+        dsp_l = QVBoxLayout(dsp_card)
+        dsp_l.setSpacing(12)
+
+        # DSP Header
+        dsp_hdr = QHBoxLayout()
+        dsp_title = QLabel("🛡️ Studio Microphone DSP & Noise Filters")
+        dsp_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        dsp_title.setStyleSheet("color: #111827;")
+        dsp_hdr.addWidget(dsp_title)
+
+        dsp_hdr.addStretch()
+
+        self.lbl_gate_badge = QLabel("● GATE: OPEN")
+        self.lbl_gate_badge.setStyleSheet("color: #059669; font-size: 10px; font-weight: 700; background: #ECFDF5; padding: 3px 8px; border-radius: 4px;")
+        dsp_hdr.addWidget(self.lbl_gate_badge)
+        dsp_l.addLayout(dsp_hdr)
+
+        dsp_sub = QLabel("Hardware-grade real-time filters: eliminates AC hum, keyboard clicks, background fans, and mic clipping.")
+        dsp_sub.setStyleSheet("color: #6B7280; font-size: 11px; border: none;")
+        dsp_l.addWidget(dsp_sub)
+
+        # Presets Row
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(8)
+        self.dsp_preset_btns = {}
+        for key, pinfo in self.engine.mic_dsp.PRESETS.items():
+            btn = QPushButton(pinfo["name"])
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #F3F4F6; color: #374151; font-weight: 500;
+                    border: 1px solid #E5E7EB; border-radius: 6px; padding: 6px 12px; font-size: 11px;
+                }
+                QPushButton:hover { background-color: #E5E7EB; color: #111827; }
+            """)
+            btn.clicked.connect(lambda _, pk=key: self._apply_dsp_preset(pk))
+            self.dsp_preset_btns[key] = btn
+            preset_row.addWidget(btn)
+        dsp_l.addLayout(preset_row)
+
+        # Filter Checkboxes Row
+        filter_checks_row = QHBoxLayout()
+        filter_checks_row.setSpacing(14)
+
+        self.chk_lowcut = QCheckBox("Low-Cut (80Hz Hum Removal)")
+        self.chk_lowcut.setChecked(self.engine.mic_dsp.enable_lowcut)
+        self.chk_lowcut.setStyleSheet("font-size: 11px; font-weight: 600; color: #111827;")
+        self.chk_lowcut.toggled.connect(lambda on: self.engine.set_mic_lowcut(on))
+        filter_checks_row.addWidget(self.chk_lowcut)
+
+        self.chk_gate = QCheckBox("Noise Gate (Cut Keyboard/Clicks)")
+        self.chk_gate.setChecked(self.engine.mic_dsp.enable_gate)
+        self.chk_gate.setStyleSheet("font-size: 11px; font-weight: 600; color: #111827;")
+        self.chk_gate.toggled.connect(lambda on: self.engine.set_mic_gate(on))
+        filter_checks_row.addWidget(self.chk_gate)
+
+        self.chk_suppress = QCheckBox("Noise Expander (Fan Reduction)")
+        self.chk_suppress.setChecked(self.engine.mic_dsp.enable_noise_suppress)
+        self.chk_suppress.setStyleSheet("font-size: 11px; font-weight: 600; color: #111827;")
+        self.chk_suppress.toggled.connect(lambda on: self.engine.set_mic_noise_suppress(on))
+        filter_checks_row.addWidget(self.chk_suppress)
+
+        self.chk_comp = QCheckBox("Compressor & Limiter (Anti-Clip)")
+        self.chk_comp.setChecked(self.engine.mic_dsp.enable_compressor)
+        self.chk_comp.setStyleSheet("font-size: 11px; font-weight: 600; color: #111827;")
+        self.chk_comp.toggled.connect(lambda on: self.engine.set_mic_compressor(on))
+        filter_checks_row.addWidget(self.chk_comp)
+
+        self.chk_deess = QCheckBox("De-Esser (Soften S/T)")
+        self.chk_deess.setChecked(self.engine.mic_dsp.enable_deesser)
+        self.chk_deess.setStyleSheet("font-size: 11px; font-weight: 600; color: #111827;")
+        self.chk_deess.toggled.connect(lambda on: self.engine.set_mic_deesser(on))
+        filter_checks_row.addWidget(self.chk_deess)
+
+        filter_checks_row.addStretch()
+        dsp_l.addLayout(filter_checks_row)
+
+        # Gate Threshold Slider & Mic Test Row
+        gate_slider_row = QHBoxLayout()
+        gate_slider_row.setSpacing(12)
+
+        lbl_gt = QLabel("Gate Threshold:")
+        lbl_gt.setStyleSheet("font-size: 11px; font-weight: bold; color: #111827;")
+        gate_slider_row.addWidget(lbl_gt)
+
+        self.lbl_gate_thresh_val = QLabel(f"{int(self.engine.mic_dsp.gate_threshold_db)} dB")
+        self.lbl_gate_thresh_val.setStyleSheet("font-size: 11px; font-weight: bold; color: #4B5563; min-width: 45px;")
+        gate_slider_row.addWidget(self.lbl_gate_thresh_val)
+
+        self.slider_gate_thresh = QSlider(Qt.Orientation.Horizontal)
+        self.slider_gate_thresh.setRange(-60, -15)
+        self.slider_gate_thresh.setValue(int(self.engine.mic_dsp.gate_threshold_db))
+        self.slider_gate_thresh.valueChanged.connect(self._on_gate_thresh_changed)
+        gate_slider_row.addWidget(self.slider_gate_thresh, 1)
+
+        # 5-second Instant Mic Check Button
+        self.btn_mic_test = QPushButton("🎙️ Test Mic (5s Check)")
+        self.btn_mic_test.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_mic_test.setStyleSheet("""
+            QPushButton {
+                background-color: #111827; color: #FFFFFF; font-weight: bold;
+                border: none; border-radius: 6px; padding: 6px 14px; font-size: 11px;
+            }
+            QPushButton:hover { background-color: #1F2937; }
+        """)
+        self.btn_mic_test.clicked.connect(self.engine.start_mic_test)
+        gate_slider_row.addWidget(self.btn_mic_test)
+
+        dsp_l.addLayout(gate_slider_row)
+        content_layout.addWidget(dsp_card)
+        self._update_preset_buttons("BROADCAST")
 
         # Voice FX Modulator Card (Real-Time Voice Changer)
         vfx_card = QFrame()
@@ -930,3 +1076,74 @@ class ZeroMixModule(BaseModule):
             self.slider_duck_level.blockSignals(False)
         if self.lbl_duck_level:
             self.lbl_duck_level.setText(f"{level}%")
+
+    def _on_sidetone_toggled(self, checked: bool):
+        self.engine.set_monitor_mic(checked)
+
+    def _on_sidetone_vol_changed(self, val: int):
+        if hasattr(self, "lbl_sidetone_vol") and self.lbl_sidetone_vol:
+            self.lbl_sidetone_vol.setText(f"Vol: {val}%")
+        self.engine.set_monitor_sidetone_volume(val)
+
+    def _on_master_mon_toggled(self, checked: bool):
+        self.engine.set_monitor_master_mode(checked)
+
+    def _on_dsp_gate_state_changed(self, is_open: bool, gain: float):
+        if hasattr(self, "lbl_gate_badge") and self.lbl_gate_badge:
+            if is_open:
+                self.lbl_gate_badge.setText("● GATE: OPEN (Speaking)")
+                self.lbl_gate_badge.setStyleSheet("color: #059669; font-size: 10px; font-weight: 700; background: #ECFDF5; padding: 3px 8px; border-radius: 4px;")
+            else:
+                self.lbl_gate_badge.setText("○ GATE: CLOSED (Muted)")
+                self.lbl_gate_badge.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 700; background: #F3F4F6; padding: 3px 8px; border-radius: 4px;")
+
+        if hasattr(self, "lbl_strip_gate") and self.lbl_strip_gate:
+            if is_open:
+                self.lbl_strip_gate.setText("● Gate: Open (Speaking)")
+                self.lbl_strip_gate.setStyleSheet("color: #059669; font-size: 10px; font-weight: 600; padding: 2px 0;")
+            else:
+                self.lbl_strip_gate.setText("○ Gate: Closed (Muted)")
+                self.lbl_strip_gate.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 600; padding: 2px 0;")
+
+    def _on_mic_test_state_changed(self, state: str):
+        if not hasattr(self, "btn_mic_test") or not self.btn_mic_test:
+            return
+        if state == "RECORDING":
+            self.btn_mic_test.setText("🔴 Recording (Speak now)... [5s]")
+            self.btn_mic_test.setStyleSheet("background-color: #EF4444; color: #FFFFFF; font-weight: bold; border-radius: 6px; padding: 6px 14px; font-size: 11px;")
+        elif state == "PLAYING":
+            self.btn_mic_test.setText("🔊 Playing in headphones...")
+            self.btn_mic_test.setStyleSheet("background-color: #10B981; color: #FFFFFF; font-weight: bold; border-radius: 6px; padding: 6px 14px; font-size: 11px;")
+        else:
+            self.btn_mic_test.setText("🎙️ Test Mic (5s Check)")
+            self.btn_mic_test.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: bold; border-radius: 6px; padding: 6px 14px; font-size: 11px;")
+
+    def _apply_dsp_preset(self, preset_key: str):
+        self.engine.apply_mic_dsp_preset(preset_key)
+        if hasattr(self, "chk_lowcut") and self.chk_lowcut:
+            self.chk_lowcut.setChecked(self.engine.mic_dsp.enable_lowcut)
+        if hasattr(self, "chk_gate") and self.chk_gate:
+            self.chk_gate.setChecked(self.engine.mic_dsp.enable_gate)
+        if hasattr(self, "chk_suppress") and self.chk_suppress:
+            self.chk_suppress.setChecked(self.engine.mic_dsp.enable_noise_suppress)
+        if hasattr(self, "chk_comp") and self.chk_comp:
+            self.chk_comp.setChecked(self.engine.mic_dsp.enable_compressor)
+        if hasattr(self, "chk_deess") and self.chk_deess:
+            self.chk_deess.setChecked(self.engine.mic_dsp.enable_deesser)
+        if hasattr(self, "slider_gate_thresh") and self.slider_gate_thresh:
+            self.slider_gate_thresh.setValue(int(self.engine.mic_dsp.gate_threshold_db))
+        self._update_preset_buttons(preset_key)
+
+    def _update_preset_buttons(self, active_key: str):
+        if not hasattr(self, "dsp_preset_btns"):
+            return
+        for pk, btn in self.dsp_preset_btns.items():
+            if pk == active_key:
+                btn.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: bold; border-radius: 6px; padding: 6px 12px; font-size: 11px;")
+            else:
+                btn.setStyleSheet("background-color: #F3F4F6; color: #374151; font-weight: 500; border: 1px solid #E5E7EB; border-radius: 6px; padding: 6px 12px; font-size: 11px;")
+
+    def _on_gate_thresh_changed(self, val: int):
+        if hasattr(self, "lbl_gate_thresh_val") and self.lbl_gate_thresh_val:
+            self.lbl_gate_thresh_val.setText(f"{val} dB")
+        self.engine.set_mic_gate_threshold(float(val))

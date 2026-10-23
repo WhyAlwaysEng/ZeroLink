@@ -14,11 +14,14 @@ import sounddevice as sd
 import av
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from core.voice_fx import VoiceFxProcessor
+from core.mic_dsp import MicDspProcessor
 
 
 class AudioMixerEngine(QObject):
     levels_updated = pyqtSignal(float, float, float)     # mic_level (0..1), music_level, soundboard_level
     ducking_state_changed = pyqtSignal(bool, float)       # is_ducking, current_duck_multiplier
+    dsp_gate_state_changed = pyqtSignal(bool, float)      # is_gate_open, gate_gain
+    mic_test_state_changed = pyqtSignal(str)              # "IDLE", "RECORDING", "PLAYING"
     soundboard_list_changed = pyqtSignal()
     sound_playback_changed = pyqtSignal(str, bool)        # sound_name, is_playing
     playback_state_changed = pyqtSignal(bool, str)        # is_music_playing, current_track_name
@@ -50,10 +53,12 @@ class AudioMixerEngine(QObject):
         self.mute_soundboard = False
 
         # Monitoring flags (what user hears in their own headphones)
-        self.monitor_mic = False          # False = don't echo own voice
+        self.monitor_mic = False              # Hear own voice in headphones (Sidetone)
+        self.monitor_sidetone_volume = 0.9    # Sidetone headphone volume
+        self.monitor_master_mode = False      # Listen to Master Broadcast (Stream Mix) directly
         self.monitor_music = True
         self.monitor_soundboard = True
-        self.mute_monitor = False         # Master monitor mute toggle (useful when testing in Discord)
+        self.mute_monitor = False             # Master monitor mute toggle
 
         # Smart Auto-Ducking Configuration
         self.ducking_enabled = True
@@ -63,6 +68,9 @@ class AudioMixerEngine(QObject):
         self.duck_release = 0.05          # Speed of fading back up (smooth)
         self._current_duck_factor = 1.0
         self._is_ducking = False
+
+        # Studio Microphone DSP Suite (Low-cut, Gate, Expander, Compressor/Limiter, De-Esser)
+        self.mic_dsp = MicDspProcessor(sample_rate=self.sample_rate)
 
         # Real-time Voice FX Processor
         self.voice_fx = VoiceFxProcessor(sample_rate=self.sample_rate)
@@ -349,14 +357,19 @@ class AudioMixerEngine(QObject):
         # 1. Process Microphone Channel
         # mic_chunk is shape (frames, 1)
         mic_mono = mic_chunk[:, 0]
-        peak_mic = float(np.max(np.abs(mic_mono))) if len(mic_mono) > 0 else 0.0
+
+        # Run through Studio DSP Suite (Low-Cut, Gate, Noise Suppression, Compressor, De-Esser)
+        processed_mono = self.mic_dsp.process(mic_mono)
+        self.dsp_gate_state_changed.emit(self.mic_dsp.is_gate_open, self.mic_dsp.gate_gain)
+
+        peak_mic = float(np.max(np.abs(processed_mono))) if len(processed_mono) > 0 else 0.0
 
         # Calculate dB
         db_mic = 20.0 * math.log10(peak_mic + 1e-6)
 
-        # Ducking Logic
+        # Ducking Logic (uses clean gated voice so clicks don't duck music)
         if self.ducking_enabled and not self.mute_mic:
-            if db_mic >= self.voice_threshold_db:
+            if db_mic >= self.voice_threshold_db and self.mic_dsp.is_gate_open:
                 target_duck = self.ducking_level
                 is_ducking = True
             else:
@@ -376,7 +389,7 @@ class AudioMixerEngine(QObject):
                 self.ducking_state_changed.emit(False, 1.0)
 
         # Apply Real-Time Voice FX
-        processed_mono = self.voice_fx.process(mic_mono)
+        processed_mono = self.voice_fx.process(processed_mono)
 
         # Scale mic audio
         effective_mic = 0.0 if self.mute_mic else self.vol_mic
@@ -451,10 +464,21 @@ class AudioMixerEngine(QObject):
         np.clip(broadcast_mix, -1.0, 1.0, out=broadcast_mix)
 
         # Monitor Mix (User's Headphones):
-        monitor_mic_chunk = mic_stereo if self.monitor_mic else np.zeros_like(mic_stereo)
-        monitor_music_chunk = music_stereo if self.monitor_music else np.zeros_like(music_stereo)
-        monitor_sound_chunk = sound_stereo if self.monitor_soundboard else np.zeros_like(sound_stereo)
-        monitor_mix = monitor_mic_chunk + monitor_music_chunk + monitor_sound_chunk
+        if self.monitor_master_mode:
+            # Broadcast Monitor Mode: Hear exactly what Discord / Stream hears
+            monitor_mix = broadcast_mix.copy()
+        else:
+            sidetone_chunk = (mic_stereo * self.monitor_sidetone_volume) if self.monitor_mic else np.zeros_like(mic_stereo)
+            monitor_music_chunk = music_stereo if self.monitor_music else np.zeros_like(music_stereo)
+            monitor_sound_chunk = sound_stereo if self.monitor_soundboard else np.zeros_like(sound_stereo)
+            monitor_mix = sidetone_chunk + monitor_music_chunk + monitor_sound_chunk
+
+        # Inject 5-second Mic Check Playback into headphones if active
+        if self.mic_dsp.is_test_playing:
+            test_chunk = self.mic_dsp.get_next_test_playback_chunk(frames)
+            if test_chunk is not None:
+                monitor_mix += test_chunk
+
         np.clip(monitor_mix, -1.0, 1.0, out=monitor_mix)
 
         # Push to output ring queues for callback streams
@@ -669,6 +693,50 @@ class AudioMixerEngine(QObject):
     def set_monitor_mic(self, enabled: bool):
         self.monitor_mic = enabled
         self.state_changed.emit()
+
+    def set_monitor_sidetone_volume(self, pct: int):
+        self.monitor_sidetone_volume = max(0.0, min(1.5, pct / 100.0))
+        self.state_changed.emit()
+
+    def set_monitor_master_mode(self, enabled: bool):
+        self.monitor_master_mode = enabled
+        self.state_changed.emit()
+
+    def apply_mic_dsp_preset(self, preset_key: str):
+        self.mic_dsp.apply_preset(preset_key)
+        self.state_changed.emit()
+
+    def set_mic_gate_threshold(self, db: float):
+        self.mic_dsp.gate_threshold_db = db
+
+    def set_mic_lowcut(self, enabled: bool):
+        self.mic_dsp.enable_lowcut = enabled
+
+    def set_mic_gate(self, enabled: bool):
+        self.mic_dsp.enable_gate = enabled
+
+    def set_mic_compressor(self, enabled: bool):
+        self.mic_dsp.enable_compressor = enabled
+
+    def set_mic_deesser(self, enabled: bool):
+        self.mic_dsp.enable_deesser = enabled
+
+    def set_mic_noise_suppress(self, enabled: bool):
+        self.mic_dsp.enable_noise_suppress = enabled
+
+    def start_mic_test(self):
+        self.mic_dsp.start_mic_test_recording()
+        self.mic_test_state_changed.emit("RECORDING")
+        QTimer.singleShot(5000, self._finish_mic_test)
+
+    def _finish_mic_test(self):
+        data = self.mic_dsp.finish_mic_test_recording()
+        if data is not None:
+            self.mic_test_state_changed.emit("PLAYING")
+            dur_ms = int(len(data) / self.sample_rate * 1000)
+            QTimer.singleShot(dur_ms + 200, lambda: self.mic_test_state_changed.emit("IDLE"))
+        else:
+            self.mic_test_state_changed.emit("IDLE")
 
     def set_ducking_config(self, enabled: bool, duck_level_pct: int, threshold_db: float = -32.0):
         self.ducking_enabled = enabled
