@@ -106,7 +106,9 @@ class ExplorerServer(
                 path == "/api/gallery/photos" || path == "/api/gallery/media" -> {
                     val album = uri.getQueryParameter("album")
                     val type = uri.getQueryParameter("type") ?: "all" // all, photos, videos
-                    handleGalleryMedia(output, type, album)
+                    val offset = uri.getQueryParameter("offset")?.toIntOrNull() ?: 0
+                    val limit = uri.getQueryParameter("limit")?.toIntOrNull() ?: 80
+                    handleGalleryMedia(output, type, album, offset, limit)
                 }
                 path == "/api/media/thumb" -> {
                     val idStr = uri.getQueryParameter("id") ?: "0"
@@ -174,7 +176,7 @@ class ExplorerServer(
         sendJsonResponse(out, 200, json.toString())
     }
 
-    private fun handleGalleryMedia(out: OutputStream, typeFilter: String, albumFilter: String?) {
+    private fun handleGalleryMedia(out: OutputStream, typeFilter: String, albumFilter: String?, offset: Int = 0, limit: Int = 80) {
         val list = ArrayList<JSONObject>()
 
         // 1. Photos
@@ -206,7 +208,7 @@ class ExplorerServer(
                     val bucketCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
 
                     var count = 0
-                    while (c.moveToNext() && count < 250) {
+                    while (c.moveToNext() && count < 8000) {
                         val id = c.getLong(idCol)
                         val name = c.getString(nameCol) ?: "Photo"
                         val date = c.getLong(dateCol) * 1000L
@@ -261,7 +263,7 @@ class ExplorerServer(
                     val bucketCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
 
                     var count = 0
-                    while (c.moveToNext() && count < 150) {
+                    while (c.moveToNext() && count < 5000) {
                         val id = c.getLong(idCol)
                         val name = c.getString(nameCol) ?: "Video"
                         val date = c.getLong(dateCol) * 1000L
@@ -289,12 +291,29 @@ class ExplorerServer(
         // Sort descending by date
         list.sortByDescending { it.optLong("date") }
 
+        val totalCount = list.size
+        val safeOffset = offset.coerceAtLeast(0)
+        val safeLimit = if (limit <= 0) 80 else limit
+        val pagedList = if (safeOffset < totalCount) {
+            list.subList(safeOffset, minOf(safeOffset + safeLimit, totalCount))
+        } else {
+            emptyList<JSONObject>()
+        }
+
         val array = JSONArray()
-        for (item in list.take(350)) {
+        for (item in pagedList) {
             array.put(item)
         }
 
-        sendJsonResponse(out, 200, array.toString())
+        val responseJson = JSONObject().apply {
+            put("total", totalCount)
+            put("offset", safeOffset)
+            put("limit", safeLimit)
+            put("hasMore", (safeOffset + safeLimit) < totalCount)
+            put("items", array)
+        }
+
+        sendJsonResponse(out, 200, responseJson.toString())
     }
 
     private fun handleThumbnail(out: OutputStream, id: Long, isVideo: Boolean) {
@@ -348,7 +367,8 @@ class ExplorerServer(
         var totalSent = 0L
         try {
             val afd = context.contentResolver.openAssetFileDescriptor(uri, "r") ?: return 0L
-            val totalLength = afd.length
+            val stat = afd.parcelFileDescriptor?.statSize ?: 0L
+            val totalLength = if (afd.length > 0) afd.length else (if (stat > 0) stat else 0L)
             val mime = context.contentResolver.getType(uri) ?: (if (isVideo) "video/mp4" else "image/jpeg")
 
             if (rangeHeader != null && rangeHeader.startsWith("bytes=") && totalLength > 0) {
@@ -363,15 +383,28 @@ class ExplorerServer(
                         "Accept-Ranges: bytes\r\n" +
                         "Content-Range: bytes $start-$end/$totalLength\r\n" +
                         "Content-Length: $contentLength\r\n" +
-                        "Connection: close\r\n\r\n"
+                        "Connection: keep-alive\r\n\r\n"
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = afd.createInputStream()
-                fis.skip(start)
-                val bis = BufferedInputStream(fis, 256 * 1024)
-                val buf = ByteArray(256 * 1024)
+                try {
+                    fis.channel.position(start)
+                } catch (e: Exception) {
+                    var skipped = 0L
+                    while (skipped < start) {
+                        val s = fis.skip(start - skipped)
+                        if (s <= 0) {
+                            if (fis.read() == -1) break
+                            skipped += 1
+                        } else {
+                            skipped += s
+                        }
+                    }
+                }
+
+                val buf = ByteArray(64 * 1024)
                 var remaining = contentLength
-                bis.use { inp ->
+                fis.use { inp ->
                     while (remaining > 0) {
                         val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
                         val read = inp.read(buf, 0, toRead)
@@ -386,13 +419,12 @@ class ExplorerServer(
                         "Content-Type: $mime\r\n" +
                         "Accept-Ranges: bytes\r\n" +
                         (if (totalLength > 0) "Content-Length: $totalLength\r\n" else "") +
-                        "Connection: close\r\n\r\n"
+                        "Connection: keep-alive\r\n\r\n"
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = afd.createInputStream()
-                val bis = BufferedInputStream(fis, 256 * 1024)
-                val buf = ByteArray(256 * 1024)
-                bis.use { inp ->
+                val buf = ByteArray(64 * 1024)
+                fis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)
                         if (read <= 0) break
@@ -482,15 +514,28 @@ class ExplorerServer(
                         "Accept-Ranges: bytes\r\n" +
                         "Content-Range: bytes $start-$end/$totalLength\r\n" +
                         "Content-Length: $contentLength\r\n" +
-                        "Connection: close\r\n\r\n"
+                        "Connection: keep-alive\r\n\r\n"
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = FileInputStream(file)
-                fis.skip(start)
-                val bis = BufferedInputStream(fis, 256 * 1024)
-                val buf = ByteArray(256 * 1024)
+                try {
+                    fis.channel.position(start)
+                } catch (e: Exception) {
+                    var skipped = 0L
+                    while (skipped < start) {
+                        val s = fis.skip(start - skipped)
+                        if (s <= 0) {
+                            if (fis.read() == -1) break
+                            skipped += 1
+                        } else {
+                            skipped += s
+                        }
+                    }
+                }
+
+                val buf = ByteArray(64 * 1024)
                 var remaining = contentLength
-                bis.use { inp ->
+                fis.use { inp ->
                     while (remaining > 0) {
                         val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
                         val read = inp.read(buf, 0, toRead)
@@ -506,13 +551,12 @@ class ExplorerServer(
                         "Accept-Ranges: bytes\r\n" +
                         "Content-Disposition: attachment; filename=\"${file.name}\"\r\n" +
                         "Content-Length: $totalLength\r\n" +
-                        "Connection: close\r\n\r\n"
+                        "Connection: keep-alive\r\n\r\n"
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = FileInputStream(file)
-                val bis = BufferedInputStream(fis, 256 * 1024)
-                val buf = ByteArray(256 * 1024)
-                bis.use { inp ->
+                val buf = ByteArray(64 * 1024)
+                fis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)
                         if (read <= 0) break

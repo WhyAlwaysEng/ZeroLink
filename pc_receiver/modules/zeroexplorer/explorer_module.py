@@ -8,6 +8,7 @@ import os
 import sys
 import time
 import json
+import queue
 import urllib.request
 import urllib.parse
 from datetime import datetime
@@ -58,25 +59,27 @@ class StorageWorker(QThread):
 
 
 class MediaWorker(QThread):
-    result_ready = pyqtSignal(list)
+    result_ready = pyqtSignal(object)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, host: str, port: int, media_type: str = "all", album: Optional[str] = None):
+    def __init__(self, host: str, port: int, media_type: str = "all", album: Optional[str] = None, offset: int = 0, limit: int = 80):
         super().__init__()
         self.host = host
         self.port = port
         self.media_type = media_type
         self.album = album
+        self.offset = offset
+        self.limit = limit
 
     def run(self):
-        params = [f"type={self.media_type}"]
+        params = [f"type={self.media_type}", f"offset={self.offset}", f"limit={self.limit}"]
         if self.album:
             params.append(f"album={urllib.parse.quote(self.album)}")
         query_str = "&".join(params)
         url = f"http://{self.host}:{self.port}/api/gallery/media?{query_str}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=6) as resp:
+            with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
                 self.result_ready.emit(data)
         except Exception as e:
@@ -108,20 +111,48 @@ class FilesWorker(QThread):
 class ThumbQueueWorker(QThread):
     thumb_ready = pyqtSignal(int, QPixmap)
 
-    def __init__(self, host: str, port: int, items_to_fetch: List[Dict]):
+    def __init__(self, host: str, port: int):
         super().__init__()
         self.host = host
         self.port = port
-        self.items_to_fetch = items_to_fetch
+        self._queue = queue.Queue()
         self._is_cancelled = False
+        self._is_paused = False
+        self._enqueued_ids = set()
+
+    def add_items(self, items: List[Dict]):
+        for itm in items:
+            p_id = itm.get("id")
+            if p_id is not None and p_id not in self._enqueued_ids:
+                self._enqueued_ids.add(p_id)
+                self._queue.put(itm)
+
+    def set_paused(self, paused: bool):
+        self._is_paused = paused
+
+    def clear(self):
+        self._enqueued_ids.clear()
+        while not self._queue.empty():
+            try:
+                self._queue.get_nowait()
+            except Exception:
+                break
 
     def cancel(self):
         self._is_cancelled = True
+        self.clear()
 
     def run(self):
-        for itm in self.items_to_fetch:
-            if self._is_cancelled:
-                break
+        while not self._is_cancelled:
+            if self._is_paused:
+                time.sleep(0.08)
+                continue
+
+            try:
+                itm = self._queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+
             p_id = itm.get("id")
             is_video = itm.get("type") == "video"
             type_param = "video" if is_video else "image"
@@ -132,11 +163,20 @@ class ThumbQueueWorker(QThread):
                     raw_bytes = resp.read()
                     img = QImage.fromData(raw_bytes)
                     if not img.isNull():
-                        pix = QPixmap.fromImage(img)
-                        self.thumb_ready.emit(p_id, pix)
+                        # Format into a clean 120x120 centered thumbnail
+                        scaled = img.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                        canvas = QPixmap(120, 120)
+                        canvas.fill(QColor(0, 0, 0, 0))
+                        painter = QPainter(canvas)
+                        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                        x = (120 - scaled.width()) // 2
+                        y = (120 - scaled.height()) // 2
+                        painter.drawImage(x, y, scaled)
+                        painter.end()
+                        self.thumb_ready.emit(p_id, canvas)
             except Exception:
                 pass
-            time.sleep(0.012)
+            time.sleep(0.01)
 
 
 # ==================== Pro Interactive Image Viewer Dialog ====================
@@ -540,6 +580,25 @@ class ProVideoPlayerDialog(QDialog):
         self.btn_fs.clicked.connect(self._toggle_fullscreen)
         ctrl_row.addWidget(self.btn_fs)
 
+        self.btn_ext = QPushButton("⚡ Open in App")
+        self.btn_ext.setToolTip("Open video stream in Windows default media player (VLC, etc.)")
+        self.btn_ext.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        self.btn_ext.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_ext.setStyleSheet("""
+            QPushButton {
+                background-color: #1F2937;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background-color: #374151;
+            }
+        """)
+        self.btn_ext.clicked.connect(self._open_in_external)
+        ctrl_row.addWidget(self.btn_ext)
+
         layout.addLayout(ctrl_row)
 
         # Wire Player events
@@ -556,6 +615,17 @@ class ProVideoPlayerDialog(QDialog):
         # Start playback
         self.player.setSource(QUrl(self.stream_url))
         self.player.play()
+
+    def _open_in_external(self):
+        self.player.pause()
+        QDesktopServices.openUrl(QUrl(self.stream_url))
+
+    def closeEvent(self, event):
+        try:
+            self.player.stop()
+        except Exception:
+            pass
+        super().closeEvent(event)
 
     def _toggle_play(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
@@ -654,6 +724,32 @@ class ZeroExplorerModule(BaseModule):
         self._media_worker: Optional[MediaWorker] = None
         self._files_worker: Optional[FilesWorker] = None
         self._thumb_queue_worker: Optional[ThumbQueueWorker] = None
+
+        # Pagination & Gallery State
+        self.gallery_offset = 0
+        self.gallery_limit = 80
+        self.gallery_total = 0
+        self.gallery_has_more = False
+        self.is_loading_more_media = False
+
+        # Pre-create Clean Placeholders
+        self._image_placeholder = self._create_placeholder_icon(is_video=False)
+        self._video_placeholder = self._create_placeholder_icon(is_video=True)
+
+    def _create_placeholder_icon(self, is_video: bool) -> QIcon:
+        pix = QPixmap(120, 120)
+        pix.fill(QColor("#F3F4F6"))
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QColor("#E5E7EB"))
+        painter.drawRoundedRect(1, 1, 118, 118, 6, 6)
+        painter.setPen(QColor("#9CA3AF"))
+        font = QFont("Segoe UI", 16, QFont.Weight.Bold)
+        painter.setFont(font)
+        glyph = "▶" if is_video else "▤"
+        painter.drawText(0, 0, 120, 120, int(Qt.AlignmentFlag.AlignCenter), glyph)
+        painter.end()
+        return QIcon(pix)
 
     @property
     def module_id(self) -> str:
@@ -964,10 +1060,11 @@ class ZeroExplorerModule(BaseModule):
         self.gallery_list = QListWidget()
         self.gallery_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.gallery_list.setIconSize(QSize(120, 120))
-        self.gallery_list.setGridSize(QSize(140, 175))
-        self.gallery_list.setSpacing(12)
+        self.gallery_list.setGridSize(QSize(142, 178))
+        self.gallery_list.setSpacing(10)
         self.gallery_list.setResizeMode(QListWidget.ResizeMode.Adjust)
-        self.gallery_list.setUniformItemSizes(True)
+        self.gallery_list.setUniformItemSizes(False)
+        self.gallery_list.setWordWrap(True)
         self.gallery_list.setMovement(QListWidget.Movement.Static)
         self.gallery_list.setStyleSheet("""
             QListWidget {
@@ -979,7 +1076,8 @@ class ZeroExplorerModule(BaseModule):
             QListWidget::item {
                 border: 1px solid #E5E7EB;
                 border-radius: 8px;
-                padding: 4px;
+                padding: 6px;
+                margin: 2px;
                 color: #111827;
             }
             QListWidget::item:hover {
@@ -994,7 +1092,38 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
+        self.gallery_list.verticalScrollBar().valueChanged.connect(self._on_gallery_scroll)
         layout.addWidget(self.gallery_list, 1)
+
+        # Bottom status and Load More bar
+        bottom_row = QHBoxLayout()
+        self.lbl_gallery_count = QLabel("0 media items")
+        self.lbl_gallery_count.setFont(QFont("Segoe UI", 9))
+        self.lbl_gallery_count.setStyleSheet("color: #6B7280;")
+        bottom_row.addWidget(self.lbl_gallery_count)
+
+        bottom_row.addStretch()
+
+        self.btn_load_more = QPushButton("▾ Load More Media")
+        self.btn_load_more.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_load_more.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_load_more.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 5px 14px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+            }
+        """)
+        self.btn_load_more.clicked.connect(self._load_next_gallery_page)
+        self.btn_load_more.setVisible(False)
+        bottom_row.addWidget(self.btn_load_more)
+
+        layout.addLayout(bottom_row)
 
         return tab
 
@@ -1308,34 +1437,58 @@ class ZeroExplorerModule(BaseModule):
     def _set_media_filter(self, media_type: str, album: Optional[str]):
         self.active_media_filter = media_type
         self.active_album_filter = album
-        self.fetch_media(media_type, album)
+        self.fetch_media(media_type, album, is_append=False)
 
-    def fetch_media(self, media_type: str, album: Optional[str]):
+    def fetch_media(self, media_type: str, album: Optional[str], is_append: bool = False):
         if self._media_worker and self._media_worker.isRunning():
             self._media_worker.terminate()
-        if self._thumb_queue_worker and self._thumb_queue_worker.isRunning():
-            self._thumb_queue_worker.cancel()
-            self._thumb_queue_worker.wait(300)
 
-        self.gallery_list.clear()
-        self._media_worker = MediaWorker(self.phone_host, self.port, media_type, album)
+        if not is_append:
+            self.gallery_offset = 0
+            self.gallery_items = []
+            self.gallery_list.clear()
+            self._gallery_item_map.clear()
+            if self._thumb_queue_worker:
+                self._thumb_queue_worker.clear()
+            self.lbl_gallery_count.setText("Loading media from device...")
+            self.btn_load_more.setVisible(False)
+
+        if not self._thumb_queue_worker or not self._thumb_queue_worker.isRunning():
+            self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port)
+            self._thumb_queue_worker.thumb_ready.connect(self._on_thumb_ready)
+            self._thumb_queue_worker.start()
+
+        self._media_worker = MediaWorker(
+            self.phone_host, self.port, media_type, album,
+            offset=self.gallery_offset, limit=self.gallery_limit
+        )
         self._media_worker.result_ready.connect(self._on_media_received)
         self._media_worker.error_occurred.connect(self._on_error)
         self._media_worker.start()
 
-    def _on_media_received(self, items: list):
-        self.gallery_items = items
-        self.gallery_list.clear()
-        self._gallery_item_map.clear()
+    def _on_media_received(self, data):
+        self.is_loading_more_media = False
+        if isinstance(data, dict):
+            new_items = data.get("items", [])
+            self.gallery_total = data.get("total", len(new_items))
+            self.gallery_has_more = data.get("hasMore", False)
+            self.gallery_offset += len(new_items)
+        else:
+            new_items = data if isinstance(data, list) else []
+            self.gallery_total = len(new_items)
+            self.gallery_has_more = False
+            self.gallery_offset += len(new_items)
 
-        for itm in items:
+        self.gallery_items.extend(new_items)
+
+        for itm in new_items:
             p_id = itm.get("id")
             name = itm.get("name", "Media")
             is_video = itm.get("type") == "video"
             dur_ms = itm.get("duration", 0)
             size_mb = itm.get("size", 0) / (1024 * 1024)
 
-            # Format clean, truncated name so grid layout remains perfectly proportioned
+            # Format clean truncated name
             clean_name = name
             if len(clean_name) > 16:
                 base, ext = os.path.splitext(clean_name)
@@ -1352,21 +1505,46 @@ class ZeroExplorerModule(BaseModule):
 
             text = f"{clean_name}\n{badge_str}"
 
-            list_item = QListWidgetItem(text)
+            # Always initialize with placeholder so item sizeHint is honored and doesn't collapse
+            placeholder = self._video_placeholder if is_video else self._image_placeholder
+            list_item = QListWidgetItem(placeholder, text)
+            list_item.setSizeHint(QSize(130, 168))
             list_item.setData(Qt.ItemDataRole.UserRole, itm)
             list_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.gallery_list.addItem(list_item)
             if p_id is not None:
                 self._gallery_item_map[p_id] = list_item
 
-        if items:
-            self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port, items)
-            self._thumb_queue_worker.thumb_ready.connect(self._on_thumb_ready)
-            self._thumb_queue_worker.start()
+        # Update counter and Load More visibility
+        total_str = f"{self.gallery_total:,}" if self.gallery_total > 0 else "0"
+        shown_str = f"{len(self.gallery_items):,}"
+        if self.gallery_has_more:
+            self.lbl_gallery_count.setText(f"Showing {shown_str} of {total_str} media items (scroll down to load more)")
+            self.btn_load_more.setVisible(True)
+        else:
+            self.lbl_gallery_count.setText(f"All {shown_str} media items loaded")
+            self.btn_load_more.setVisible(False)
+
+        # Queue thumbnails
+        if new_items and self._thumb_queue_worker:
+            self._thumb_queue_worker.add_items(new_items)
+
+    def _on_gallery_scroll(self, value: int):
+        sb = self.gallery_list.verticalScrollBar()
+        if sb.maximum() > 0 and value >= int(sb.maximum() * 0.85):
+            if self.gallery_has_more and not self.is_loading_more_media:
+                self._load_next_gallery_page()
+
+    def _load_next_gallery_page(self):
+        if self.is_loading_more_media or not self.gallery_has_more:
+            return
+        self.is_loading_more_media = True
+        self.lbl_gallery_count.setText(f"Loading more media ({len(self.gallery_items):,} of {self.gallery_total:,})...")
+        self.fetch_media(self.active_media_filter, self.active_album_filter, is_append=True)
 
     def _on_thumb_ready(self, photo_id: int, pixmap: QPixmap):
         itm = self._gallery_item_map.get(photo_id)
-        if itm:
+        if itm and not pixmap.isNull():
             itm.setIcon(QIcon(pixmap))
 
     def fetch_files(self, path: str):
@@ -1517,10 +1695,16 @@ class ZeroExplorerModule(BaseModule):
             name = item_data.get("name", "Media")
 
             if is_video:
-                stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
-                dur_ms = item_data.get("duration", 0)
-                dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
-                dlg.exec()
+                if self._thumb_queue_worker:
+                    self._thumb_queue_worker.set_paused(True)
+                try:
+                    stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
+                    dur_ms = item_data.get("duration", 0)
+                    dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
+                    dlg.exec()
+                finally:
+                    if self._thumb_queue_worker:
+                        self._thumb_queue_worker.set_paused(False)
             else:
                 # Find index in current gallery photo list
                 photos_only = [m for m in self.gallery_items if m.get("type") == "image"]
@@ -1545,10 +1729,16 @@ class ZeroExplorerModule(BaseModule):
             name = file_data.get("name", "")
 
             if cat == "video":
-                encoded = urllib.parse.quote(path)
-                stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}&download=false"
-                dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
-                dlg.exec()
+                if self._thumb_queue_worker:
+                    self._thumb_queue_worker.set_paused(True)
+                try:
+                    encoded = urllib.parse.quote(path)
+                    stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}&download=false"
+                    dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
+                    dlg.exec()
+                finally:
+                    if self._thumb_queue_worker:
+                        self._thumb_queue_worker.set_paused(False)
             elif cat == "image":
                 encoded = urllib.parse.quote(path)
                 img_list = [{"id": 0, "name": name, "type": "image"}]
