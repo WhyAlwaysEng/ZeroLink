@@ -46,6 +46,22 @@ class AdbManager:
     def is_available(self) -> bool:
         return self.adb_path is not None and os.path.isfile(self.adb_path)
 
+    def is_wireless_device(self, serial: str) -> bool:
+        """Returns True if the ADB device serial indicates a Wireless Debugging connection over Wi-Fi."""
+        return "._tcp" in serial or ":" in serial or serial.startswith("adb-")
+
+    def get_connection_type(self) -> str:
+        """Returns 'USB', 'WIRELESS_ADB', or 'NONE'."""
+        devices = self.get_devices()
+        if not devices:
+            return "NONE"
+        for serial, state in devices:
+            if state == "device":
+                if self.is_wireless_device(serial):
+                    return "WIRELESS_ADB"
+                return "USB"
+        return "NONE"
+
     def get_devices(self) -> List[Tuple[str, str]]:
         """Returns list of (serial_id, state) e.g. [('device_serial', 'device')]."""
         if not self.is_available():

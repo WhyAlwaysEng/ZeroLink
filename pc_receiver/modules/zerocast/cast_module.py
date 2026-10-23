@@ -568,12 +568,19 @@ class ZeroCastModule(BaseModule):
             self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
             return
 
+        conn_type = self.adb_manager.get_connection_type()
         devs = self.adb_manager.get_devices()
         if devs:
             dev_id = devs[0][0]
-            short_id = dev_id if len(dev_id) <= 12 else (dev_id[:10] + "..")
-            self.usb_pill.setText(f"USB: {short_id}")
-            self.usb_pill.setStyleSheet("color: #FFFFFF; background: #141414; border: 1px solid #333333; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+            if conn_type == "WIRELESS_ADB":
+                self.usb_pill.setText("⚡ ADB: Wireless Wi-Fi (No Cable)")
+                self.usb_pill.setToolTip("Connected via Wireless Debugging over Wi-Fi. Real USB cable is not plugged in.")
+                self.usb_pill.setStyleSheet("color: #F59E0B; background: #2A1A05; border: 1px solid #D97706; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+            else:
+                short_id = dev_id if len(dev_id) <= 12 else (dev_id[:10] + "..")
+                self.usb_pill.setText(f"⚡ USB Cable: {short_id}")
+                self.usb_pill.setToolTip("Connected via physical USB cable (High-Speed ADB).")
+                self.usb_pill.setStyleSheet("color: #38BDF8; background: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         else:
             self.usb_pill.setText("USB: Unplugged")
             self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
@@ -866,16 +873,27 @@ class ZeroCastModule(BaseModule):
     def _on_client_connected(self, client_info: str):
         self.is_audio_only_stream = False
         client_ip = client_info.split(":")[0].strip()
-        is_usb = client_ip in ("127.0.0.1", "localhost", "::1")
-        mode_desc = "⚡ USB CABLE" if is_usb else "📡 WI-FI LAN"
+        is_loopback = client_ip in ("127.0.0.1", "localhost", "::1")
+        conn_type = self.adb_manager.get_connection_type() if is_loopback else "WIFI"
+
+        if is_loopback and conn_type == "WIRELESS_ADB":
+            mode_desc = "⚡ WIRELESS ADB (Wi-Fi Tunnel • Capped ~20 Mbps)"
+            badge_text = "● LIVE: ⚡ WIRELESS ADB (Wi-Fi)"
+            badge_style = "color: #F59E0B; background-color: #2A1A05; border: 1px solid #D97706; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+        elif is_loopback and conn_type == "USB":
+            mode_desc = "⚡ PHYSICAL USB CABLE"
+            badge_text = "● LIVE: ⚡ USB CABLE"
+            badge_style = "color: #38BDF8; background-color: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+        else:
+            mode_desc = f"📡 WI-FI LAN ({client_ip})"
+            badge_text = "● LIVE: 📡 WI-FI LAN"
+            badge_style = "color: #34D399; background-color: #064E3B; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+
         if self.canvas:
             self.canvas.connection_mode = mode_desc
         if self.status_pill:
-            self.status_pill.setText(f"● LIVE: {mode_desc}")
-            if is_usb:
-                self.status_pill.setStyleSheet("color: #38BDF8; background-color: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
-            else:
-                self.status_pill.setStyleSheet("color: #34D399; background-color: #064E3B; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
+            self.status_pill.setText(badge_text)
+            self.status_pill.setStyleSheet(badge_style)
         if self.log_label:
             self.log_label.setText(f"Connected: {client_info} [{mode_desc}]")
         self.telemetry.reset()

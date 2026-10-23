@@ -90,7 +90,7 @@ object ZeroLinkConfig {
 
     fun getCastStrictCbr(context: Context): Boolean {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        return sp.getBoolean(KEY_CAST_STRICT_CBR, true) // Default true for hard ceiling
+        return sp.getBoolean(KEY_CAST_STRICT_CBR, false)
     }
 
     fun setCastStrictCbr(context: Context, enabled: Boolean) {

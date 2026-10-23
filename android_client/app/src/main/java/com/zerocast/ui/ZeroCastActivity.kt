@@ -30,6 +30,8 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Button
 import android.view.View
+import android.content.IntentFilter
+import android.os.BatteryManager
 
 class ZeroCastActivity : AppCompatActivity() {
 
@@ -218,14 +220,32 @@ class ZeroCastActivity : AppCompatActivity() {
         binding.spinnerBitrate.setSelection(4)
     }
 
+    private fun isUsbCablePluggedIn(): Boolean {
+        return try {
+            val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val batteryStatus: Intent? = registerReceiver(null, ifilter)
+            val chargePlug = batteryStatus?.getIntExtra(BatteryManager.EXTRA_PLUGGED, -1) ?: -1
+            chargePlug == BatteryManager.BATTERY_PLUGGED_USB
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     private fun updateConnectionHint() {
         val ip = binding.etServerIp.text.toString().trim()
         val isUsb = ip == "127.0.0.1" || ip == "localhost"
+        val hasPhysicalCable = isUsbCablePluggedIn()
+
         if (isUsb) {
-            binding.tvConnectionHint.text = "⚡ Connection Mode: USB Cable (Ultra-Low Latency via ADB 127.0.0.1)"
-            binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
+            if (hasPhysicalCable) {
+                binding.tvConnectionHint.text = "⚡ Connection Mode: Physical USB Cable (High-Speed ADB 127.0.0.1)"
+                binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
+            } else {
+                binding.tvConnectionHint.text = "⚠️ Connection Mode: Wireless ADB over Wi-Fi (No physical cable detected • Capped ~20 Mbps • Plug in USB cable for 50-80 Mbps)"
+                binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
+            }
         } else if (ip.isNotEmpty()) {
-            binding.tvConnectionHint.text = "📡 Connection Mode: Wi-Fi LAN (Local Network: $ip)"
+            binding.tvConnectionHint.text = "📡 Connection Mode: Direct Wi-Fi LAN (Local Network: $ip)"
             binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#059669"))
         } else {
             binding.tvConnectionHint.text = "⚠️ Please enter PC IP or tap 'USB Cable'"
@@ -427,12 +447,22 @@ class ZeroCastActivity : AppCompatActivity() {
     private fun updateUiState(streaming: Boolean) {
         isStreaming = streaming
         val host = binding.etServerIp.text.toString().trim()
-        val isUsb = host == "127.0.0.1" || host == "localhost"
+        val isLoopback = host == "127.0.0.1" || host == "localhost"
+        val hasPhysicalCable = isUsbCablePluggedIn()
+
         if (streaming) {
             binding.btnToggleStream.text = "STOP STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.status_red))
-            binding.tvStatusBadge.text = if (isUsb) "● LIVE (⚡ USB)" else "● LIVE (📡 Wi-Fi)"
-            binding.tvMetricHint.text = if (isUsb) "⚡ Live via USB Cable (Ultra-Low Latency ADB)" else "📡 Live via Wi-Fi LAN ($host)"
+            if (isLoopback && hasPhysicalCable) {
+                binding.tvStatusBadge.text = "● LIVE (⚡ USB)"
+                binding.tvMetricHint.text = "⚡ Live via Physical USB Cable (High-Speed ADB)"
+            } else if (isLoopback) {
+                binding.tvStatusBadge.text = "● LIVE (⚡ ADB Wi-Fi)"
+                binding.tvMetricHint.text = "⚠️ Live via Wireless ADB over Wi-Fi (Capped ~20 Mbps)"
+            } else {
+                binding.tvStatusBadge.text = "● LIVE (📡 Wi-Fi)"
+                binding.tvMetricHint.text = "📡 Live via Direct Wi-Fi LAN ($host)"
+            }
         } else {
             binding.btnToggleStream.text = "START STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))

@@ -326,8 +326,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:checked="true"
-                    android:text="Strict Bitrate Cap (CBR • Hard Ceiling)"
+                    android:checked="false"
+                    android:text="Force CBR Bitrate Cap (Experimental)"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -335,7 +335,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="Prevents bitrate spikes from exceeding the chosen limit during heavy screen motion."
+                    android:text="Default VBR mode provides butter-smooth hardware encoding without frame drops. Enable only if strict network bandwidth capping is required."
                     android:textColor="@color/text_secondary"
                     android:textSize="10sp" />
 

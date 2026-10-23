@@ -29,8 +29,8 @@ class StreamSender(
         fun onCongestionChanged(isCongested: Boolean) {}
     }
 
-    // Queue capacity of 36 allows smooth interleaved video & audio packets without blocking AudioRecord
-    private val frameQueue = ArrayBlockingQueue<FramePacket>(36)
+    // Queue capacity of 120 allows high-bitrate streaming without dropping frames during I-frame bursts
+    private val frameQueue = ArrayBlockingQueue<FramePacket>(120)
     private val isRunning = AtomicBoolean(false)
     private var socket: Socket? = null
     private var outputStream: DataOutputStream? = null
@@ -45,11 +45,11 @@ class StreamSender(
                 Log.d(TAG, "Connecting to PC server at $host:$port...")
                 val sock = Socket()
                 sock.tcpNoDelay = true
-                sock.sendBufferSize = 128 * 1024
+                sock.sendBufferSize = 1024 * 1024 // 1 MB high-throughput TCP send buffer
                 sock.connect(InetSocketAddress(host, port), 4000)
 
                 socket = sock
-                outputStream = DataOutputStream(sock.getOutputStream())
+                outputStream = DataOutputStream(java.io.BufferedOutputStream(sock.getOutputStream(), 64 * 1024))
                 inputStream = DataInputStream(sock.getInputStream())
 
                 Log.d(TAG, "Connected successfully to $host:$port")
