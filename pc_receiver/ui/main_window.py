@@ -266,7 +266,7 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_pad)
         side_layout.addWidget(self.btn_nav_pad)
 
-        self.btn_nav_connections = NavButton("Connections", "⚯")
+        self.btn_nav_connections = NavButton("Connections", "◈")
         self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)

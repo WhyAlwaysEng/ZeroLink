@@ -224,18 +224,18 @@ class ZeroCamModule(BaseModule):
         c_layout = QVBoxLayout(ctrl_card)
         c_layout.setSpacing(12)
 
-        c_title = QLabel("📱 Mobile Camera Controls")
+        c_title = QLabel("◈ Mobile Camera Controls")
         c_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         c_title.setStyleSheet("color: #111827;")
         c_layout.addWidget(c_title)
 
         btn_row = QHBoxLayout()
-        btn_switch = QPushButton("🔄 Switch Front / Back")
+        btn_switch = QPushButton("↻ Switch Front / Back")
         btn_switch.setStyleSheet("padding: 6px 12px; font-size: 11px; font-weight: 600;")
         btn_switch.clicked.connect(lambda: self.server.send_control_command({"action": "SWITCH_CAMERA"}))
         btn_row.addWidget(btn_switch)
 
-        btn_torch = QPushButton("💡 Toggle Torch / Flash")
+        btn_torch = QPushButton("◈ Toggle Torch / Flash")
         btn_torch.setStyleSheet("padding: 6px 12px; font-size: 11px; font-weight: 600;")
         btn_torch.clicked.connect(lambda: self.server.send_control_command({"action": "TOGGLE_TORCH"}))
         btn_row.addWidget(btn_torch)
@@ -313,7 +313,7 @@ class ZeroCamModule(BaseModule):
                 lbl_usb_status.setText("USB Tunnel Active! On your phone, connect to 127.0.0.1.")
                 lbl_usb_status.setStyleSheet("color: #111827; font-size: 10px; font-weight: bold;")
             else:
-                lbl_usb_status.setText(f"❌ {msg}")
+                lbl_usb_status.setText(f"{msg}")
                 lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px;")
 
         btn_usb_tunnel.clicked.connect(_on_usb_click)
@@ -327,12 +327,12 @@ class ZeroCamModule(BaseModule):
         a_layout = QVBoxLayout(adj_card)
         a_layout.setSpacing(10)
 
-        a_title = QLabel("🎨 Video Adjustments & Enhancer")
+        a_title = QLabel("◈ Video Adjustments & Enhancer")
         a_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         a_title.setStyleSheet("color: #111827;")
         a_layout.addWidget(a_title)
 
-        chk_mirror = QCheckBox("🪞 Mirror Camera (Flip Horizontal)")
+        chk_mirror = QCheckBox("Mirror Camera (Flip Horizontal)")
         chk_mirror.setChecked(self.server.flip_horizontal)
         chk_mirror.toggled.connect(lambda checked: setattr(self.server, "flip_horizontal", checked))
         a_layout.addWidget(chk_mirror)
@@ -345,7 +345,7 @@ class ZeroCamModule(BaseModule):
         # Orientation / Rotation Control
         rot_row = QHBoxLayout()
         rot_row.addWidget(QLabel("Orientation:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
-        btn_rotate = QPushButton("🔄 Rotate +90°")
+        btn_rotate = QPushButton("↻ Rotate +90°")
         btn_rotate.setStyleSheet("padding: 5px 12px; font-size: 11px; font-weight: 600;")
         lbl_rot_status = QLabel("Auto (0°)")
         lbl_rot_status.setStyleSheet("color: #6B7280; font-size: 10px;")
@@ -409,14 +409,14 @@ class ZeroCamModule(BaseModule):
         m_layout = QHBoxLayout(m_card)
         m_layout.setSpacing(12)
 
-        self.lbl_stat_fps = QLabel("⚡ 0 FPS")
+        self.lbl_stat_fps = QLabel("0 FPS")
         self.lbl_stat_fps.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_fps.setStyleSheet("color: #059669;")
+        self.lbl_stat_fps.setStyleSheet("color: #111827;")
         m_layout.addWidget(self.lbl_stat_fps)
 
-        self.lbl_stat_bitrate = QLabel("📊 0.0 Mbps")
+        self.lbl_stat_bitrate = QLabel("0.0 Mbps")
         self.lbl_stat_bitrate.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_bitrate.setStyleSheet("color: #7C3AED;")
+        self.lbl_stat_bitrate.setStyleSheet("color: #4B5563;")
         m_layout.addWidget(self.lbl_stat_bitrate)
         m_layout.addStretch()
         right_col.addWidget(m_card)
@@ -459,10 +459,10 @@ class ZeroCamModule(BaseModule):
                 self.btn_vcam_toggle.setText("Stop Virtual Webcam")
                 self.btn_vcam_toggle.setStyleSheet("background-color: #DC2626; color: #FFFFFF; border-radius: 6px; padding: 8px 14px; font-weight: bold;")
                 self.lbl_vcam_status.setText(f"● Active: Broadcasting {self.server._vcam_w}x{self.server._vcam_h} to Discord / OBS")
-                self.lbl_vcam_status.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
+                self.lbl_vcam_status.setStyleSheet("color: #111827; font-size: 11px; font-weight: bold;")
             else:
                 self.btn_vcam_toggle.setChecked(False)
-                self.lbl_vcam_status.setText("❌ Failed to initialize Virtual Camera driver.")
+                self.lbl_vcam_status.setText("Failed to initialize Virtual Camera driver.")
                 self.lbl_vcam_status.setStyleSheet("color: #DC2626; font-size: 11px;")
         else:
             self.server.stop_virtual_camera()
@@ -479,7 +479,7 @@ class ZeroCamModule(BaseModule):
         fname = f"snapshot_{int(time.time())}.jpg"
         fpath = os.path.join(pic_dir, fname)
         self._last_qimage.save(fpath, "JPG", 95)
-        self.lbl_snap_status.setText(f"✅ Saved to {fname}")
+        self.lbl_snap_status.setText(f"Saved to {fname}")
 
     def _toggle_power(self):
         if self.is_active:
@@ -491,24 +491,21 @@ class ZeroCamModule(BaseModule):
 
     def _on_stats_updated(self, fps: float, bitrate_mbps: float):
         if self.lbl_stat_fps:
-            self.lbl_stat_fps.setText(f"⚡ {fps:.0f} FPS")
+            self.lbl_stat_fps.setText(f"{fps:.0f} FPS")
         if self.lbl_stat_bitrate:
-            self.lbl_stat_bitrate.setText(f"📊 {bitrate_mbps:.1f} Mbps")
+            self.lbl_stat_bitrate.setText(f"{bitrate_mbps:.1f} Mbps")
 
     def _on_client_connected(self, ip: str, model: str):
         if self.client_pill:
             is_usb = ip.strip() in ("127.0.0.1", "localhost", "::1")
-            mode = "⚡ USB" if is_usb else "📡 Wi-Fi"
-            self.client_pill.setText(f"📱 Cam: Connected via {mode} ({model})")
-            if is_usb:
-                self.client_pill.setStyleSheet("color: #0284C7; background: #F0F9FF; border: 1px solid #BAE6FD; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
-            else:
-                self.client_pill.setStyleSheet("color: #059669; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            mode = "⌁ USB" if is_usb else "◫ Wi-Fi"
+            self.client_pill.setText(f"◎ Cam: Connected via {mode} ({model})")
+            self.client_pill.setStyleSheet("color: #111827; background: #F3F4F6; border: 1px solid #D1D5DB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
 
     def _on_client_disconnected(self, ip: str):
         if self.client_pill:
-            self.client_pill.setText("📱 Camera: Offline")
+            self.client_pill.setText("◎ Camera: Offline")
             self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         if self.preview_lbl:
             self.preview_lbl.clear()
-            self.preview_lbl.setText("📷 Waiting for Camera Stream...")
+            self.preview_lbl.setText("◎ Waiting for Camera Stream...")

@@ -248,7 +248,7 @@ class ZeroClipModule(BaseModule):
         card_l.setSpacing(10)
 
         card_header = QHBoxLayout()
-        title_lbl = QLabel("📋 Active Clipboard")
+        title_lbl = QLabel("⎘ Active Clipboard")
         title_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         title_lbl.setStyleSheet("color: #111827; border: none;")
         card_header.addWidget(title_lbl)
@@ -334,7 +334,7 @@ class ZeroClipModule(BaseModule):
         if self.client_pill:
             color = "#111827" if count > 0 else "#6B7280"
             weight = "700" if count > 0 else "400"
-            self.client_pill.setText(f"📱 Mobile: {count} Connected")
+            self.client_pill.setText(f"⎘ Mobile: {count} Connected")
             self.client_pill.setStyleSheet(f"color: {color}; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: {weight};")
 
     def _on_clip_received(self, text: str, source: str, timestamp: float):

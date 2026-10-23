@@ -47,8 +47,9 @@ class DeviceSummaryCard(QFrame):
         top_row = QHBoxLayout()
         top_row.setSpacing(10)
 
-        icon_lbl = QLabel("📱")
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 15))
+        icon_lbl = QLabel("◈")
+        icon_lbl.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        icon_lbl.setStyleSheet("color: #111827;")
         top_row.addWidget(icon_lbl)
 
         model_name = device_data.get("model", "Android Device")
@@ -59,7 +60,7 @@ class DeviceSummaryCard(QFrame):
 
         ip = device_data.get("ip", "127.0.0.1")
         is_usb = ip in ("127.0.0.1", "localhost")
-        tunnel_badge = QLabel("⚡ USB ADB" if is_usb else "📶 Wi-Fi LAN")
+        tunnel_badge = QLabel("⌁ USB ADB" if is_usb else "◫ Wi-Fi LAN")
         tunnel_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         if is_usb:
             tunnel_badge.setStyleSheet("""
@@ -68,7 +69,8 @@ class DeviceSummaryCard(QFrame):
             """)
         else:
             tunnel_badge.setStyleSheet("""
-                background-color: #E0E7FF; color: #3730A3;
+                background-color: #F3F4F6; color: #111827;
+                border: 1px solid #D1D5DB;
                 padding: 3px 8px; border-radius: 4px;
             """)
         top_row.addWidget(tunnel_badge)
@@ -110,7 +112,7 @@ class DeviceSummaryCard(QFrame):
 
         modules = device_data.get("modules", [])
         for mod in modules:
-            m_badge = QLabel(f"{mod.get('glyph', '🔌')} {mod.get('name', 'Module')}{(' (' + mod.get('extra', '') + ')') if mod.get('extra') else ''}")
+            m_badge = QLabel(f"{mod.get('glyph', '◈')} {mod.get('name', 'Module')}{(' (' + mod.get('extra', '') + ')') if mod.get('extra') else ''}")
             m_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
             m_badge.setStyleSheet("""
                 background-color: #F3F4F6;
@@ -152,8 +154,9 @@ class ClientRowWidget(QFrame):
         layout.setSpacing(14)
 
         # Device Icon
-        icon_lbl = QLabel("📱")
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 16))
+        icon_lbl = QLabel("◈")
+        icon_lbl.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
+        icon_lbl.setStyleSheet("color: #111827;")
         layout.addWidget(icon_lbl)
 
         # Device Info
@@ -171,7 +174,7 @@ class ClientRowWidget(QFrame):
 
         ip = client_info.get("ip", "127.0.0.1")
         is_usb = ip in ("127.0.0.1", "localhost")
-        tunnel_badge = QLabel("⚡ USB ADB" if is_usb else "📶 Wi-Fi LAN")
+        tunnel_badge = QLabel("⌁ USB ADB" if is_usb else "◫ Wi-Fi LAN")
         tunnel_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
         if is_usb:
             tunnel_badge.setStyleSheet("""
@@ -180,7 +183,8 @@ class ClientRowWidget(QFrame):
             """)
         else:
             tunnel_badge.setStyleSheet("""
-                background-color: #E0E7FF; color: #3730A3;
+                background-color: #F3F4F6; color: #111827;
+                border: 1px solid #D1D5DB;
                 padding: 2px 6px; border-radius: 4px;
             """)
         name_row.addWidget(tunnel_badge)
@@ -202,22 +206,22 @@ class ClientRowWidget(QFrame):
 
         # Streaming Stats if present (e.g. ZeroCast)
         if "latency" in client_info:
-            lbl_lat = QLabel(f"⚡ {client_info['latency']}")
-            lbl_lat.setStyleSheet("color: #2563EB; font-size: 11px; font-weight: 600;")
+            lbl_lat = QLabel(f"⌁ {client_info['latency']}")
+            lbl_lat.setStyleSheet("color: #111827; font-size: 11px; font-weight: 600;")
             details_row.addWidget(lbl_lat)
 
         if "bitrate" in client_info:
-            lbl_br = QLabel(f"📊 {client_info['bitrate']}")
-            lbl_br.setStyleSheet("color: #7C3AED; font-size: 11px; font-weight: 600;")
+            lbl_br = QLabel(f"◈ {client_info['bitrate']}")
+            lbl_br.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 600;")
             details_row.addWidget(lbl_br)
 
         if "fps" in client_info:
-            lbl_fps = QLabel(f"🎮 {client_info['fps']}")
-            lbl_fps.setStyleSheet("color: #059669; font-size: 11px; font-weight: 600;")
+            lbl_fps = QLabel(f"▣ {client_info['fps']}")
+            lbl_fps.setStyleSheet("color: #111827; font-size: 11px; font-weight: 600;")
             details_row.addWidget(lbl_fps)
 
         self.lbl_duration = QLabel("Duration: 00m 00s")
-        self.lbl_duration.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
+        self.lbl_duration.setStyleSheet("color: #111827; font-size: 11px; font-weight: bold;")
         details_row.addWidget(self.lbl_duration)
         details_row.addStretch()
         info_col.addLayout(details_row)
@@ -400,7 +404,7 @@ class ConnectionsView(QWidget):
         header_col.addWidget(subtitle)
         header_row.addLayout(header_col, 1)
 
-        btn_refresh = QPushButton("🔄 Refresh")
+        btn_refresh = QPushButton("↻ Refresh")
         btn_refresh.setCursor(Qt.CursorShape.PointingHandCursor)
         btn_refresh.setStyleSheet("""
             QPushButton {
@@ -432,11 +436,11 @@ class ConnectionsView(QWidget):
         self.lbl_total_clients.setStyleSheet("color: #111827;")
         summary_layout.addWidget(self.lbl_total_clients)
 
-        self.lbl_usb_clients = QLabel("⚡ USB ADB: 0")
+        self.lbl_usb_clients = QLabel("⌁ USB ADB: 0")
         self.lbl_usb_clients.setStyleSheet("color: #4B5563; font-size: 11px;")
         summary_layout.addWidget(self.lbl_usb_clients)
 
-        self.lbl_wifi_clients = QLabel("📶 Wi-Fi LAN: 0")
+        self.lbl_wifi_clients = QLabel("◫ Wi-Fi LAN: 0")
         self.lbl_wifi_clients.setStyleSheet("color: #4B5563; font-size: 11px;")
         summary_layout.addWidget(self.lbl_wifi_clients)
 
@@ -484,7 +488,7 @@ class ConnectionsView(QWidget):
         cast_clients = self.mod_zerocast.server.get_connected_clients() if hasattr(self.mod_zerocast, "server") else []
         for c in cast_clients:
             c["module"] = "ZeroCast"
-            c["glyph"] = "📺"
+            c["glyph"] = "⊡"
             if hasattr(self.mod_zerocast, "stats"):
                 c["fps"] = f"{self.mod_zerocast.stats.fps:.0f} FPS"
                 c["latency"] = f"{self.mod_zerocast.stats.latency_ms:.0f} ms"
@@ -493,25 +497,25 @@ class ConnectionsView(QWidget):
         mix_clients = self.mod_zeromix.service.get_connected_clients() if hasattr(self.mod_zeromix, "service") else []
         for c in mix_clients:
             c["module"] = "ZeroMix"
-            c["glyph"] = "🎛️"
+            c["glyph"] = "⧉"
             c["mode"] = "Mixer & Remote"
 
         clip_clients = self.mod_zeroclip.service.get_connected_clients() if hasattr(self.mod_zeroclip, "service") else []
         for c in clip_clients:
             c["module"] = "ZeroClip"
-            c["glyph"] = "📋"
+            c["glyph"] = "⎘"
             c["mode"] = "Clipboard Sync"
 
         drop_clients = self.mod_zerodrop.service.get_connected_clients() if hasattr(self.mod_zerodrop, "service") else []
         for c in drop_clients:
             c["module"] = "ZeroDrop"
-            c["glyph"] = "📁"
+            c["glyph"] = "⇄"
             c["mode"] = "File Drop"
 
         display_clients = self.mod_zerodisplay.server.get_connected_clients() if (self.mod_zerodisplay and hasattr(self.mod_zerodisplay, "server")) else []
         for c in display_clients:
             c["module"] = "ZeroDisplay"
-            c["glyph"] = "🖥️"
+            c["glyph"] = "▣"
             if hasattr(self.mod_zerodisplay, "server"):
                 c["fps"] = f"{self.mod_zerodisplay.server.fps:.0f} FPS"
                 c["bitrate"] = f"{self.mod_zerodisplay.server.bitrate_mbps:.1f} Mbps"
@@ -519,7 +523,7 @@ class ConnectionsView(QWidget):
         cam_clients = self.mod_zerocam.server.get_connected_clients() if (self.mod_zerocam and hasattr(self.mod_zerocam, "server")) else []
         for c in cam_clients:
             c["module"] = "ZeroCam"
-            c["glyph"] = "📷"
+            c["glyph"] = "◎"
             if hasattr(self.mod_zerocam, "server"):
                 c["fps"] = f"{self.mod_zerocam.server.fps:.0f} FPS"
                 c["bitrate"] = f"{self.mod_zerocam.server.bitrate_mbps:.1f} Mbps"
@@ -527,7 +531,7 @@ class ConnectionsView(QWidget):
         pad_clients = self.mod_zeropad.server.get_connected_clients() if (self.mod_zeropad and hasattr(self.mod_zeropad, "server")) else []
         for c in pad_clients:
             c["module"] = "ZeroPad"
-            c["glyph"] = "🎮"
+            c["glyph"] = "▦"
             c["mode"] = "Macro Remote"
 
         all_clients = cast_clients + mix_clients + clip_clients + drop_clients + display_clients + cam_clients + pad_clients
@@ -536,8 +540,8 @@ class ConnectionsView(QWidget):
         wifi_count = total - usb_count
 
         self.lbl_total_clients.setText(f"Total Connections: {total}")
-        self.lbl_usb_clients.setText(f"⚡ USB ADB: {usb_count}")
-        self.lbl_wifi_clients.setText(f"📶 Wi-Fi LAN: {wifi_count}")
+        self.lbl_usb_clients.setText(f"⌁ USB ADB: {usb_count}")
+        self.lbl_wifi_clients.setText(f"◫ Wi-Fi LAN: {wifi_count}")
 
         # Count active modules
         services_list = [self.mod_zerocast, self.mod_zeromix, self.mod_zeroclip, self.mod_zerodrop]
@@ -572,12 +576,12 @@ class ConnectionsView(QWidget):
             extra = c.get("fps") or c.get("mode") or ""
             devices_map[ip]["modules"].append({
                 "name": c.get("module", "Module"),
-                "glyph": c.get("glyph", "🔌"),
+                "glyph": c.get("glyph", "◈"),
                 "extra": extra
             })
 
         if devices_map:
-            sec_dev_lbl = QLabel("📱 ACTIVE DEVICES OVERVIEW (PHYSICAL PHONES / TABLETS)")
+            sec_dev_lbl = QLabel("◈ ACTIVE DEVICES OVERVIEW (PHYSICAL PHONES / TABLETS)")
             sec_dev_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
             sec_dev_lbl.setStyleSheet("color: #4B5563; letter-spacing: 0.5px;")
             self.cards_layout.addWidget(sec_dev_lbl)
@@ -587,7 +591,7 @@ class ConnectionsView(QWidget):
                 self.cards_layout.addWidget(card)
 
         # ==================== Section 2: Module Breakdown ====================
-        sec_mod_lbl = QLabel("🔌 MODULE CONNECTIONS & GRANULAR CONTROLS")
+        sec_mod_lbl = QLabel("◈ MODULE CONNECTIONS & GRANULAR CONTROLS")
         sec_mod_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         sec_mod_lbl.setStyleSheet("color: #4B5563; letter-spacing: 0.5px; margin-top: 8px;")
         self.cards_layout.addWidget(sec_mod_lbl)
@@ -595,7 +599,7 @@ class ConnectionsView(QWidget):
         # Add ZeroCast card
         card_cast = ModuleConnectionsCard(
             title="ZeroCast",
-            glyph="📺",
+            glyph="⊡",
             port=self.mod_zerocast.port,
             is_active=self.mod_zerocast.is_active,
             clients=cast_clients,
@@ -608,7 +612,7 @@ class ConnectionsView(QWidget):
         # Add ZeroMix card
         card_mix = ModuleConnectionsCard(
             title="ZeroMix (Audio Mixer & Remote)",
-            glyph="🎛️",
+            glyph="⧉",
             port=self.mod_zeromix.port,
             is_active=self.mod_zeromix.is_active,
             clients=mix_clients,
@@ -621,7 +625,7 @@ class ConnectionsView(QWidget):
         # Add ZeroClip card
         card_clip = ModuleConnectionsCard(
             title="ZeroClip (Clipboard Sync)",
-            glyph="📋",
+            glyph="⎘",
             port=self.mod_zeroclip.port,
             is_active=self.mod_zeroclip.is_active,
             clients=clip_clients,
@@ -634,7 +638,7 @@ class ConnectionsView(QWidget):
         # Add ZeroDrop card
         card_drop = ModuleConnectionsCard(
             title="ZeroDrop (File Drop)",
-            glyph="📁",
+            glyph="⇄",
             port=self.mod_zerodrop.port,
             is_active=self.mod_zerodrop.is_active,
             clients=drop_clients,
@@ -648,7 +652,7 @@ class ConnectionsView(QWidget):
         if self.mod_zerodisplay:
             card_display = ModuleConnectionsCard(
                 title="ZeroDisplay (Extended 2nd Monitor)",
-                glyph="🖥️",
+                glyph="▣",
                 port=self.mod_zerodisplay.port,
                 is_active=self.mod_zerodisplay.is_active,
                 clients=display_clients,
@@ -661,8 +665,8 @@ class ConnectionsView(QWidget):
         # Add ZeroCam card if available
         if self.mod_zerocam:
             card_cam = ModuleConnectionsCard(
-                title="ZeroCam (Wireless 4K Webcam)",
-                glyph="📷",
+                title="ZeroCam (Wireless Webcam)",
+                glyph="◎",
                 port=self.mod_zerocam.port,
                 is_active=self.mod_zerocam.is_active,
                 clients=cam_clients,
@@ -676,7 +680,7 @@ class ConnectionsView(QWidget):
         if self.mod_zeropad:
             card_pad = ModuleConnectionsCard(
                 title="ZeroPad (Media & Macro Remote)",
-                glyph="🎮",
+                glyph="▦",
                 port=self.mod_zeropad.port,
                 is_active=self.mod_zeropad.is_active,
                 clients=pad_clients,

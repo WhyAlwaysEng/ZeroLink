@@ -870,17 +870,17 @@ class ZeroCastModule(BaseModule):
         conn_type = self.adb_manager.get_connection_type() if is_loopback else "WIFI"
 
         if is_loopback and conn_type == "WIRELESS_ADB":
-            mode_desc = "⚡ WIRELESS ADB (Wi-Fi Tunnel • Capped ~20 Mbps)"
-            badge_text = "● LIVE: ⚡ WIRELESS ADB (Wi-Fi)"
-            badge_style = "color: #F59E0B; background-color: #2A1A05; border: 1px solid #D97706; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+            mode_desc = "⌁ WIRELESS ADB (Wi-Fi Tunnel • Capped ~20 Mbps)"
+            badge_text = "● LIVE: ⌁ WIRELESS ADB (Wi-Fi)"
+            badge_style = "color: #111827; background-color: #FEF3C7; border: 1px solid #FCD34D; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
         elif is_loopback and conn_type == "USB":
-            mode_desc = "⚡ PHYSICAL USB CABLE"
-            badge_text = "● LIVE: ⚡ USB CABLE"
-            badge_style = "color: #38BDF8; background-color: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+            mode_desc = "⌁ PHYSICAL USB CABLE"
+            badge_text = "● LIVE: ⌁ USB CABLE"
+            badge_style = "color: #FFFFFF; background-color: #111827; border: 1px solid #111827; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
         else:
-            mode_desc = f"📡 WI-FI LAN ({client_ip})"
-            badge_text = "● LIVE: 📡 WI-FI LAN"
-            badge_style = "color: #34D399; background-color: #064E3B; border: 1px solid #059669; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
+            mode_desc = f"◫ WI-FI LAN ({client_ip})"
+            badge_text = "● LIVE: ◫ WI-FI LAN"
+            badge_style = "color: #111827; background-color: #F3F4F6; border: 1px solid #D1D5DB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;"
 
         if self.canvas:
             self.canvas.connection_mode = mode_desc
