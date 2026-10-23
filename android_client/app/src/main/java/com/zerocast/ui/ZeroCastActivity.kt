@@ -90,6 +90,11 @@ class ZeroCastActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
+                Toast.makeText(this, "ZeroMix is currently casting audio. Stop ZeroMix cast first.", Toast.LENGTH_LONG).show()
+                updateUiState(false)
+                return@registerForActivityResult
+            }
             startScreenStreamService(result.resultCode, result.data!!)
         } else {
             Toast.makeText(this, "Screen capture permission denied", Toast.LENGTH_SHORT).show()
@@ -340,6 +345,10 @@ class ZeroCastActivity : AppCompatActivity() {
 
         binding.btnToggleStream.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+            if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
+                Toast.makeText(this, "ZeroMix is currently casting audio. Stop ZeroMix cast first.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (!isStreaming) {
                 startStreamFlow()
             } else {
@@ -479,12 +488,20 @@ class ZeroCastActivity : AppCompatActivity() {
     }
 
     private fun updateUiState(streaming: Boolean) {
-        isStreaming = streaming
+        val isAudioOnlyService = StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly
+        isStreaming = streaming && !isAudioOnlyService
         val host = binding.etServerIp.text.toString().trim()
         val isLoopback = host == "127.0.0.1" || host == "localhost"
         val hasPhysicalCable = isUsbCablePluggedIn()
 
-        if (streaming) {
+        if (isAudioOnlyService) {
+            binding.btnToggleStream.isEnabled = false
+            binding.btnToggleStream.text = "⛔ ZEROMIX AUDIO CAST ACTIVE"
+            binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.text_tertiary))
+            binding.tvStatusBadge.text = "● AUDIO CAST (ZEROMIX)"
+            binding.tvMetricHint.text = "ZeroMix is actively streaming phone audio. Stop ZeroMix to screen cast."
+        } else if (streaming) {
+            binding.btnToggleStream.isEnabled = true
             binding.btnToggleStream.text = "STOP STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.status_red))
             if (isLoopback && hasPhysicalCable) {
@@ -498,6 +515,7 @@ class ZeroCastActivity : AppCompatActivity() {
                 binding.tvMetricHint.text = "📡 Live via Direct Wi-Fi LAN ($host)"
             }
         } else {
+            binding.btnToggleStream.isEnabled = true
             binding.btnToggleStream.text = "START STREAMING"
             binding.btnToggleStream.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))
             binding.tvStatusBadge.text = "● READY"

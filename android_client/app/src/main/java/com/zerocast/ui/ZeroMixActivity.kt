@@ -49,6 +49,11 @@ class ZeroMixActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            if (StreamForegroundService.isStreaming && !StreamForegroundService.isAudioOnly) {
+                Toast.makeText(this, "ZeroCast is currently streaming screen & audio. Stop ZeroCast first.", Toast.LENGTH_LONG).show()
+                updateAudioCastUI()
+                return@registerForActivityResult
+            }
             startAudioOnlyService(result.resultCode, result.data!!)
         } else {
             Toast.makeText(this, "Audio cast permission cancelled", Toast.LENGTH_SHORT).show()
@@ -232,6 +237,8 @@ class ZeroMixActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
                 stopAudioOnlyService()
+            } else if (StreamForegroundService.isStreaming && !StreamForegroundService.isAudioOnly) {
+                Toast.makeText(this, "ZeroCast is currently streaming screen & audio. Stop ZeroCast first.", Toast.LENGTH_LONG).show()
             } else {
                 requestAudioCast()
             }
@@ -292,11 +299,19 @@ class ZeroMixActivity : AppCompatActivity() {
 
     private fun updateAudioCastUI() {
         if (StreamForegroundService.isStreaming && StreamForegroundService.isAudioOnly) {
+            binding.btnToggleAudioCast.isEnabled = true
             binding.btnToggleAudioCast.text = "⏹ Stop Cast"
             binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
             binding.tvAudioCastStatus.text = "● Streaming Phone Audio to PC Mixer (Eco Mode)"
             binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
+        } else if (StreamForegroundService.isStreaming && !StreamForegroundService.isAudioOnly) {
+            binding.btnToggleAudioCast.isEnabled = false
+            binding.btnToggleAudioCast.text = "⛔ ZeroCast Screen Active"
+            binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_tertiary))
+            binding.tvAudioCastStatus.text = "ZeroCast is streaming screen & audio. Stop ZeroCast first to use Audio Cast."
+            binding.tvAudioCastStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
         } else {
+            binding.btnToggleAudioCast.isEnabled = true
             binding.btnToggleAudioCast.text = "▶ Cast Audio"
             binding.btnToggleAudioCast.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
             binding.tvAudioCastStatus.text = "Eco Audio Stream • 0.05% GPU • Cool Phone"

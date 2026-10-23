@@ -127,6 +127,15 @@ class StreamForegroundService : LifecycleService() {
     }
 
     private fun handleStartAudioOnly(intent: Intent) {
+        if (isStreaming) {
+            Log.w(TAG, "Stream already active (audioOnly=$isAudioOnly). Ignoring ACTION_START_AUDIO_ONLY.")
+            mainHandler.post {
+                val msg = if (!isAudioOnly) "ZeroCast screen stream is active. Stop it first." else "Audio cast already running."
+                android.widget.Toast.makeText(applicationContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
@@ -232,6 +241,15 @@ class StreamForegroundService : LifecycleService() {
     }
 
     private fun handleStartScreen(intent: Intent) {
+        if (isStreaming) {
+            Log.w(TAG, "Stream already active (audioOnly=$isAudioOnly). Ignoring ACTION_START_SCREEN.")
+            mainHandler.post {
+                val msg = if (isAudioOnly) "ZeroMix audio cast is active. Stop it first." else "Screen cast already running."
+                android.widget.Toast.makeText(applicationContext, msg, android.widget.Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, Activity.RESULT_CANCELED)
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         val host = intent.getStringExtra(EXTRA_HOST) ?: "127.0.0.1"
