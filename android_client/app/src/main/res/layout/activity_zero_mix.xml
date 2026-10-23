@@ -227,6 +227,19 @@
                     android:text="Stream YouTube, Spotify, or game audio directly into PC ZeroMix without screen mirroring (battery saver &amp; no overheating)."
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnMixOledStandby"
+                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="40dp"
+                    android:layout_marginTop="10dp"
+                    android:text="🌙 OLED Black Standby (Zero Heat &amp; Power)"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-bold"
+                    app:cornerRadius="8dp"
+                    app:strokeColor="@color/surface_stroke" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

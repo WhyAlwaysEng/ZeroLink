@@ -81,7 +81,21 @@ class NetworkDiscovery(
             }
         }
 
-        // 3. Fast Parallel Subnet TCP Scanner (bypasses Wi-Fi router AP Isolation / UDP blocks)
+        // 3. Direct Hotspot Link Priority Probes (< 100ms discovery, zero router needed)
+        currentScope.launch {
+            if (isScanning.get()) {
+                // Windows Mobile Hotspot default PC gateway
+                probeTcpGateway("192.168.137.1")
+                // Android Mobile Hotspot connected clients from ARP table
+                getHotspotArpClients().forEach { clientIp ->
+                    if (isScanning.get()) {
+                        probeTcpGateway(clientIp)
+                    }
+                }
+            }
+        }
+
+        // 4. Fast Parallel Subnet TCP Scanner (bypasses Wi-Fi router AP Isolation / UDP blocks)
         currentScope.launch {
             delay(300)
             if (isScanning.get()) {
@@ -197,6 +211,26 @@ class NetworkDiscovery(
         }
     }
 
+    private fun getHotspotArpClients(): List<String> {
+        val clients = mutableListOf<String>()
+        try {
+            val file = java.io.File("/proc/net/arp")
+            if (file.exists() && file.canRead()) {
+                file.forEachLine { line ->
+                    val tokens = line.split("\\s+".toRegex())
+                    if (tokens.size >= 4 && tokens[0] != "IP") {
+                        val ip = tokens[0]
+                        val flags = tokens[2]
+                        if (flags != "0x0" && ip.isNotEmpty() && !ip.startsWith("0.")) {
+                            clients.add(ip)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return clients
+    }
+
     private fun getLocalIpAddresses(): List<String> {
         val result = mutableListOf<String>()
         try {
@@ -209,7 +243,7 @@ class NetworkDiscovery(
                     val addr = addrs.nextElement()
                     if (addr is Inet4Address && !addr.isLoopbackAddress) {
                         val host = addr.hostAddress
-                        if (host != null && host.startsWith("192.168.")) {
+                        if (host != null && (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172."))) {
                             result.add(host)
                         }
                     }

@@ -174,6 +174,8 @@ class LanDiscoveryService(QObject):
                     mod_id = payload.get("module", "").lower()
                     if mod_id:
                         self.module_wake_requested.emit(mod_id)
+                        if mod_id == "zeromix":
+                            self.module_wake_requested.emit("zerocast")
                         response_dict = {
                             "status": "READY",
                             "module": mod_id,

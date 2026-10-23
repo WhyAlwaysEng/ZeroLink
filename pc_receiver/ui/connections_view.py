@@ -418,6 +418,12 @@ class ConnectionsView(QWidget):
         btn_refresh.clicked.connect(self.refresh_devices)
         header_row.addWidget(btn_refresh)
 
+        self.btn_autostart = QPushButton()
+        self.btn_autostart.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._update_autostart_ui()
+        self.btn_autostart.clicked.connect(self._toggle_autostart)
+        header_row.addWidget(self.btn_autostart)
+
         root_layout.addLayout(header_row)
 
         # Summary Bar
@@ -467,6 +473,34 @@ class ConnectionsView(QWidget):
         scroll.setWidget(self.cards_container)
 
         root_layout.addWidget(scroll, 1)
+
+    def _update_autostart_ui(self):
+        from ui.main_window import is_windows_autostart_enabled
+        enabled = is_windows_autostart_enabled()
+        if enabled:
+            self.btn_autostart.setText("🚀 Windows Boot: ON")
+            self.btn_autostart.setStyleSheet("""
+                QPushButton {
+                    background-color: #111827; color: #FFFFFF; border: 1px solid #111827;
+                    border-radius: 6px; padding: 8px 14px; font-weight: bold; font-size: 11px;
+                }
+                QPushButton:hover { background-color: #374151; }
+            """)
+        else:
+            self.btn_autostart.setText("🚀 Windows Boot: OFF")
+            self.btn_autostart.setStyleSheet("""
+                QPushButton {
+                    background-color: #FFFFFF; color: #6B7280; border: 1px solid #D1D5DB;
+                    border-radius: 6px; padding: 8px 14px; font-weight: bold; font-size: 11px;
+                }
+                QPushButton:hover { background-color: #F3F4F6; color: #111827; }
+            """)
+
+    def _toggle_autostart(self):
+        from ui.main_window import is_windows_autostart_enabled, set_windows_autostart
+        new_state = not is_windows_autostart_enabled()
+        set_windows_autostart(new_state)
+        self._update_autostart_ui()
 
     def disconnect_device_all(self, ip: str):
         """Disconnects a physical device across all running services."""

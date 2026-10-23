@@ -130,6 +130,9 @@ class ZeroPadActivity : AppCompatActivity() {
         // Section 3: Precision Trackpad Setup
         setupTouchpad()
 
+        // Section 3b: Gyro Air Mouse Setup
+        setupGyroAirMouse()
+
         // Section 4: Remote Keyboard & Text Injection
         setupRemoteKeyboard()
     }
@@ -241,10 +244,44 @@ class ZeroPadActivity : AppCompatActivity() {
     private var touchDownTime = 0L
     private var isTapCandidate = false
     private var isDragging = false
+    private var twoFingerDownTime = 0L
+    private var isTwoFingerTapCandidate = false
     private val dragHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var dragRunnable: Runnable? = null
     private val moveSensitivity = 1.6f
     private val scrollSensitivity = 1.2f
+
+    // Gyro Air Mouse Sensor & State
+    private var sensorManager: android.hardware.SensorManager? = null
+    private var gyroSensor: android.hardware.Sensor? = null
+    private var isGyroEnabled = false
+    private var isAimHolding = false
+    private var isGyroRegistered = false
+    private var gyroSensitivity = 1.8f
+
+    private val gyroListener = object : android.hardware.SensorEventListener {
+        override fun onSensorChanged(event: android.hardware.SensorEvent) {
+            if (event.sensor.type == android.hardware.Sensor.TYPE_GYROSCOPE) {
+                if (isGyroEnabled || isAimHolding) {
+                    val pitchVel = event.values[0] // Rotation around X (Up/Down)
+                    val yawVel = event.values[2]   // Rotation around Z (Left/Right)
+
+                    val deadzone = 0.035f
+                    val rawDx = -yawVel
+                    val rawDy = -pitchVel
+
+                    val dx = if (Math.abs(rawDx) > deadzone) rawDx * gyroSensitivity * 16f else 0f
+                    val dy = if (Math.abs(rawDy) > deadzone) rawDy * gyroSensitivity * 16f else 0f
+
+                    if (dx.toInt() != 0 || dy.toInt() != 0) {
+                        sendMouseMove(dx.toInt(), dy.toInt())
+                    }
+                }
+            }
+        }
+
+        override fun onAccuracyChanged(sensor: android.hardware.Sensor?, accuracy: Int) {}
+    }
 
     @android.annotation.SuppressLint("ClickableViewAccessibility")
     private fun setupTouchpad() {
@@ -277,6 +314,8 @@ class ZeroPadActivity : AppCompatActivity() {
                 }
                 android.view.MotionEvent.ACTION_POINTER_DOWN -> {
                     isTapCandidate = false
+                    twoFingerDownTime = System.currentTimeMillis()
+                    isTwoFingerTapCandidate = true
                     dragRunnable?.let { dragHandler.removeCallbacks(it) }
                     if (isDragging) {
                         sendMouseUp("left")
@@ -286,6 +325,15 @@ class ZeroPadActivity : AppCompatActivity() {
                     }
                     lastTouchX = event.x
                     lastTouchY = event.y
+                    true
+                }
+                android.view.MotionEvent.ACTION_POINTER_UP -> {
+                    val twoElapsed = System.currentTimeMillis() - twoFingerDownTime
+                    if (isTwoFingerTapCandidate && twoElapsed < 280) {
+                        isTwoFingerTapCandidate = false
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        sendMouseClick("right")
+                    }
                     true
                 }
                 android.view.MotionEvent.ACTION_MOVE -> {
@@ -303,6 +351,10 @@ class ZeroPadActivity : AppCompatActivity() {
                         lastTouchX = event.x
                         lastTouchY = event.y
                     } else if (event.pointerCount >= 2) {
+                        val scrollDist = Math.abs(event.y - lastTouchY)
+                        if (scrollDist > 8.0) {
+                            isTwoFingerTapCandidate = false
+                        }
                         isTapCandidate = false
                         dragRunnable?.let { dragHandler.removeCallbacks(it) }
                         if (isDragging) {
@@ -369,6 +421,86 @@ class ZeroPadActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             sendMouseClick("right")
         }
+    }
+
+    private fun setupGyroAirMouse() {
+        sensorManager = getSystemService(android.content.Context.SENSOR_SERVICE) as? android.hardware.SensorManager
+        gyroSensor = sensorManager?.getDefaultSensor(android.hardware.Sensor.TYPE_GYROSCOPE)
+
+        if (gyroSensor == null) {
+            binding.tvGyroStatus.text = "Gyroscope sensor not available on this device"
+            binding.switchGyroAirMouse.isEnabled = false
+            binding.btnGyroHoldAim.isEnabled = false
+            return
+        }
+
+        binding.switchGyroAirMouse.setOnCheckedChangeListener { _, isChecked ->
+            isGyroEnabled = isChecked
+            if (isChecked) {
+                binding.tvGyroStatus.text = "● Active: Waving phone in air moves PC cursor"
+                binding.tvGyroStatus.setTextColor(android.graphics.Color.parseColor("#111827"))
+                registerGyro()
+            } else {
+                binding.tvGyroStatus.text = "Air Mouse sensor idle • Slide or Hold to aim"
+                binding.tvGyroStatus.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                if (!isAimHolding) unregisterGyro()
+            }
+        }
+
+        binding.btnGyroHoldAim.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    isAimHolding = true
+                    binding.tvGyroStatus.text = "● AIMING: Air pointer active"
+                    binding.tvGyroStatus.setTextColor(android.graphics.Color.parseColor("#111827"))
+                    registerGyro()
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    isAimHolding = false
+                    if (!isGyroEnabled) {
+                        binding.tvGyroStatus.text = "Air Mouse sensor idle"
+                        binding.tvGyroStatus.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                        unregisterGyro()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+
+        binding.sbGyroSensitivity.setOnSeekBarChangeListener(object : android.widget.SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: android.widget.SeekBar?, progress: Int, fromUser: Boolean) {
+                val sens = (progress.coerceAtLeast(5)) / 10.0f
+                gyroSensitivity = sens
+                binding.tvGyroSensVal.text = String.format(java.util.Locale.US, "%.1fx", sens)
+            }
+            override fun onStartTrackingTouch(seekBar: android.widget.SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: android.widget.SeekBar?) {}
+        })
+    }
+
+    private fun registerGyro() {
+        if (!isGyroRegistered && gyroSensor != null) {
+            sensorManager?.registerListener(gyroListener, gyroSensor, android.hardware.SensorManager.SENSOR_DELAY_GAME)
+            isGyroRegistered = true
+        }
+    }
+
+    private fun unregisterGyro() {
+        if (isGyroRegistered) {
+            sensorManager?.unregisterListener(gyroListener)
+            isGyroRegistered = false
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        if (isGyroEnabled) {
+            binding.switchGyroAirMouse.isChecked = false
+        }
+        unregisterGyro()
     }
 
     private fun setupRemoteKeyboard() {

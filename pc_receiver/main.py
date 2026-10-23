@@ -10,8 +10,11 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
 
-    window = MainWindow(port=8888)
-    window.show()
+    start_minimized = "--minimized" in sys.argv or "--tray" in sys.argv
+
+    window = MainWindow(port=8888, start_minimized=start_minimized)
+    if not start_minimized:
+        window.show()
 
     # Handle --send command line argument from Windows Context Menu
     if "--send" in sys.argv:

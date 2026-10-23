@@ -346,6 +346,14 @@ class ZeroCastActivity : AppCompatActivity() {
                 stopStreamService()
             }
         }
+
+        binding.btnOledStandby.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, OledStandbyActivity::class.java).apply {
+                putExtra("EXTRA_REASON", "ZeroCast Screen Mirror Active")
+            }
+            startActivity(intent)
+        }
     }
 
     private fun startOverlayService() {

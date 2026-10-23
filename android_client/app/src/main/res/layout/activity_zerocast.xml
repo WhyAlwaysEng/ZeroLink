@@ -482,6 +482,19 @@
             android:letterSpacing="0.04"
             app:cornerRadius="10dp" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnOledStandby"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="10dp"
+            android:text="🌙 OLED Black Standby (Zero Heat &amp; Power)"
+            android:textColor="@color/text_primary"
+            android:textSize="12sp"
+            android:fontFamily="sans-serif-bold"
+            app:cornerRadius="10dp"
+            app:strokeColor="@color/surface_stroke" />
+
         <TextView
             android:id="@+id/tvMetricHint"
             android:layout_width="match_parent"

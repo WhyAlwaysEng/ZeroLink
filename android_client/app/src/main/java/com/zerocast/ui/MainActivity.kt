@@ -153,6 +153,9 @@ class MainActivity : AppCompatActivity() {
         val serverIp = ZeroLinkConfig.getServerIp(this)
         if (serverIp.isNotEmpty()) {
             NetworkDiscovery.wakeModule(serverIp, moduleId)
+            if (moduleId == "zeromix") {
+                NetworkDiscovery.wakeModule(serverIp, "zerocast")
+            }
         }
         val intent = Intent(this, activityClass)
         startActivity(intent)

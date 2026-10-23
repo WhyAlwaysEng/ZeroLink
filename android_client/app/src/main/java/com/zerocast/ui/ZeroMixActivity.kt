@@ -236,6 +236,14 @@ class ZeroMixActivity : AppCompatActivity() {
                 requestAudioCast()
             }
         }
+
+        binding.btnMixOledStandby.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, OledStandbyActivity::class.java).apply {
+                putExtra("EXTRA_REASON", "ZeroMix Phone Audio Stream Active")
+            }
+            startActivity(intent)
+        }
     }
 
     private fun requestAudioCast() {
@@ -259,6 +267,7 @@ class ZeroMixActivity : AppCompatActivity() {
         }
 
         ZeroLinkConfig.setServerIp(this, host)
+        NetworkDiscovery.wakeModule(host, "zerocast")
 
         val intent = Intent(this, StreamForegroundService::class.java).apply {
             action = StreamForegroundService.ACTION_START_AUDIO_ONLY
@@ -302,6 +311,8 @@ class ZeroMixActivity : AppCompatActivity() {
             return
         }
         ZeroLinkConfig.setServerIp(this, host)
+        NetworkDiscovery.wakeModule(host, "zeromix")
+        NetworkDiscovery.wakeModule(host, "zerocast")
         binding.btnConnect.text = "Connecting..."
         mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
     }

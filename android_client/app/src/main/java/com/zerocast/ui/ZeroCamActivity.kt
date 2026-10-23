@@ -140,6 +140,14 @@ class ZeroCamActivity : AppCompatActivity() {
             }
         }
 
+        binding.btnCamOledStandby.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = android.content.Intent(this, OledStandbyActivity::class.java).apply {
+                putExtra("EXTRA_REASON", "ZeroCam Webcam Active")
+            }
+            startActivity(intent)
+        }
+
         // Tap-to-focus on camera viewfinder
         binding.cameraPreviewView.setOnTouchListener { _, event ->
             if (event.action == android.view.MotionEvent.ACTION_UP) {

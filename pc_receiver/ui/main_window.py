@@ -45,6 +45,50 @@ def get_local_ip() -> str:
     return ip
 
 
+def is_windows_autostart_enabled() -> bool:
+    """Checks if ZeroLink is registered in Windows Startup (HKCU Run)."""
+    if os.name != 'nt':
+        return False
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+        val, _ = winreg.QueryValueEx(key, "ZeroLink")
+        winreg.CloseKey(key)
+        return bool(val)
+    except OSError:
+        return False
+
+
+def set_windows_autostart(enable: bool) -> bool:
+    """Registers or unregisters ZeroLink in Windows Startup to start minimized."""
+    if os.name != 'nt':
+        return False
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_WRITE)
+        if enable:
+            if getattr(sys, 'frozen', False):
+                cmd = f'"{sys.executable}" --minimized'
+            else:
+                main_py = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "main.py"))
+                py_exe = sys.executable
+                pyw = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
+                if os.path.exists(pyw):
+                    py_exe = pyw
+                cmd = f'"{py_exe}" "{main_py}" --minimized'
+            winreg.SetValueEx(key, "ZeroLink", 0, winreg.REG_SZ, cmd)
+        else:
+            try:
+                winreg.DeleteValue(key, "ZeroLink")
+            except OSError:
+                pass
+        winreg.CloseKey(key)
+        return True
+    except Exception as e:
+        print(f"[AutoStart] Registry error: {e}")
+        return False
+
+
 class NavButton(QPushButton):
     """Minimalist monochrome sidebar item with subtle active indicator."""
     def __init__(self, text: str, glyph: str, badge: str = "", parent=None):
@@ -107,10 +151,11 @@ class NavButton(QPushButton):
 class MainWindow(QMainWindow):
     """ZeroLink Hub Central Application Window (Minimalist Edition)."""
 
-    def __init__(self, port: int = 8888):
+    def __init__(self, port: int = 8888, start_minimized: bool = False):
         super().__init__()
         self.port = port
         self.local_ip = get_local_ip()
+        self.start_minimized = start_minimized
 
         self.setWindowTitle("ZeroLink Hub v1.0")
         icon_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
@@ -176,6 +221,14 @@ class MainWindow(QMainWindow):
         self.latest_release_tag = ""
         self.latest_release_notes = ""
         QTimer.singleShot(2500, self._check_for_updates)
+
+        if getattr(self, "start_minimized", False):
+            QTimer.singleShot(1000, lambda: self.tray_icon.showMessage(
+                "ZeroLink Hub",
+                "ZeroLink started minimized to tray. Background services are active.",
+                QSystemTrayIcon.MessageIcon.Information,
+                2500
+            ))
 
     def _setup_ui(self):
         self.setStyleSheet(GLOBAL_APP_STYLESHEET)
@@ -416,6 +469,14 @@ class MainWindow(QMainWindow):
             if mod and not mod.is_active:
                 self.module_manager.toggle_module(module_id, True)
 
+        # ZeroMix & ZeroCast Synchronization:
+        # ZeroMix receives phone audio streamed to ZeroCast port 8888; ensure ZeroCast is live
+        if module_id == "zeromix":
+            cast_mod = self.module_manager.get_module("zerocast")
+            if cast_mod and not cast_mod.is_active:
+                self.module_manager.toggle_module("zerocast", True)
+                print("[ZeroLink Sync] Auto-activated ZeroCast service for ZeroMix phone audio stream")
+
         if module_id == "zerocast":
             self.stacked.setCurrentIndex(1)
             self.btn_nav_cast.setChecked(True)
@@ -461,10 +522,19 @@ class MainWindow(QMainWindow):
 
     def _on_module_toggle_requested(self, module_id: str, enable: bool):
         self.module_manager.toggle_module(module_id, enable)
+        if module_id == "zeromix":
+            cast_mod = self.module_manager.get_module("zerocast")
+            if cast_mod and cast_mod.is_active != enable:
+                self.module_manager.toggle_module("zerocast", enable)
+                print(f"[ZeroLink Sync] Synced ZeroCast state to {enable} matching ZeroMix")
 
     def _on_zeromix_state_changed(self, module_id: str, is_active: bool):
         if module_id == "zeromix":
             self.mod_zerocast.use_external_mixer = is_active
+            cast_mod = self.module_manager.get_module("zerocast")
+            if cast_mod and cast_mod.is_active != is_active:
+                self.module_manager.toggle_module("zerocast", is_active)
+                print(f"[ZeroLink Sync] Synced ZeroCast service to {is_active} matching ZeroMix")
 
     def _toggle_fullscreen(self):
         self.is_fullscreen = not self.is_fullscreen
@@ -570,6 +640,14 @@ class MainWindow(QMainWindow):
 
         tray_menu.addSeparator()
 
+        self.action_autostart = QAction("🚀 Start with Windows", self)
+        self.action_autostart.setCheckable(True)
+        self.action_autostart.setChecked(is_windows_autostart_enabled())
+        self.action_autostart.toggled.connect(self._on_toggle_autostart)
+        tray_menu.addAction(self.action_autostart)
+
+        tray_menu.addSeparator()
+
         action_quit = QAction("❌ Exit ZeroLink", self)
         action_quit.triggered.connect(self._really_quit)
         tray_menu.addAction(action_quit)
@@ -577,6 +655,15 @@ class MainWindow(QMainWindow):
         self.tray_icon.setContextMenu(tray_menu)
         self.tray_icon.activated.connect(self._on_tray_activated)
         self.tray_icon.show()
+
+    def _on_toggle_autostart(self, enabled: bool):
+        ok = set_windows_autostart(enabled)
+        if hasattr(self, "tray_icon") and self.tray_icon:
+            if ok:
+                msg = "ZeroLink will now start minimized to tray on Windows boot." if enabled else "ZeroLink removed from Windows startup."
+                self.tray_icon.showMessage("Windows Startup", msg, QSystemTrayIcon.MessageIcon.Information, 2500)
+            else:
+                self.tray_icon.showMessage("Windows Startup", "Failed to update Windows startup settings.", QSystemTrayIcon.MessageIcon.Warning, 2500)
 
     def _restore_from_tray(self):
         self.showNormal()
@@ -609,6 +696,11 @@ class MainWindow(QMainWindow):
         if mod and not mod.is_active:
             self.module_manager.toggle_module(module_id, True)
             print(f"[ZeroWake] Remotely activated module: {module_id}")
+        if module_id == "zeromix":
+            cast_mod = self.module_manager.get_module("zerocast")
+            if cast_mod and not cast_mod.is_active:
+                self.module_manager.toggle_module("zerocast", True)
+                print(f"[ZeroWake] Synced activation: zerocast activated with zeromix")
 
     def closeEvent(self, event):
         if getattr(self, "_is_quitting", False):
