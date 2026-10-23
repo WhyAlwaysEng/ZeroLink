@@ -1,6 +1,6 @@
 """ZeroLink File Transfer Service (ZeroDrop)
 High-speed chunked LAN/USB file transfers between Windows PC and Android.
-Default Port: 8890
+Default Port: 8895
 """
 
 import os
@@ -21,7 +21,7 @@ class FileTransferService(QObject):
     client_count_changed = pyqtSignal(int)
     clients_updated = pyqtSignal()
 
-    def __init__(self, port: int = 8890, download_dir: Optional[str] = None, adb_manager: Optional[AdbManager] = None, parent=None):
+    def __init__(self, port: int = 8895, download_dir: Optional[str] = None, adb_manager: Optional[AdbManager] = None, parent=None):
         super().__init__(parent)
         self.port = port
         self.download_dir = download_dir or os.path.join(os.path.expanduser("~"), "Downloads", "ZeroDrop")

@@ -7,3 +7,4 @@ MODULE_NAME = "ZeroCam"
 MODULE_ICON = "◎"
 MODULE_DESCRIPTION = "Wireless phone camera streaming into Virtual Webcam for Discord/OBS/Zoom"
 MODULE_PORT = 8893
+DEFAULT_PORT = 8893

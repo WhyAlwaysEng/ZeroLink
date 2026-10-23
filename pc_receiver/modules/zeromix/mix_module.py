@@ -327,7 +327,7 @@ class ZeroMixModule(BaseModule):
 
         # Mic Device
         col_mic = QVBoxLayout()
-        col_mic.addWidget(QLabel("🎤 Microphone Input:", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
+        col_mic.addWidget(QLabel("⌁ Microphone Input:", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_mic = QComboBox()
         self.combo_mic.currentIndexChanged.connect(self._on_devices_changed)
         col_mic.addWidget(self.combo_mic)
@@ -335,12 +335,12 @@ class ZeroMixModule(BaseModule):
 
         # Monitor Device
         col_mon = QVBoxLayout()
-        col_mon.addWidget(QLabel("🎧 Monitor (Headphones):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
+        col_mon.addWidget(QLabel("◈ Monitor (Headphones):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_monitor = QComboBox()
         self.combo_monitor.currentIndexChanged.connect(self._on_devices_changed)
         col_mon.addWidget(self.combo_monitor)
 
-        self.btn_mute_monitor = QPushButton("🔇 Mute Monitor (Discord Test Mode)")
+        self.btn_mute_monitor = QPushButton("✕ Mute Monitor (Discord Test Mode)")
         self.btn_mute_monitor.setCheckable(True)
         self.btn_mute_monitor.setChecked(getattr(self.engine, "mute_monitor", False))
         self.btn_mute_monitor.setStyleSheet("""
@@ -357,7 +357,7 @@ class ZeroMixModule(BaseModule):
 
         # Broadcast Device (Virtual Mic)
         col_bc = QVBoxLayout()
-        col_bc.addWidget(QLabel("📡 Virtual Mic (Discord/Game Output):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
+        col_bc.addWidget(QLabel("⧉ Virtual Mic (Discord/Game Output):", styleSheet="font-size: 11px; font-weight: bold; color: #111827;"))
         self.combo_broadcast = QComboBox()
         self.combo_broadcast.currentIndexChanged.connect(self._on_devices_changed)
         col_bc.addWidget(self.combo_broadcast)
@@ -375,7 +375,7 @@ class ZeroMixModule(BaseModule):
         self.lbl_virtual_status.setWordWrap(True)
         helper_bar.addWidget(self.lbl_virtual_status, 1)
 
-        btn_get_cable = QPushButton("📥 Get Free VB-Audio Cable")
+        btn_get_cable = QPushButton("⤓ Get Free VB-Audio Cable")
         btn_get_cable.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6; color: #1F2937; border: 1px solid #D1D5DB;
@@ -386,7 +386,7 @@ class ZeroMixModule(BaseModule):
         btn_get_cable.clicked.connect(lambda: QDesktopServices.openUrl(QUrl("https://vb-audio.com/Cable/")))
         helper_bar.addWidget(btn_get_cable)
 
-        btn_refresh_devs = QPushButton("🔄 Refresh Devices")
+        btn_refresh_devs = QPushButton("↻ Refresh Devices")
         btn_refresh_devs.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6; color: #1F2937; border: 1px solid #D1D5DB;
@@ -409,7 +409,7 @@ class ZeroMixModule(BaseModule):
         stems_layout.setSpacing(14)
 
         # Mic Channel
-        self.strip_mic = ChannelStrip("Microphone", "🎤", initial_vol=100, max_vol=150)
+        self.strip_mic = ChannelStrip("Microphone", "⌁", initial_vol=100, max_vol=150)
         self.strip_mic.volume_changed.connect(lambda v: self.engine.set_mic_volume(v))
         self.strip_mic.mute_toggled.connect(lambda m: self.engine.set_mic_mute(m))
 
@@ -425,7 +425,7 @@ class ZeroMixModule(BaseModule):
         stems_layout.addWidget(self.strip_mic, 1)
 
         # Strip Music / Phone Cast
-        self.strip_music = ChannelStrip("Phone Cast / Music", "📱", initial_vol=80, max_vol=100)
+        self.strip_music = ChannelStrip("Phone Cast / Music", "◈", initial_vol=80, max_vol=100)
         self.strip_music.volume_changed.connect(lambda v: self.engine.set_music_volume(v))
         self.strip_music.mute_toggled.connect(lambda m: self.engine.set_music_mute(m))
 
@@ -435,7 +435,7 @@ class ZeroMixModule(BaseModule):
 
         # Music file loader
         music_btn_row = QHBoxLayout()
-        btn_open_music = QPushButton("📁 PC Music")
+        btn_open_music = QPushButton("⊡ PC Music")
         btn_open_music.setStyleSheet("padding: 4px 8px; font-size: 11px;")
         btn_open_music.clicked.connect(self._pick_music_file)
         music_btn_row.addWidget(btn_open_music)
@@ -448,7 +448,7 @@ class ZeroMixModule(BaseModule):
         stems_layout.addWidget(self.strip_music, 1)
 
         # Soundboard Channel
-        self.strip_sound = ChannelStrip("Soundboard", "🔊", initial_vol=90, max_vol=100)
+        self.strip_sound = ChannelStrip("Soundboard", "▣", initial_vol=90, max_vol=100)
         self.strip_sound.volume_changed.connect(lambda v: self.engine.set_soundboard_volume(v))
         self.strip_sound.mute_toggled.connect(lambda m: self.engine.set_soundboard_mute(m))
 
@@ -467,7 +467,7 @@ class ZeroMixModule(BaseModule):
         vfx_l.setSpacing(12)
 
         vfx_hdr = QHBoxLayout()
-        vfx_title = QLabel("🎙️ Real-Time Voice Changer (Voice FX)")
+        vfx_title = QLabel("◈ Real-Time Voice Changer (Voice FX)")
         vfx_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         vfx_title.setStyleSheet("color: #111827;")
         vfx_hdr.addWidget(vfx_title)
@@ -510,7 +510,7 @@ class ZeroMixModule(BaseModule):
         duck_l.setSpacing(10)
 
         duck_hdr = QHBoxLayout()
-        self.chk_ducking = QCheckBox("🦆 Enable Smart Auto-Ducking (Auto-Lower Music When Speaking)")
+        self.chk_ducking = QCheckBox("◈ Enable Smart Auto-Ducking (Auto-Lower Music When Speaking)")
         self.chk_ducking.setChecked(self.engine.ducking_enabled)
         self.chk_ducking.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         self.chk_ducking.setStyleSheet("color: #111827;")
@@ -581,7 +581,7 @@ class ZeroMixModule(BaseModule):
         snd_hdr.addWidget(btn_add_sound)
         snd_l.addLayout(snd_hdr)
 
-        snd_hint = QLabel("💡 Add sounds here. Open ZeroMix on your phone and press 'Refresh' to trigger them wirelessly into your PC mix!")
+        snd_hint = QLabel("◈ Add sounds here. Open ZeroMix on your phone and press 'Refresh' to trigger them wirelessly into your PC mix!")
         snd_hint.setStyleSheet("color: #6B7280; font-size: 11px;")
         snd_l.addWidget(snd_hint)
 
@@ -608,12 +608,12 @@ class ZeroMixModule(BaseModule):
         if self.combo_mic is not None:
             self.combo_mic.blockSignals(True)
             self.combo_mic.clear()
-            self.combo_mic.addItem("❌ None (Microphone Disabled)", -1)
+            self.combo_mic.addItem("✕ None (Microphone Disabled)", -1)
             for d in inputs:
                 clean = d["name"]
                 if len(clean) > 40:
                     clean = clean[:37] + "..."
-                self.combo_mic.addItem(f"🎤 {clean}", d["index"])
+                self.combo_mic.addItem(f"⌁ {clean}", d["index"])
             if self.engine.input_mic_device is None:
                 self.combo_mic.setCurrentIndex(0)
             else:
@@ -623,12 +623,12 @@ class ZeroMixModule(BaseModule):
         if self.combo_monitor is not None:
             self.combo_monitor.blockSignals(True)
             self.combo_monitor.clear()
-            self.combo_monitor.addItem("❌ None (Monitor Disabled / No Feedback)", -1)
+            self.combo_monitor.addItem("✕ None (Monitor Disabled / No Feedback)", -1)
             for d in outputs:
                 clean = d["name"]
                 if len(clean) > 40:
                     clean = clean[:37] + "..."
-                self.combo_monitor.addItem(f"🎧 {clean}", d["index"])
+                self.combo_monitor.addItem(f"◈ {clean}", d["index"])
             if self.engine.output_monitor_device is None:
                 self.combo_monitor.setCurrentIndex(0)
             else:
@@ -638,7 +638,7 @@ class ZeroMixModule(BaseModule):
         if self.combo_broadcast is not None:
             self.combo_broadcast.blockSignals(True)
             self.combo_broadcast.clear()
-            self.combo_broadcast.addItem("❌ None (Monitor in Headphones Only)", -1)
+            self.combo_broadcast.addItem("✕ None (Monitor in Headphones Only)", -1)
 
             # Categorize outputs into Virtual vs Physical
             virtual_outputs = []
@@ -651,9 +651,9 @@ class ZeroMixModule(BaseModule):
                 if len(clean) > 40:
                     clean = clean[:37] + "..."
                 if any(kw in name_lower for kw in virtual_keywords):
-                    virtual_outputs.append((f"✨ [VIRTUAL MIC] {clean}", d["index"]))
+                    virtual_outputs.append((f"◈ [VIRTUAL MIC] {clean}", d["index"]))
                 else:
-                    physical_outputs.append((f"🔊 {clean}", d["index"]))
+                    physical_outputs.append((f"▣ {clean}", d["index"]))
 
             # Add virtual outputs first (highlighted)
             for label, idx in virtual_outputs:
@@ -714,7 +714,7 @@ class ZeroMixModule(BaseModule):
         self.engine.set_monitor_mute(checked)
         if self.btn_mute_monitor:
             if checked:
-                self.btn_mute_monitor.setText("🔇 Monitor MUTED (Discord Test Mode)")
+                self.btn_mute_monitor.setText("✕ Monitor MUTED (Discord Test Mode)")
                 self.btn_mute_monitor.setStyleSheet("""
                     QPushButton {
                         background-color: #FEE2E2; color: #DC2626; border: 1px solid #F87171;
@@ -722,7 +722,7 @@ class ZeroMixModule(BaseModule):
                     }
                 """)
             else:
-                self.btn_mute_monitor.setText("🔇 Mute Monitor (Discord Test Mode)")
+                self.btn_mute_monitor.setText("✕ Mute Monitor (Discord Test Mode)")
                 self.btn_mute_monitor.setStyleSheet("""
                     QPushButton {
                         background-color: #F3F4F6; color: #374151; border: 1px solid #D1D5DB;
@@ -787,7 +787,7 @@ class ZeroMixModule(BaseModule):
         l.setContentsMargins(8, 6, 8, 6)
         l.setSpacing(8)
 
-        lbl = QLabel(f"🔊 {item['name'][:20]}")
+        lbl = QLabel(f"▣ {item['name'][:20]}")
         lbl.setStyleSheet("color: #111827; font-size: 11px; font-weight: 600; border: none;")
         l.addWidget(lbl, 1)
 
@@ -872,8 +872,8 @@ class ZeroMixModule(BaseModule):
         if self.lbl_duck_status:
             if is_ducking:
                 pct = int((1.0 - factor) * 100)
-                self.lbl_duck_status.setText(f"🦆 DUCKING (-{pct}%)")
-                self.lbl_duck_status.setStyleSheet("color: #FFFFFF; font-size: 10px; font-weight: 700; background: #EF4444; padding: 3px 8px; border-radius: 4px;")
+                self.lbl_duck_status.setText(f"● DUCKING (-{pct}%)")
+                self.lbl_duck_status.setStyleSheet("color: #FFFFFF; font-size: 10px; font-weight: 700; background: #111827; padding: 3px 8px; border-radius: 4px;")
             else:
                 self.lbl_duck_status.setText("● IDLE")
                 self.lbl_duck_status.setStyleSheet("color: #6B7280; font-size: 10px; font-weight: 700; background: #F3F4F6; padding: 3px 8px; border-radius: 4px;")
@@ -890,7 +890,8 @@ class ZeroMixModule(BaseModule):
         if self.client_pill:
             color = "#111827" if count > 0 else "#6B7280"
             weight = "700" if count > 0 else "400"
-            self.client_pill.setText(f"📱 Mobile: {count} Connected")
+            icon = "●" if count > 0 else "○"
+            self.client_pill.setText(f"{icon} Mobile: {count} Connected")
             self.client_pill.setStyleSheet(f"color: {color}; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: {weight};")
 
     def _on_phone_stream_status_changed(self, is_active: bool):

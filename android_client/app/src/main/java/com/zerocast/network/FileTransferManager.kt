@@ -28,7 +28,7 @@ class FileTransferManager(private val context: Context) {
      */
     fun sendFileToPc(
         host: String,
-        port: Int = 8890,
+        port: Int = com.zerocast.util.ZeroLinkConfig.DEFAULT_DROP_PORT,
         uri: Uri,
         onProgress: (String, Int, Float) -> Unit,
         onSuccess: (String) -> Unit,
@@ -103,7 +103,7 @@ class FileTransferManager(private val context: Context) {
      */
     fun startReceiveWorker(
         host: String,
-        port: Int = 8890,
+        port: Int = com.zerocast.util.ZeroLinkConfig.DEFAULT_DROP_PORT,
         onProgress: (String, Int, Float) -> Unit,
         onFileReceived: (File) -> Unit,
         onError: (String, String) -> Unit,

@@ -295,14 +295,14 @@ class ZeroPadModule(BaseModule):
 
     def _on_client_connected(self, ip: str, model: str):
         if self.client_pill:
-            self.client_pill.setText(f"📱 {model} ({ip})")
-            self.client_pill.setStyleSheet("color: #059669; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            self.client_pill.setText(f"● {model} ({ip})")
+            self.client_pill.setStyleSheet("color: #111827; background: #F3F4F6; border: 1px solid #D1D5DB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
         if self.log_box:
-            self.log_box.append(f"[{time.strftime('%H:%M:%S')}] 🟢 Controller connected: {model} ({ip})")
+            self.log_box.append(f"[{time.strftime('%H:%M:%S')}] ● Controller connected: {model} ({ip})")
 
     def _on_client_disconnected(self, ip: str):
         if self.client_pill:
-            self.client_pill.setText("📱 Mobile: Offline")
+            self.client_pill.setText("○ Mobile: Offline")
             self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         if self.log_box:
-            self.log_box.append(f"[{time.strftime('%H:%M:%S')}] 🔴 Controller disconnected: {ip}")
+            self.log_box.append(f"[{time.strftime('%H:%M:%S')}] ○ Controller disconnected: {ip}")

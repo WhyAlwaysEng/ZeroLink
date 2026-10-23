@@ -34,8 +34,9 @@ class DropZoneWidget(QFrame):
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.setSpacing(8)
 
-        self.icon_lbl = QLabel("📤")
-        self.icon_lbl.setFont(QFont("Segoe UI Emoji", 28))
+        self.icon_lbl = QLabel("⇪")
+        self.icon_lbl.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
+        self.icon_lbl.setStyleSheet("color: #111827; border: none;")
         self.icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.icon_lbl)
 
@@ -433,7 +434,8 @@ class ZeroDropModule(BaseModule):
         if self.client_pill:
             color = "#111827" if count > 0 else "#6B7280"
             weight = "700" if count > 0 else "400"
-            self.client_pill.setText(f"📱 Mobile: {count} Connected")
+            icon = "●" if count > 0 else "○"
+            self.client_pill.setText(f"{icon} Mobile: {count} Connected")
             self.client_pill.setStyleSheet(f"color: {color}; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: {weight};")
 
     def _on_transfer_progress(self, filename: str, done: int, total: int, speed: float):

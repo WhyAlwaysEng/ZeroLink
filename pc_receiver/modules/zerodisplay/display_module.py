@@ -152,7 +152,7 @@ class ZeroDisplayModule(BaseModule):
         b_title.setStyleSheet("color: #111827;")
         banner_layout.addWidget(b_title)
 
-        b_sub = QLabel("สตรีมและมิลเลอร์หน้าจอคอมพิวเตอร์ (เลือก Display 1, Display 2, หรือจอรวม) ไปยังหน้าจอมือถือหรือแท็บเล็ตแบบไร้สาย พร้อมระบบสัมผัสควบคุมเคอร์เซอร์เมาส์ (แตะคลิก, ลากหน้าต่าง, รูด 2 นิ้วเลื่อนลูกกลิ้งเมาส์)\n💡 ทริค: หากต้องการใช้เป็นจอแยกอิสระ (Extended Desktop) สามารถเสียบหัวแปลง HDMI Dummy Plug เข้าที่การ์ดจอ PC หรือใช้ Virtual Display Driver แล้วเลือกจอนั้นในช่อง Select PC Display ได้ทันที")
+        b_sub = QLabel("สตรีมและมิลเลอร์หน้าจอคอมพิวเตอร์ (เลือก Display 1, Display 2, หรือจอรวม) ไปยังหน้าจอมือถือหรือแท็บเล็ตแบบไร้สาย พร้อมระบบสัมผัสควบคุมเคอร์เซอร์เมาส์ (แตะคลิก, ลากหน้าต่าง, รูด 2 นิ้วเลื่อนลูกกลิ้งเมาส์)\n◈ ทริค: หากต้องการใช้เป็นจอแยกอิสระ (Extended Desktop) สามารถเสียบหัวแปลง HDMI Dummy Plug เข้าที่การ์ดจอ PC หรือใช้ Virtual Display Driver แล้วเลือกจอนั้นในช่อง Select PC Display ได้ทันที")
         b_sub.setFont(QFont("Segoe UI", 10))
         b_sub.setStyleSheet("color: #6B7280;")
         b_sub.setWordWrap(True)
@@ -358,21 +358,21 @@ class ZeroDisplayModule(BaseModule):
 
     def _on_stats_updated(self, fps: float, bitrate_mbps: float):
         if self.lbl_stat_fps:
-            self.lbl_stat_fps.setText(f"⚡ {fps:.0f} FPS")
+            self.lbl_stat_fps.setText(f"◈ {fps:.0f} FPS")
         if self.lbl_stat_bitrate:
-            self.lbl_stat_bitrate.setText(f"📊 {bitrate_mbps:.1f} Mbps")
+            self.lbl_stat_bitrate.setText(f"▦ {bitrate_mbps:.1f} Mbps")
 
     def _on_client_connected(self, ip: str, model: str):
         if self.client_pill:
             count = len(self.server.get_connected_clients())
-            self.client_pill.setText(f"📱 Mobile: {count} Connected ({model})")
-            self.client_pill.setStyleSheet("color: #059669; background: #ECFDF5; border: 1px solid #A7F3D0; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;")
+            self.client_pill.setText(f"● Mobile: {count} Connected ({model})")
+            self.client_pill.setStyleSheet("color: #111827; background: #F3F4F6; border: 1px solid #D1D5DB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 700;")
 
     def _on_client_disconnected(self, ip: str):
         if self.client_pill:
             count = len(self.server.get_connected_clients())
             if count == 0:
-                self.client_pill.setText("📱 Mobile: 0 Connected")
+                self.client_pill.setText("○ Mobile: 0 Connected")
                 self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
             else:
-                self.client_pill.setText(f"📱 Mobile: {count} Connected")
+                self.client_pill.setText(f"● Mobile: {count} Connected")
