@@ -6,6 +6,7 @@ and Clear File Explorer with Instant Filter & Category Badges.
 
 import os
 import sys
+import time
 import json
 import urllib.request
 import urllib.parse
@@ -135,6 +136,7 @@ class ThumbQueueWorker(QThread):
                         self.thumb_ready.emit(p_id, pix)
             except Exception:
                 pass
+            time.sleep(0.012)
 
 
 # ==================== Pro Interactive Image Viewer Dialog ====================
@@ -645,6 +647,7 @@ class ZeroExplorerModule(BaseModule):
         self.active_album_filter: Optional[str] = None
         self.selected_file_path = ""
         self.selected_item_data: Optional[Dict] = None
+        self._gallery_item_map: Dict[int, QListWidgetItem] = {}
 
         # Workers
         self._storage_worker: Optional[StorageWorker] = None
@@ -964,6 +967,8 @@ class ZeroExplorerModule(BaseModule):
         self.gallery_list.setGridSize(QSize(145, 165))
         self.gallery_list.setSpacing(10)
         self.gallery_list.setResizeMode(QListWidget.ResizeMode.Adjust)
+        self.gallery_list.setUniformItemSizes(True)
+        self.gallery_list.setMovement(QListWidget.Movement.Static)
         self.gallery_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #E5E7EB;
@@ -989,6 +994,7 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
+        self.gallery_list.itemActivated.connect(self._on_gallery_item_double_clicked)
         layout.addWidget(self.gallery_list, 1)
 
         return tab
@@ -1321,8 +1327,10 @@ class ZeroExplorerModule(BaseModule):
     def _on_media_received(self, items: list):
         self.gallery_items = items
         self.gallery_list.clear()
+        self._gallery_item_map.clear()
 
         for itm in items:
+            p_id = itm.get("id")
             name = itm.get("name", "Media")
             is_video = itm.get("type") == "video"
             dur_ms = itm.get("duration", 0)
@@ -1339,6 +1347,8 @@ class ZeroExplorerModule(BaseModule):
             list_item.setData(Qt.ItemDataRole.UserRole, itm)
             list_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.gallery_list.addItem(list_item)
+            if p_id is not None:
+                self._gallery_item_map[p_id] = list_item
 
         if items:
             self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port, items)
@@ -1346,12 +1356,9 @@ class ZeroExplorerModule(BaseModule):
             self._thumb_queue_worker.start()
 
     def _on_thumb_ready(self, photo_id: int, pixmap: QPixmap):
-        for i in range(self.gallery_list.count()):
-            itm = self.gallery_list.item(i)
-            data = itm.data(Qt.ItemDataRole.UserRole)
-            if data and data.get("id") == photo_id:
-                itm.setIcon(QIcon(pixmap))
-                break
+        itm = self._gallery_item_map.get(photo_id)
+        if itm:
+            itm.setIcon(QIcon(pixmap))
 
     def fetch_files(self, path: str):
         if self._files_worker and self._files_worker.isRunning():

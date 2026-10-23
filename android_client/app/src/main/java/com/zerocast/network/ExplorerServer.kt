@@ -68,7 +68,10 @@ class ExplorerServer(
     private fun handleClient(socket: Socket) {
         val clientIp = socket.inetAddress?.hostAddress ?: "Unknown"
         try {
-            socket.soTimeout = 12000
+            socket.tcpNoDelay = true
+            socket.sendBufferSize = 1024 * 1024
+            socket.receiveBufferSize = 256 * 1024
+            socket.soTimeout = 15000
             val input = socket.getInputStream()
             val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
             val output = socket.getOutputStream()
@@ -363,9 +366,10 @@ class ExplorerServer(
 
                 val fis = afd.createInputStream()
                 fis.skip(start)
-                val buf = ByteArray(65536)
+                val bis = BufferedInputStream(fis, 256 * 1024)
+                val buf = ByteArray(256 * 1024)
                 var remaining = contentLength
-                fis.use { inp ->
+                bis.use { inp ->
                     while (remaining > 0) {
                         val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
                         val read = inp.read(buf, 0, toRead)
@@ -384,8 +388,9 @@ class ExplorerServer(
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = afd.createInputStream()
-                val buf = ByteArray(65536)
-                fis.use { inp ->
+                val bis = BufferedInputStream(fis, 256 * 1024)
+                val buf = ByteArray(256 * 1024)
+                bis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)
                         if (read <= 0) break
@@ -480,9 +485,10 @@ class ExplorerServer(
 
                 val fis = FileInputStream(file)
                 fis.skip(start)
-                val buf = ByteArray(65536)
+                val bis = BufferedInputStream(fis, 256 * 1024)
+                val buf = ByteArray(256 * 1024)
                 var remaining = contentLength
-                fis.use { inp ->
+                bis.use { inp ->
                     while (remaining > 0) {
                         val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
                         val read = inp.read(buf, 0, toRead)
@@ -502,8 +508,9 @@ class ExplorerServer(
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = FileInputStream(file)
-                val buf = ByteArray(65536)
-                fis.use { inp ->
+                val bis = BufferedInputStream(fis, 256 * 1024)
+                val buf = ByteArray(256 * 1024)
+                bis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)
                         if (read <= 0) break
