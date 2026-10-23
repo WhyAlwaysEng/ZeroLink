@@ -406,6 +406,40 @@ class DashboardView(QWidget):
         self.cards["zeropad"] = card_pad
         grid.addWidget(card_pad, 3, 0)
 
+        # ZeroExplorer
+        mod_explorer = self.module_manager.get_module("zeroexplorer")
+        explorer_active = mod_explorer.is_active if mod_explorer else False
+        card_explorer = ModuleCard(
+            module_id="zeroexplorer",
+            title="ZeroExplorer",
+            glyph="▤",
+            desc="Wireless Android file manager, gallery previewer, 4K video streamer, and APK package installer.",
+            is_enabled=explorer_active,
+            is_available=True,
+            port_info="Port 8896 (HTTP)"
+        )
+        card_explorer.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_explorer.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zeroexplorer"] = card_explorer
+        grid.addWidget(card_explorer, 3, 1)
+
+        # ZeroDev
+        mod_dev = self.module_manager.get_module("zerodev")
+        dev_active = mod_dev.is_active if mod_dev else False
+        card_dev = ModuleCard(
+            module_id="zerodev",
+            title="ZeroDev Console",
+            glyph="</>",
+            desc="Developer workshop, cross-platform code scaffolder, and real-time network port probe for PC & Mobile.",
+            is_enabled=dev_active,
+            is_available=True,
+            port_info="Port 8897 (Probe)"
+        )
+        card_dev.toggle_clicked.connect(self.module_toggle_requested.emit)
+        card_dev.open_clicked.connect(self.navigate_to_module.emit)
+        self.cards["zerodev"] = card_dev
+        grid.addWidget(card_dev, 4, 0)
+
         layout.addLayout(grid)
         layout.addStretch()
 

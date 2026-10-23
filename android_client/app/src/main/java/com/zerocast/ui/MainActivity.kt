@@ -79,5 +79,12 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ZeroExplorerActivity::class.java)
             startActivity(intent)
         }
+
+        // Module 9: ZeroDev (Module Workshop & Latency Probe)
+        binding.cardModuleZeroDev.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, ZeroDevActivity::class.java)
+            startActivity(intent)
+        }
     }
 }
