@@ -110,7 +110,7 @@
                         android:layout_height="44dp"
                         android:layout_marginEnd="6dp"
                         android:layout_weight="1"
-                        android:text="⚡ USB Cable"
+                        android:text="⌁ USB Cable"
                         android:textColor="@color/text_primary"
                         android:textSize="12sp"
                         app:cornerRadius="8dp" />
@@ -122,7 +122,7 @@
                         android:layout_height="44dp"
                         android:layout_marginStart="6dp"
                         android:layout_weight="1"
-                        android:text="📡 Wi-Fi LAN"
+                        android:text="◫ Wi-Fi LAN"
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp"
                         app:cornerRadius="8dp" />
@@ -175,7 +175,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
                     android:layout_marginTop="8dp"
-                    android:text="🔍 Auto-Discover PC on LAN"
+                    android:text="⌕ Auto-Discover PC on LAN"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     app:cornerRadius="8dp" />
@@ -185,7 +185,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
-                    android:text="⚡ USB Active: Zero-latency via 127.0.0.1:8888"
+                    android:text="⌁ USB Active: Zero-latency via 127.0.0.1:8888"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
 
@@ -195,7 +195,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="44dp"
                     android:layout_marginTop="8dp"
-                    android:text="⚡ Benchmark Speed (USB vs Wi-Fi)"
+                    android:text="⌁ Benchmark Speed (USB vs Wi-Fi)"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold"
@@ -414,7 +414,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:checked="true"
-                    android:text="🔊 Stream Internal Audio (To PC Speakers)"
+                    android:text="◗ Stream Internal Audio (To PC Speakers)"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp" />
 
@@ -430,7 +430,7 @@
                     android:id="@+id/switchFloatingOverlay"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="📊 Floating Phone HUD (CPU / RAM %)"
+                    android:text="⊞ Floating Phone HUD (CPU / RAM %)"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />
@@ -441,7 +441,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
-                    android:text="🌙 Auto-Dim Screen (Cooling &amp; Battery Saver)"
+                    android:text="◒ Auto-Dim Screen (Cooling &amp; Battery Saver)"
                     android:textColor="@color/text_primary"
                     android:textSize="12sp"
                     android:textStyle="bold" />

@@ -55,7 +55,7 @@ class NavButton(QPushButton):
         layout.setSpacing(10)
 
         icon_lbl = QLabel(glyph)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 12))
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 13))
         icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(icon_lbl)
 
@@ -72,9 +72,9 @@ class NavButton(QPushButton):
             badge_lbl.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
             badge_lbl.setStyleSheet("""
                 background-color: #F3F4F6;
-                color: #6B7280;
+                color: #111827;
                 padding: 2px 6px;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #D1D5DB;
                 border-radius: 4px;
             """)
             badge_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
@@ -83,14 +83,14 @@ class NavButton(QPushButton):
         self.setStyleSheet("""
             NavButton {
                 background-color: transparent;
-                color: #6B7280;
+                color: #374151;
                 border: none;
                 border-radius: 6px;
                 text-align: left;
             }
             NavButton:hover {
                 background-color: #F3F4F6;
-                color: #111827;
+                color: #000000;
             }
             NavButton:checked {
                 background-color: #F3F4F6;
@@ -225,48 +225,48 @@ class MainWindow(QMainWindow):
         self.nav_group = QButtonGroup(self)
         self.nav_group.setExclusive(True)
 
-        self.btn_nav_dashboard = NavButton("Dashboard", "📊")
+        self.btn_nav_dashboard = NavButton("Dashboard", "⊞")
         self.btn_nav_dashboard.setChecked(True)
         self.btn_nav_dashboard.clicked.connect(lambda: self.stacked.setCurrentIndex(0))
         self.nav_group.addButton(self.btn_nav_dashboard)
         side_layout.addWidget(self.btn_nav_dashboard)
 
-        self.btn_nav_cast = NavButton("ZeroCast", "📺", badge="CORE")
+        self.btn_nav_cast = NavButton("ZeroCast", "⊡", badge="CORE")
         self.btn_nav_cast.clicked.connect(lambda: self.stacked.setCurrentIndex(1))
         self.nav_group.addButton(self.btn_nav_cast)
         side_layout.addWidget(self.btn_nav_cast)
 
-        self.btn_nav_drop = NavButton("ZeroDrop", "📁")
+        self.btn_nav_drop = NavButton("ZeroDrop", "⇄")
         self.btn_nav_drop.clicked.connect(lambda: self.stacked.setCurrentIndex(2))
         self.nav_group.addButton(self.btn_nav_drop)
         side_layout.addWidget(self.btn_nav_drop)
 
-        self.btn_nav_clip = NavButton("ZeroClip", "📋")
+        self.btn_nav_clip = NavButton("ZeroClip", "⎘")
         self.btn_nav_clip.clicked.connect(lambda: self.stacked.setCurrentIndex(3))
         self.nav_group.addButton(self.btn_nav_clip)
         side_layout.addWidget(self.btn_nav_clip)
 
-        self.btn_nav_mix = NavButton("ZeroMix", "🎛️")
+        self.btn_nav_mix = NavButton("ZeroMix", "⧉")
         self.btn_nav_mix.clicked.connect(lambda: self.stacked.setCurrentIndex(4))
         self.nav_group.addButton(self.btn_nav_mix)
         side_layout.addWidget(self.btn_nav_mix)
 
-        self.btn_nav_display = NavButton("ZeroDisplay", "🖥️", badge="NEW")
+        self.btn_nav_display = NavButton("ZeroDisplay", "◫", badge="NEW")
         self.btn_nav_display.clicked.connect(lambda: self.stacked.setCurrentIndex(5))
         self.nav_group.addButton(self.btn_nav_display)
         side_layout.addWidget(self.btn_nav_display)
 
-        self.btn_nav_cam = NavButton("ZeroCam", "📷")
+        self.btn_nav_cam = NavButton("ZeroCam", "◉")
         self.btn_nav_cam.clicked.connect(lambda: self.stacked.setCurrentIndex(6))
         self.nav_group.addButton(self.btn_nav_cam)
         side_layout.addWidget(self.btn_nav_cam)
 
-        self.btn_nav_pad = NavButton("ZeroPad", "🎮", badge="NEW")
+        self.btn_nav_pad = NavButton("ZeroPad", "⌖", badge="NEW")
         self.btn_nav_pad.clicked.connect(lambda: self.stacked.setCurrentIndex(7))
         self.nav_group.addButton(self.btn_nav_pad)
         side_layout.addWidget(self.btn_nav_pad)
 
-        self.btn_nav_connections = NavButton("Connections", "🔗")
+        self.btn_nav_connections = NavButton("Connections", "⚯")
         self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)

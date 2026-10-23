@@ -43,7 +43,7 @@
             android:background="@drawable/bg_badge_pill"
             android:paddingHorizontal="10dp"
             android:paddingVertical="4dp"
-            android:text="⚡ USB CABLE"
+            android:text="⌁ USB CABLE"
             android:textColor="@color/text_primary"
             android:textSize="11sp"
             android:textStyle="bold" />
@@ -202,7 +202,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="⚡ SMART CONNECTION ADVISOR"
+                android:text="◈ SMART CONNECTION ADVISOR"
                 android:textColor="@color/text_secondary"
                 android:textSize="10sp"
                 android:textStyle="bold" />

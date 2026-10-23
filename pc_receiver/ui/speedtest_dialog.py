@@ -141,23 +141,20 @@ class SpeedTestDialog(QDialog):
         lbl_title = QLabel("SPEED & LATENCY BENCHMARK")
         lbl_title.setStyleSheet("font-size: 13px; font-weight: 800; letter-spacing: 1.5px; color: #FFFFFF;")
         lbl_sub = QLabel("Measures raw throughput and latency between PC and Android.")
-        lbl_sub.setStyleSheet("font-size: 11px; color: #666666;")
+        lbl_sub.setStyleSheet("font-size: 11px; color: #A1A1AA;")
         title_box.addWidget(lbl_title)
         title_box.addWidget(lbl_sub)
         head_layout.addLayout(title_box)
 
         is_usb = self.target_host in ("127.0.0.1", "localhost")
-        self.badge_media = QLabel("⚡ USB CABLE" if is_usb else f"📡 WI-FI ({self.target_host})")
-        if is_usb:
-            self.badge_media.setStyleSheet("background: #0C2340; color: #38BDF8; border: 1px solid #0284C7; border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;")
-        else:
-            self.badge_media.setStyleSheet("background: #064E3B; color: #34D399; border: 1px solid #059669; border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;")
+        self.badge_media = QLabel("● USB CABLE" if is_usb else f"● WI-FI ({self.target_host})")
+        self.badge_media.setStyleSheet("background: #18181B; color: #FFFFFF; border: 1px solid #3F3F46; border-radius: 4px; padding: 4px 8px; font-size: 10px; font-weight: 700;")
         head_layout.addWidget(self.badge_media, alignment=Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         layout.addLayout(head_layout)
 
         # Main Speed Display Card
         speed_card = QFrame()
-        speed_card.setStyleSheet("background-color: #111111; border: 1px solid #222222; border-radius: 12px; padding: 20px;")
+        speed_card.setStyleSheet("background-color: #111113; border: 1px solid #27272A; border-radius: 12px; padding: 20px;")
         sc_layout = QVBoxLayout(speed_card)
         sc_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         sc_layout.setSpacing(6)
@@ -169,7 +166,7 @@ class SpeedTestDialog(QDialog):
 
         lbl_unit = QLabel("Mbps (Megabits / sec)")
         lbl_unit.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lbl_unit.setStyleSheet("font-size: 11px; font-weight: 600; color: #777777; letter-spacing: 1px;")
+        lbl_unit.setStyleSheet("font-size: 11px; font-weight: 600; color: #E4E4E7; letter-spacing: 1px;")
         sc_layout.addWidget(lbl_unit)
 
         self.progress_bar = QProgressBar()
@@ -177,12 +174,12 @@ class SpeedTestDialog(QDialog):
         self.progress_bar.setTextVisible(False)
         self.progress_bar.setStyleSheet("""
             QProgressBar {
-                background-color: #1A1A1A;
+                background-color: #27272A;
                 border: none;
                 border-radius: 3px;
             }
             QProgressBar::chunk {
-                background-color: #38BDF8;
+                background-color: #FFFFFF;
                 border-radius: 3px;
             }
         """)
@@ -195,10 +192,10 @@ class SpeedTestDialog(QDialog):
 
         # Ping Box
         ping_box = QFrame()
-        ping_box.setStyleSheet("background-color: #111111; border: 1px solid #222222; border-radius: 8px; padding: 12px;")
+        ping_box.setStyleSheet("background-color: #111113; border: 1px solid #27272A; border-radius: 8px; padding: 12px;")
         pb_layout = QVBoxLayout(ping_box)
         pb_title = QLabel("LATENCY (PING)")
-        pb_title.setStyleSheet("font-size: 9px; font-weight: 700; color: #666666; letter-spacing: 1px;")
+        pb_title.setStyleSheet("font-size: 9px; font-weight: 700; color: #A1A1AA; letter-spacing: 1px;")
         self.lbl_ping_val = QLabel("-- ms")
         self.lbl_ping_val.setStyleSheet("font-size: 18px; font-weight: 800; color: #FFFFFF; font-family: 'Consolas', sans-serif;")
         pb_layout.addWidget(pb_title)
@@ -207,10 +204,10 @@ class SpeedTestDialog(QDialog):
 
         # Jitter Box
         jitter_box = QFrame()
-        jitter_box.setStyleSheet("background-color: #111111; border: 1px solid #222222; border-radius: 8px; padding: 12px;")
+        jitter_box.setStyleSheet("background-color: #111113; border: 1px solid #27272A; border-radius: 8px; padding: 12px;")
         jb_layout = QVBoxLayout(jitter_box)
         jb_title = QLabel("JITTER (VARIATION)")
-        jb_title.setStyleSheet("font-size: 9px; font-weight: 700; color: #666666; letter-spacing: 1px;")
+        jb_title.setStyleSheet("font-size: 9px; font-weight: 700; color: #A1A1AA; letter-spacing: 1px;")
         self.lbl_jitter_val = QLabel("-- ms")
         self.lbl_jitter_val.setStyleSheet("font-size: 18px; font-weight: 800; color: #FFFFFF; font-family: 'Consolas', sans-serif;")
         jb_layout.addWidget(jb_title)
@@ -221,13 +218,13 @@ class SpeedTestDialog(QDialog):
 
         # Smart Recommendation Card
         self.rec_card = QFrame()
-        self.rec_card.setStyleSheet("background-color: #141414; border: 1px solid #2A2A2A; border-radius: 8px; padding: 12px;")
+        self.rec_card.setStyleSheet("background-color: #18181B; border: 1px solid #3F3F46; border-radius: 8px; padding: 12px;")
         rc_layout = QVBoxLayout(self.rec_card)
-        rc_title = QLabel("⚡ SMART CONNECTION ADVISOR")
-        rc_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #9CA3AF; letter-spacing: 1px;")
-        self.lbl_rec_desc = QLabel("Tap 'Run Benchmark' to measure your USB or Wi-Fi throughput.")
+        rc_title = QLabel("⌁ CONNECTION ADVISOR")
+        rc_title.setStyleSheet("font-size: 10px; font-weight: 700; color: #A1A1AA; letter-spacing: 1px;")
+        self.lbl_rec_desc = QLabel("Tap 'Start Benchmark' to measure your USB or Wi-Fi throughput.")
         self.lbl_rec_desc.setWordWrap(True)
-        self.lbl_rec_desc.setStyleSheet("font-size: 11px; color: #CCCCCC; line-height: 1.4;")
+        self.lbl_rec_desc.setStyleSheet("font-size: 11px; color: #FFFFFF; line-height: 1.4;")
         rc_layout.addWidget(rc_title)
         rc_layout.addWidget(self.lbl_rec_desc)
         layout.addWidget(self.rec_card)
@@ -313,31 +310,30 @@ class SpeedTestDialog(QDialog):
         ping = summary.get("avg_ping_ms", 0.0)
         is_usb = summary.get("is_usb", False)
 
-        # Smart Recommendation Logic
+        # Smart Recommendation Logic (High contrast monochrome)
         if is_usb or mbps >= 60.0:
             rec_text = (
-                f"✅ <b>Exceptional Connection ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
+                f"<b>Exceptional Connection ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
                 "Ideal for <b>Extreme Quality (50 - 80 Mbps @ 60 FPS)</b> with ultra-low input lag and lossless fidelity."
             )
-            self.rec_card.setStyleSheet("background-color: #064E3B; border: 1px solid #059669; border-radius: 8px; padding: 12px;")
         elif mbps >= 25.0:
             rec_text = (
-                f"👍 <b>Strong Stable Link ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
+                f"<b>Strong Stable Link ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
                 "Recommended for <b>High Performance (25 - 35 Mbps @ 60 FPS)</b>."
             )
-            self.rec_card.setStyleSheet("background-color: #0C2340; border: 1px solid #0284C7; border-radius: 8px; padding: 12px;")
         elif mbps >= 12.0:
             rec_text = (
-                f"⚖️ <b>Balanced Wi-Fi Link ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
+                f"<b>Balanced Wi-Fi Link ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
                 "Recommended for <b>14 - 18 Mbps Balanced Mode</b>. Connect via USB Cable for extreme 80 Mbps speeds."
             )
-            self.rec_card.setStyleSheet("background-color: #141414; border: 1px solid #444444; border-radius: 8px; padding: 12px;")
         else:
             rec_text = (
-                f"⚠️ <b>Limited Bandwidth ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
+                f"<b>Limited Bandwidth ({mbps:.1f} Mbps • {ping:.1f}ms):</b><br>"
                 "Recommended for <b>6 - 10 Mbps Low Latency Mode</b>. Switching to USB Cable (ADB) is strongly advised."
             )
-            self.rec_card.setStyleSheet("background-color: #451A03; border: 1px solid #D97706; border-radius: 8px; padding: 12px;")
+
+        self.rec_card.setStyleSheet("background-color: #18181B; border: 1px solid #52525B; border-radius: 8px; padding: 12px;")
+        self.lbl_rec_desc.setText(rec_text)
 
         self.lbl_rec_desc.setText(rec_text)
 

@@ -209,7 +209,7 @@ class ModernVideoCanvas(QWidget):
         painter.drawText(cx + 24, cy + 80, "Ready for Device Stream")
 
         painter.setFont(QFont("Segoe UI", 11))
-        painter.setPen(QColor("#6B7280"))
+        painter.setPen(QColor("#374151"))
         painter.drawText(cx + 24, cy + 112, "1. Connect Android via USB Cable (Auto ADB) or Wi-Fi.")
         painter.drawText(cx + 24, cy + 134, "2. Open ZeroLink app on phone, tap ZeroCast, and start stream.")
 
@@ -223,25 +223,25 @@ class ModernVideoCanvas(QWidget):
             ("RES", self.resolution_text),
         ]
 
-        box_width = 180
+        box_width = 186
         box_height = 16 + len(hud_items) * 22 + 8
-        painter.setBrush(QColor(10, 10, 10, 230))
-        painter.setPen(QPen(QColor(36, 36, 36), 1))
+        painter.setBrush(QColor(9, 9, 11, 235))
+        painter.setPen(QPen(QColor(63, 63, 70), 1))
         painter.drawRoundedRect(QRect(20, 20, box_width, box_height), 6, 6)
 
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-        painter.setPen(QColor("#555555"))
+        painter.setPen(QColor("#A1A1AA"))
         painter.drawText(30, 34, "TELEMETRY")
 
         y = 54
         for label, val in hud_items:
             painter.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            painter.setPen(QColor("#666666"))
+            painter.setPen(QColor("#E4E4E7"))
             painter.drawText(30, y, label)
 
             painter.setFont(QFont("Consolas", 9, QFont.Weight.Bold))
             painter.setPen(QColor("#FFFFFF"))
-            painter.drawText(QRect(70, y - 12, 118, 18), Qt.AlignmentFlag.AlignRight, val)
+            painter.drawText(QRect(70, y - 12, 124, 18), Qt.AlignmentFlag.AlignRight, val)
             y += 22
 
     def _normalize_coords(self, pos: QPoint):
@@ -379,11 +379,29 @@ class ZeroCastPopoutWindow(QMainWindow):
         self.show()
         if hasattr(self.cast_module, "btn_pin") and self.cast_module.btn_pin:
             if self.is_pinned:
-                self.cast_module.btn_pin.setText("📌 Pinned")
+                self.cast_module.btn_pin.setText("⚲ Pinned")
                 self.cast_module.btn_pin.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: 700; border-radius: 4px; padding: 4px 8px; font-size: 11px;")
             else:
-                self.cast_module.btn_pin.setText("📌 Pin")
+                self.cast_module.btn_pin.setText("⚲ Pin")
                 self.cast_module.btn_pin.setStyleSheet("background-color: #F3F4F6; color: #374151; font-weight: 600; border: 1px solid #D1D5DB; border-radius: 4px; padding: 4px 8px; font-size: 11px;")
+
+    def fit_to_stream_aspect_ratio(self):
+        """Dynamically adjusts window geometry to perfectly fit the active stream aspect ratio."""
+        if not self.cast_module.canvas.current_pixmap.isNull():
+            pm = self.cast_module.canvas.current_pixmap
+            is_swapped = self.cast_module.canvas.rotation_angle in (90, 270)
+            pw = pm.height() if is_swapped else pm.width()
+            ph = pm.width() if is_swapped else pm.height()
+            if pw > 0 and ph > 0:
+                aspect = pw / ph
+                bar_h = 0 if getattr(self.cast_module, "is_screen_only", False) else 82
+                if aspect >= 1.0: # Landscape orientation
+                    target_w = 900
+                    target_h = int(target_w / aspect) + bar_h
+                else: # Portrait orientation
+                    target_h = 760
+                    target_w = int((target_h - bar_h) * aspect)
+                self.resize(max(340, target_w), max(380, target_h))
 
     def _toggle_fullscreen(self):
         if not self.is_fullscreen:
@@ -655,22 +673,22 @@ class ZeroCastModule(BaseModule):
 
         # Manual Orientation Selector
         self.combo_rotate = QComboBox()
-        self.combo_rotate.addItem("🔄 0° Auto", 0)
-        self.combo_rotate.addItem("🔄 90°", 90)
-        self.combo_rotate.addItem("🔄 180°", 180)
-        self.combo_rotate.addItem("🔄 270°", 270)
+        self.combo_rotate.addItem("↻ Auto (0°)", 0)
+        self.combo_rotate.addItem("↻ 90°", 90)
+        self.combo_rotate.addItem("↻ 180°", 180)
+        self.combo_rotate.addItem("↻ 270°", 270)
         self.combo_rotate.setToolTip("Force manual orientation (0°, 90°, 180°, 270°)")
         self.combo_rotate.currentIndexChanged.connect(self._on_rotation_changed)
         bar_layout.addWidget(self.combo_rotate)
 
         # Auto Pop-out Checkbox
         self.chk_auto_popout = QCheckBox("Auto Pop-out")
-        self.chk_auto_popout.setStyleSheet("color: #4B5563; font-size: 11px;")
+        self.chk_auto_popout.setStyleSheet("color: #374151; font-size: 11px;")
         self.chk_auto_popout.setToolTip("Automatically open in a floating window when phone connects")
         bar_layout.addWidget(self.chk_auto_popout)
 
         # Screen Dim Button
-        self.btn_dim_screen = QPushButton("🌙 Dim Screen")
+        self.btn_dim_screen = QPushButton("◒ Dim")
         self.btn_dim_screen.setToolTip("Dim phone display to 0% brightness to save battery & prevent heating while casting")
         self.btn_dim_screen.setStyleSheet("""
             QPushButton {
@@ -690,7 +708,7 @@ class ZeroCastModule(BaseModule):
         bar_layout.addWidget(self.btn_dim_screen)
 
         # Screen Only Button (Pop-out mode only)
-        self.btn_screen_only = QPushButton("🖥️ Screen Only")
+        self.btn_screen_only = QPushButton("□ Screen Only")
         self.btn_screen_only.setToolTip("Hide toolbars and show pure screen only (Press Esc or click 'Show Controls' to restore)")
         self.btn_screen_only.setStyleSheet("""
             QPushButton {
@@ -731,7 +749,28 @@ class ZeroCastModule(BaseModule):
         self.btn_popout.clicked.connect(self._toggle_popout)
         bar_layout.addWidget(self.btn_popout)
 
-        self.btn_snapshot = QPushButton("Snapshot")
+        # Fit Aspect Ratio Button
+        self.btn_fit = QPushButton("⇲ Fit Aspect")
+        self.btn_fit.setToolTip("Dynamically fit window to the phone's exact aspect ratio")
+        self.btn_fit.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+        """)
+        self.btn_fit.clicked.connect(self._fit_to_stream_aspect)
+        bar_layout.addWidget(self.btn_fit)
+
+        self.btn_snapshot = QPushButton("⧇ Snapshot")
         self.btn_snapshot.clicked.connect(self._take_snapshot)
         bar_layout.addWidget(self.btn_snapshot)
 
@@ -739,7 +778,7 @@ class ZeroCastModule(BaseModule):
         self.btn_qr.clicked.connect(self._show_qr_dialog)
         bar_layout.addWidget(self.btn_qr)
 
-        self.btn_speedtest = QPushButton("⚡ Speed Test")
+        self.btn_speedtest = QPushButton("⌁ Speed Test")
         self.btn_speedtest.setToolTip("Benchmark connection latency and throughput (USB vs Wi-Fi)")
         self.btn_speedtest.clicked.connect(self._show_speedtest_dialog)
         bar_layout.addWidget(self.btn_speedtest)
@@ -765,7 +804,7 @@ class ZeroCastModule(BaseModule):
         bot_layout.setSpacing(8)
 
         self.log_label = QLabel("ZeroCast Ready")
-        self.log_label.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.log_label.setStyleSheet("color: #1F2937; font-size: 11px; font-weight: 500;")
         bot_layout.addWidget(self.log_label)
 
         bot_layout.addStretch()
@@ -783,13 +822,13 @@ class ZeroCastModule(BaseModule):
         btn_recent.clicked.connect(self.input_controller.send_recent_apps)
         bot_layout.addWidget(btn_recent)
 
-        btn_notify = QPushButton("🔔")
+        btn_notify = QPushButton("▤")
         btn_notify.setFixedWidth(30)
         btn_notify.setToolTip("Notification Shade (F3)")
         btn_notify.clicked.connect(self.input_controller.send_notifications)
         bot_layout.addWidget(btn_notify)
 
-        btn_power = QPushButton("🔒")
+        btn_power = QPushButton("⏻")
         btn_power.setFixedWidth(30)
         btn_power.setToolTip("Screen Lock / Power (F4)")
         btn_power.clicked.connect(self.input_controller.send_power_key)
@@ -798,7 +837,7 @@ class ZeroCastModule(BaseModule):
         bot_layout.addSpacing(4)
 
         # Volume Controls
-        self.btn_audio = QPushButton("🔊")
+        self.btn_audio = QPushButton("◗")
         self.btn_audio.setFixedWidth(32)
         self.btn_audio.setToolTip("Click to Mute / Unmute")
         self.btn_audio.clicked.connect(self._toggle_audio)
@@ -836,7 +875,7 @@ class ZeroCastModule(BaseModule):
         bot_layout.addWidget(self.slider_volume)
 
         self.lbl_volume = QLabel("100%")
-        self.lbl_volume.setStyleSheet("color: #4B5563; font-size: 11px; font-weight: 600; min-width: 32px;")
+        self.lbl_volume.setStyleSheet("color: #111827; font-size: 11px; font-weight: 700; min-width: 32px;")
         bot_layout.addWidget(self.lbl_volume)
 
         self.combo_audio_dev = QComboBox()
@@ -1201,18 +1240,25 @@ class ZeroCastModule(BaseModule):
         if hasattr(self, "combo_audio_dev") and self.combo_audio_dev:
             self.combo_audio_dev.setVisible(not is_compact)
 
+    def _fit_to_stream_aspect(self):
+        """Dynamically fits window to current video aspect ratio."""
+        if self.is_popped_out and self.popout_window:
+            self.popout_window.fit_to_stream_aspect_ratio()
+        elif self.canvas:
+            self.canvas.update()
+
     def _toggle_dim_screen(self):
         """Toggles phone screen dimming (brightness to 0 to save battery/heat)."""
         self.is_screen_dimmed = not getattr(self, "is_screen_dimmed", False)
         self.input_controller.set_screen_dimmed(self.is_screen_dimmed)
         if hasattr(self, "btn_dim_screen") and self.btn_dim_screen:
             if self.is_screen_dimmed:
-                self.btn_dim_screen.setText("☀️ Restore")
+                self.btn_dim_screen.setText("◓ Restore")
                 self.btn_dim_screen.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: 700; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
                 if self.log_label:
                     self.log_label.setText("Phone screen dimmed (Power save active)")
             else:
-                self.btn_dim_screen.setText("🌙 Dim Screen")
+                self.btn_dim_screen.setText("◒ Dim")
                 self.btn_dim_screen.setStyleSheet("background-color: #F3F4F6; color: #111827; border: 1px solid #D1D5DB; font-weight: 600; padding: 4px 8px; border-radius: 6px; font-size: 11px;")
                 if self.log_label:
                     self.log_label.setText("Phone screen brightness restored")

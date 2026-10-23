@@ -67,7 +67,7 @@ class ModuleCard(QFrame):
         if port_info:
             port_lbl = QLabel(port_info)
             port_lbl.setFont(QFont("Consolas", 10))
-            port_lbl.setStyleSheet("color: #6B7280;")
+            port_lbl.setStyleSheet("color: #374151;")
             title_col.addWidget(port_lbl)
 
         header_row.addLayout(title_col)
@@ -84,7 +84,7 @@ class ModuleCard(QFrame):
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
         desc_lbl.setFont(QFont("Segoe UI", 11))
-        desc_lbl.setStyleSheet("color: #4B5563; line-height: 1.5;")
+        desc_lbl.setStyleSheet("color: #374151; line-height: 1.5;")
         layout.addWidget(desc_lbl)
 
         layout.addStretch()
@@ -153,9 +153,9 @@ class ModuleCard(QFrame):
             self.status_pill.setText("○ INACTIVE")
             self.status_pill.setStyleSheet("""
                 background-color: #F3F4F6;
-                color: #6B7280;
+                color: #374151;
                 padding: 3px 8px;
-                border: 1px solid #E5E7EB;
+                border: 1px solid #D1D5DB;
                 border-radius: 4px;
                 font-size: 9px;
                 font-weight: bold;
