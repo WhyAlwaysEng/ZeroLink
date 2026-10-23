@@ -26,6 +26,7 @@ import com.zerocast.service.FloatingOverlayService
 import com.zerocast.service.StreamForegroundService
 import com.zerocast.speedtest.SpeedTestManager
 import com.zerocast.util.ZeroLinkConfig
+import com.zerocast.util.CodecProbeHelper
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Button
@@ -149,6 +150,11 @@ class ZeroCastActivity : AppCompatActivity() {
             binding.spinnerBitrate.setSelection(bitrateIdx)
         }
 
+        val codecIdx = ZeroLinkConfig.getCastCodec(this)
+        if (codecIdx < binding.spinnerCodec.count) {
+            binding.spinnerCodec.setSelection(codecIdx)
+        }
+
         binding.chkAudio.isChecked = ZeroLinkConfig.getCastAudio(this)
         binding.switchDimScreen.isChecked = ZeroLinkConfig.getCastDimScreen(this)
         binding.switchStrictCbr.isChecked = ZeroLinkConfig.getCastStrictCbr(this)
@@ -162,6 +168,7 @@ class ZeroCastActivity : AppCompatActivity() {
         ZeroLinkConfig.setCastResolution(this, binding.spinnerResolution.selectedItemPosition)
         ZeroLinkConfig.setCastFps(this, binding.spinnerFps.selectedItemPosition)
         ZeroLinkConfig.setCastBitrate(this, binding.spinnerBitrate.selectedItemPosition)
+        ZeroLinkConfig.setCastCodec(this, binding.spinnerCodec.selectedItemPosition)
         ZeroLinkConfig.setCastAudio(this, binding.chkAudio.isChecked)
         ZeroLinkConfig.setCastDimScreen(this, binding.switchDimScreen.isChecked)
         ZeroLinkConfig.setCastStrictCbr(this, binding.switchStrictCbr.isChecked)
@@ -218,6 +225,18 @@ class ZeroCastActivity : AppCompatActivity() {
         val adapterBitrate = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, bitrateOptions)
         binding.spinnerBitrate.adapter = adapterBitrate
         binding.spinnerBitrate.setSelection(4)
+
+        // Codec selection with Hardware capability auto-detection
+        val codecOptions = mutableListOf("H.264 (Default - Most Compatible)")
+        if (CodecProbeHelper.isHardwareHevcSupported()) {
+            codecOptions.add("H.265 / HEVC (High Efficiency • 50% Bandwidth)")
+        }
+        if (CodecProbeHelper.isHardwareAv1Supported()) {
+            codecOptions.add("AV1 (Next-Gen Hardware)")
+        }
+        val adapterCodec = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, codecOptions)
+        binding.spinnerCodec.adapter = adapterCodec
+        binding.spinnerCodec.setSelection(0)
     }
 
     private fun isUsbCablePluggedIn(): Boolean {
@@ -373,6 +392,12 @@ class ZeroCastActivity : AppCompatActivity() {
 
         val bitrateKbps = BITRATE_VALUES_KBPS.getOrElse(binding.spinnerBitrate.selectedItemPosition) { 18000 }
 
+        val selectedCodecStr = when (binding.spinnerCodec.selectedItemPosition) {
+            1 -> if (CodecProbeHelper.isHardwareHevcSupported()) "HEVC" else "H264"
+            2 -> if (CodecProbeHelper.isHardwareAv1Supported()) "AV1" else "H264"
+            else -> "H264"
+        }
+
         val dimScreen = binding.switchDimScreen.isChecked
         val (w, h) = getTargetDimensions()
 
@@ -388,6 +413,7 @@ class ZeroCastActivity : AppCompatActivity() {
             putExtra(StreamForegroundService.EXTRA_FPS, fps)
             putExtra(StreamForegroundService.EXTRA_QUALITY, 80)
             putExtra(StreamForegroundService.EXTRA_USE_H264, true)
+            putExtra(StreamForegroundService.EXTRA_VIDEO_CODEC, selectedCodecStr)
             putExtra(StreamForegroundService.EXTRA_CAPTURE_AUDIO, binding.chkAudio.isChecked)
             putExtra(StreamForegroundService.EXTRA_BITRATE_KBPS, bitrateKbps)
             putExtra(StreamForegroundService.EXTRA_USE_CBR, binding.switchStrictCbr.isChecked)

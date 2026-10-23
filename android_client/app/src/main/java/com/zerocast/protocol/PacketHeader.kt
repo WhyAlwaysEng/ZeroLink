@@ -12,6 +12,8 @@ object PacketHeader {
     const val TYPE_AUDIO: Byte = 0x03
     const val TYPE_CONFIG_JSON: Byte = 0x04
     const val TYPE_INPUT_CONTROL: Byte = 0x05
+    const val TYPE_VIDEO_HEVC: Byte = 0x06
+    const val TYPE_VIDEO_AV1: Byte = 0x07
 
     const val FLAG_KEYFRAME: Byte = 0x01
     const val FLAG_CODEC_CONFIG: Byte = 0x02

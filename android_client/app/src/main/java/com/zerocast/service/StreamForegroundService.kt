@@ -23,6 +23,7 @@ import androidx.core.app.NotificationCompat
 import androidx.lifecycle.LifecycleService
 import com.zerocast.capture.AudioCaptureManager
 import com.zerocast.capture.ScreenCaptureH264Manager
+import com.zerocast.capture.ScreenCaptureHevcManager
 import com.zerocast.capture.ScreenCaptureManager
 import com.zerocast.network.StreamSender
 import com.zerocast.protocol.PacketHeader
@@ -53,6 +54,7 @@ class StreamForegroundService : LifecycleService() {
         const val EXTRA_FPS = "extra_fps"
         const val EXTRA_QUALITY = "extra_quality"
         const val EXTRA_USE_H264 = "extra_use_h264"
+        const val EXTRA_VIDEO_CODEC = "extra_video_codec"
         const val EXTRA_CAPTURE_AUDIO = "extra_capture_audio"
         const val EXTRA_BITRATE_KBPS = "extra_bitrate_kbps"
         const val EXTRA_USE_CBR = "extra_use_cbr"
@@ -69,6 +71,7 @@ class StreamForegroundService : LifecycleService() {
     private var mediaProjection: MediaProjection? = null
     private var screenCaptureManager: ScreenCaptureManager? = null
     private var screenCaptureH264Manager: ScreenCaptureH264Manager? = null
+    private var screenCaptureHevcManager: ScreenCaptureHevcManager? = null
     private var audioCaptureManager: AudioCaptureManager? = null
     private var streamSender: StreamSender? = null
     private var dummyImageReader: ImageReader? = null
@@ -86,6 +89,7 @@ class StreamForegroundService : LifecycleService() {
     private var useCbrCap = true
     private var currentHost = "127.0.0.1"
     private var isH264Mode = true
+    private var selectedCodec = "H264"
     private var lastRotation = -1
     private var displayListener: DisplayManager.DisplayListener? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -241,6 +245,7 @@ class StreamForegroundService : LifecycleService() {
         streamBitrateKbps = intent.getIntExtra(EXTRA_BITRATE_KBPS, 14000)
         useCbrCap = intent.getBooleanExtra(EXTRA_USE_CBR, true)
         isH264Mode = intent.getBooleanExtra(EXTRA_USE_H264, true)
+        selectedCodec = intent.getStringExtra(EXTRA_VIDEO_CODEC) ?: "H264"
         val captureAudio = intent.getBooleanExtra(EXTRA_CAPTURE_AUDIO, true)
 
         if (resultCode != Activity.RESULT_OK || resultData == null) {
@@ -264,10 +269,11 @@ class StreamForegroundService : LifecycleService() {
         streamSender = StreamSender(host, port, dropLateFrames = false, listener = object : StreamSender.StreamListener {
             override fun onConnected() {
                 Log.d(TAG, "Connected to PC: $host:$port")
+                val codecDisplayName = if (selectedCodec == "HEVC") "H.265 / HEVC" else (if (isH264Mode) "H.264" else "MJPEG")
                 val configJson = """
                     {
                         "type": "CONFIG",
-                        "codec": "${if (isH264Mode) "H.264" else "MJPEG"}",
+                        "codec": "$codecDisplayName",
                         "width": $baseWidth,
                         "height": $baseHeight,
                         "fps": $streamFps,
@@ -304,9 +310,11 @@ class StreamForegroundService : LifecycleService() {
                     val fallbackKbps = maxOf(4500, streamBitrateKbps / 2)
                     Log.w(TAG, "Network congestion detected -> Scaling bitrate down to ${fallbackKbps} Kbps")
                     screenCaptureH264Manager?.updateBitrate(fallbackKbps)
+                    screenCaptureHevcManager?.updateBitrate(fallbackKbps)
                 } else {
                     Log.d(TAG, "Network recovered -> Restoring bitrate to ${streamBitrateKbps} Kbps")
                     screenCaptureH264Manager?.updateBitrate(streamBitrateKbps)
+                    screenCaptureHevcManager?.updateBitrate(streamBitrateKbps)
                 }
             }
         })
@@ -346,17 +354,49 @@ class StreamForegroundService : LifecycleService() {
 
         if (isH264Mode) {
             val bitrateKbps = if (streamBitrateKbps > 0) streamBitrateKbps else (if (w >= 1080 || h >= 1080) 12000 else 6000)
-            screenCaptureH264Manager = ScreenCaptureH264Manager(
-                mediaProjection = proj,
-                width = w,
-                height = h,
-                dpi = streamDpi,
-                targetFps = streamFps,
-                bitrateKbps = bitrateKbps,
-                streamSender = sender,
-                useCbrCap = useCbrCap
-            )
-            screenCaptureH264Manager?.start()
+            if (selectedCodec == "HEVC") {
+                try {
+                    screenCaptureHevcManager = ScreenCaptureHevcManager(
+                        mediaProjection = proj,
+                        width = w,
+                        height = h,
+                        dpi = streamDpi,
+                        targetFps = streamFps,
+                        bitrateKbps = bitrateKbps,
+                        streamSender = sender,
+                        useCbrCap = useCbrCap
+                    )
+                    screenCaptureHevcManager?.start()
+                    Log.d(TAG, "Started ScreenCaptureHevcManager successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "HEVC startup failed, auto-fallback to H.264: ${e.message}")
+                    screenCaptureHevcManager = null
+                    selectedCodec = "H264"
+                    screenCaptureH264Manager = ScreenCaptureH264Manager(
+                        mediaProjection = proj,
+                        width = w,
+                        height = h,
+                        dpi = streamDpi,
+                        targetFps = streamFps,
+                        bitrateKbps = bitrateKbps,
+                        streamSender = sender,
+                        useCbrCap = useCbrCap
+                    )
+                    screenCaptureH264Manager?.start()
+                }
+            } else {
+                screenCaptureH264Manager = ScreenCaptureH264Manager(
+                    mediaProjection = proj,
+                    width = w,
+                    height = h,
+                    dpi = streamDpi,
+                    targetFps = streamFps,
+                    bitrateKbps = bitrateKbps,
+                    streamSender = sender,
+                    useCbrCap = useCbrCap
+                )
+                screenCaptureH264Manager?.start()
+            }
         } else {
             screenCaptureManager = ScreenCaptureManager(
                 mediaProjection = proj,
@@ -405,6 +445,9 @@ class StreamForegroundService : LifecycleService() {
                 screenCaptureH264Manager?.stop()
                 screenCaptureH264Manager = null
 
+                screenCaptureHevcManager?.stop()
+                screenCaptureHevcManager = null
+
                 screenCaptureManager?.stop()
                 screenCaptureManager = null
 
@@ -432,6 +475,9 @@ class StreamForegroundService : LifecycleService() {
 
             screenCaptureH264Manager?.stop()
             screenCaptureH264Manager = null
+
+            screenCaptureHevcManager?.stop()
+            screenCaptureHevcManager = null
 
             screenCaptureManager?.stop()
             screenCaptureManager = null
@@ -518,6 +564,9 @@ class StreamForegroundService : LifecycleService() {
 
         screenCaptureH264Manager?.stop()
         screenCaptureH264Manager = null
+
+        screenCaptureHevcManager?.stop()
+        screenCaptureHevcManager = null
 
         screenCaptureManager?.stop()
         screenCaptureManager = null

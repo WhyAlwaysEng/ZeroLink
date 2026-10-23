@@ -26,10 +26,12 @@ from core.telemetry import TelemetryTracker, TelemetryStats
 from core.adb_helper import AdbManager
 from core.audio_player import AudioPlayer
 from core.h264_decoder import H264Decoder
+from core.hevc_decoder import HevcDecoder
+from core.av1_decoder import Av1Decoder
 from core.discovery import LanDiscoveryService
 from core.input_controller import InputController
 from core.virtual_cam import VirtualCameraManager
-from core.protocol import TYPE_VIDEO_MJPEG
+from core.protocol import TYPE_VIDEO_MJPEG, TYPE_VIDEO_H264, TYPE_VIDEO_HEVC, TYPE_VIDEO_AV1
 from core.speedtest_server import SpeedTestServer, SPEEDTEST_PORT
 from ui.speedtest_dialog import SpeedTestDialog
 from ui.flow_layout import FlowLayout
@@ -442,6 +444,8 @@ class ZeroCastModule(BaseModule):
         self.adb_manager = AdbManager()
         self.audio_player = AudioPlayer()
         self.h264_decoder = H264Decoder()
+        self.hevc_decoder = HevcDecoder()
+        self.av1_decoder = Av1Decoder()
         self.input_controller = InputController(self.adb_manager)
         self.virtual_cam = VirtualCameraManager(target_width=1280, target_height=720, fps=30)
         self.discovery = LanDiscoveryService(tcp_port=self.port, local_ip=self.local_ip)
@@ -891,6 +895,8 @@ class ZeroCastModule(BaseModule):
             self.log_label.setText(f"Connected: {client_info} [{mode_desc}]")
         self.telemetry.reset()
         self.h264_decoder.reset()
+        self.hevc_decoder.reset()
+        self.av1_decoder.reset()
 
         if self.chk_auto_popout and self.chk_auto_popout.isChecked() and not self.is_popped_out:
             QTimer.singleShot(250, self._maybe_auto_popout)
@@ -937,9 +943,33 @@ class ZeroCastModule(BaseModule):
             # In audio-only eco mode, ignore incoming video frames so they don't display on screen or pop out
             return
 
-        if frame_type == 0x02:  # TYPE_VIDEO_H264
+        if frame_type == TYPE_VIDEO_H264 or frame_type == 0x02:
             self.current_codec_name = "H.264"
             images = self.h264_decoder.decode(payload)
+            if images:
+                bytes_per_img = len(payload) // len(images)
+                for img in images:
+                    if self.virtual_cam.is_active:
+                        self.virtual_cam.push_frame(img)
+                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                    pixmap = QPixmap.fromImage(img)
+                    if self.canvas:
+                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+        elif frame_type == TYPE_VIDEO_HEVC or frame_type == 0x06:
+            self.current_codec_name = "H.265 / HEVC"
+            images = self.hevc_decoder.decode(payload)
+            if images:
+                bytes_per_img = len(payload) // len(images)
+                for img in images:
+                    if self.virtual_cam.is_active:
+                        self.virtual_cam.push_frame(img)
+                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                    pixmap = QPixmap.fromImage(img)
+                    if self.canvas:
+                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+        elif frame_type == TYPE_VIDEO_AV1 or frame_type == 0x07:
+            self.current_codec_name = "AV1"
+            images = self.av1_decoder.decode(payload)
             if images:
                 bytes_per_img = len(payload) // len(images)
                 for img in images:

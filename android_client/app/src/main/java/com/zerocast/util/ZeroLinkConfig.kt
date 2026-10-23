@@ -17,6 +17,7 @@ object ZeroLinkConfig {
     private const val KEY_CAST_AUDIO = "cast_audio"
     private const val KEY_CAST_DIM = "cast_dim"
     private const val KEY_CAST_STRICT_CBR = "cast_strict_cbr"
+    private const val KEY_CAST_CODEC = "cast_codec"
 
     fun getServerIp(context: Context): String {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -96,5 +97,15 @@ object ZeroLinkConfig {
     fun setCastStrictCbr(context: Context, enabled: Boolean) {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         sp.edit().putBoolean(KEY_CAST_STRICT_CBR, enabled).apply()
+    }
+
+    fun getCastCodec(context: Context): Int {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getInt(KEY_CAST_CODEC, 0) // default 0: H.264
+    }
+
+    fun setCastCodec(context: Context, index: Int) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putInt(KEY_CAST_CODEC, index).apply()
     }
 }

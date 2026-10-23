@@ -15,6 +15,9 @@ from core.protocol import (
     unpack_header,
     pack_header,
     TYPE_VIDEO_MJPEG,
+    TYPE_VIDEO_H264,
+    TYPE_VIDEO_HEVC,
+    TYPE_VIDEO_AV1,
     TYPE_INPUT_CONTROL,
     TYPE_CONFIG_JSON
 )
@@ -188,7 +191,7 @@ class StreamServer(QObject):
                     break
 
                 # 4. Dispatch packet
-                if packet_type in (TYPE_VIDEO_MJPEG, 0x02):
+                if packet_type in (TYPE_VIDEO_MJPEG, TYPE_VIDEO_H264, TYPE_VIDEO_HEVC, TYPE_VIDEO_AV1):
                     self.frame_received.emit(payload, packet_type, timestamp_us)
                 elif packet_type == 0x03:  # TYPE_AUDIO
                     self.audio_received.emit(payload)
