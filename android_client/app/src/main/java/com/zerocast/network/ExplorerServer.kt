@@ -455,13 +455,15 @@ class ExplorerServer(
         val array = JSONArray()
 
         if (dir.exists() && dir.isDirectory) {
-            val files = dir.listFiles()
-            if (files != null) {
-                val sorted = files.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
-                for (f in sorted) {
-                    val ext = if (f.isDirectory) "" else f.extension.lowercase()
+            val rawFiles = dir.listFiles()
+            if (rawFiles != null) {
+                val list = ArrayList<JSONObject>(rawFiles.size)
+                for (f in rawFiles) {
+                    val isDir = f.isDirectory
+                    val name = f.name
+                    val ext = if (isDir) "" else f.extension.lowercase()
                     val category = when {
-                        f.isDirectory -> "folder"
+                        isDir -> "folder"
                         ext in listOf("jpg", "jpeg", "png", "webp", "gif") -> "image"
                         ext in listOf("mp4", "mkv", "mov", "avi", "webm") -> "video"
                         ext in listOf("pdf", "doc", "docx", "txt", "xlsx") -> "document"
@@ -469,14 +471,20 @@ class ExplorerServer(
                         ext == "apk" -> "apk"
                         else -> "file"
                     }
-                    val item = JSONObject().apply {
-                        put("name", f.name)
+                    list.add(JSONObject().apply {
+                        put("name", name)
                         put("path", f.absolutePath)
-                        put("isDir", f.isDirectory)
-                        put("size", if (f.isDirectory) 0L else f.length())
+                        put("isDir", isDir)
+                        put("size", if (isDir) 0L else f.length())
                         put("date", f.lastModified())
                         put("category", category)
-                    }
+                    })
+                }
+
+                // In-memory sort with zero repeated disk stat calls
+                list.sortWith(compareBy({ !it.optBoolean("isDir") }, { it.optString("name").lowercase() }))
+
+                for (item in list) {
                     array.put(item)
                 }
             }

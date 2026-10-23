@@ -87,25 +87,26 @@ class MediaWorker(QThread):
 
 
 class FilesWorker(QThread):
-    result_ready = pyqtSignal(dict)
-    error_occurred = pyqtSignal(str)
+    result_ready = pyqtSignal(int, dict)
+    error_occurred = pyqtSignal(int, str)
 
-    def __init__(self, host: str, port: int, path: str):
+    def __init__(self, host: str, port: int, path: str, request_id: int = 0):
         super().__init__()
         self.host = host
         self.port = port
         self.path = path
+        self.request_id = request_id
 
     def run(self):
         encoded = urllib.parse.quote(self.path)
         url = f"http://{self.host}:{self.port}/api/files/list?path={encoded}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=6) as resp:
+            with urllib.request.urlopen(req, timeout=20) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
-                self.result_ready.emit(data)
+                self.result_ready.emit(self.request_id, data)
         except Exception as e:
-            self.error_occurred.emit(str(e))
+            self.error_occurred.emit(self.request_id, str(e))
 
 
 class ThumbQueueWorker(QThread):
@@ -1353,9 +1354,12 @@ class ZeroExplorerModule(BaseModule):
         self.table_files.setColumnCount(4)
         self.table_files.setHorizontalHeaderLabels(["Name", "Type / Category", "Date Modified", "Size"])
         self.table_files.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        self.table_files.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_files.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
-        self.table_files.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.table_files.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
+        self.table_files.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Interactive)
+        self.table_files.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Interactive)
+        self.table_files.setColumnWidth(1, 110)
+        self.table_files.setColumnWidth(2, 140)
+        self.table_files.setColumnWidth(3, 100)
         self.table_files.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table_files.setShowGrid(False)
         self.table_files.setStyleSheet("""
@@ -1633,20 +1637,43 @@ class ZeroExplorerModule(BaseModule):
             itm.setIcon(QIcon(pixmap))
 
     def fetch_files(self, path: str):
-        if self._files_worker and self._files_worker.isRunning():
-            self._files_worker.terminate()
-        self._files_worker = FilesWorker(self.phone_host, self.port, path)
+        self._files_request_seq = getattr(self, "_files_request_seq", 0) + 1
+        req_id = self._files_request_seq
+
+        # Show immediate feedback so the UI never feels frozen
+        self.txt_breadcrumb.setText(path)
+        self.table_files.setRowCount(1)
+        loading_item = QTableWidgetItem(f"  ⏳ Loading folder contents ({os.path.basename(path) or path})...")
+        loading_item.setForeground(QColor("#6B7280"))
+        self.table_files.setItem(0, 0, loading_item)
+        self.table_files.setItem(0, 1, QTableWidgetItem("--"))
+        self.table_files.setItem(0, 2, QTableWidgetItem(""))
+        self.table_files.setItem(0, 3, QTableWidgetItem(""))
+        QApplication.processEvents()
+
+        self._files_worker = FilesWorker(self.phone_host, self.port, path, request_id=req_id)
         self._files_worker.result_ready.connect(self._on_files_received)
-        self._files_worker.error_occurred.connect(self._on_error)
+        self._files_worker.error_occurred.connect(self._on_files_error)
         self._files_worker.start()
 
-    def _on_files_received(self, data: dict):
+    def _on_files_received(self, req_id: int, data: dict):
+        if req_id != getattr(self, "_files_request_seq", 0):
+            return
+
         self.current_folder_path = data.get("currentPath", self.current_folder_path)
         self.parent_folder_path = data.get("parentPath", "")
         self.txt_breadcrumb.setText(self.current_folder_path)
 
         self.raw_files_list = data.get("files", [])
         self._apply_sorting_and_filter()
+
+    def _on_files_error(self, req_id: int, err: str):
+        if req_id != getattr(self, "_files_request_seq", 0):
+            return
+        self.table_files.setRowCount(1)
+        err_item = QTableWidgetItem(f"  ⚠ Failed to load folder: {err}")
+        err_item.setForeground(QColor("#EF4444"))
+        self.table_files.setItem(0, 0, err_item)
 
     def _apply_sorting_and_filter(self):
         query = self.txt_search_filter.text().strip().lower()
@@ -1667,41 +1694,48 @@ class ZeroExplorerModule(BaseModule):
         elif "Category" in sort_mode:
             files.sort(key=lambda x: (not x.get("isDir", False), x.get("category", "")))
 
-        self.table_files.setRowCount(len(files))
-        for row, f in enumerate(files):
-            name = f.get("name", "")
-            is_dir = f.get("isDir", False)
-            cat = f.get("category", "file").upper()
-            size_b = f.get("size", 0)
-            date_ms = f.get("date", 0)
+        # Batch insertion with updates disabled for instant rendering
+        self.table_files.setUpdatesEnabled(False)
+        self.table_files.blockSignals(True)
+        try:
+            self.table_files.setRowCount(len(files))
+            for row, f in enumerate(files):
+                name = f.get("name", "")
+                is_dir = f.get("isDir", False)
+                cat = f.get("category", "file").upper()
+                size_b = f.get("size", 0)
+                date_ms = f.get("date", 0)
 
-            display_name = f"  {name}"
-            date_str = datetime.fromtimestamp(date_ms / 1000).strftime("%Y-%m-%d %H:%M") if date_ms > 0 else ""
+                display_name = f"  {name}"
+                date_str = datetime.fromtimestamp(date_ms / 1000).strftime("%Y-%m-%d %H:%M") if date_ms > 0 else ""
 
-            if is_dir:
-                type_str = "FOLDER"
-                size_str = "--"
-            else:
-                type_str = cat
-                if size_b >= 1024 ** 3:
-                    size_str = f"{size_b / (1024 ** 3):.2f} GB"
-                elif size_b >= 1024 ** 2:
-                    size_str = f"{size_b / (1024 ** 2):.1f} MB"
+                if is_dir:
+                    type_str = "FOLDER"
+                    size_str = "--"
                 else:
-                    size_str = f"{size_b / 1024:.0f} KB"
+                    type_str = cat
+                    if size_b >= 1024 ** 3:
+                        size_str = f"{size_b / (1024 ** 3):.2f} GB"
+                    elif size_b >= 1024 ** 2:
+                        size_str = f"{size_b / (1024 ** 2):.1f} MB"
+                    else:
+                        size_str = f"{size_b / 1024:.0f} KB"
 
-            item_name = QTableWidgetItem(display_name)
-            item_name.setData(Qt.ItemDataRole.UserRole, f)
-            item_name.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold if is_dir else QFont.Weight.Normal))
+                item_name = QTableWidgetItem(display_name)
+                item_name.setData(Qt.ItemDataRole.UserRole, f)
+                item_name.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold if is_dir else QFont.Weight.Normal))
 
-            item_type = QTableWidgetItem(type_str)
-            item_type.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
-            item_type.setForeground(QColor("#6B7280" if is_dir else "#111827"))
+                item_type = QTableWidgetItem(type_str)
+                item_type.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+                item_type.setForeground(QColor("#6B7280" if is_dir else "#111827"))
 
-            self.table_files.setItem(row, 0, item_name)
-            self.table_files.setItem(row, 1, item_type)
-            self.table_files.setItem(row, 2, QTableWidgetItem(date_str))
-            self.table_files.setItem(row, 3, QTableWidgetItem(size_str))
+                self.table_files.setItem(row, 0, item_name)
+                self.table_files.setItem(row, 1, item_type)
+                self.table_files.setItem(row, 2, QTableWidgetItem(date_str))
+                self.table_files.setItem(row, 3, QTableWidgetItem(size_str))
+        finally:
+            self.table_files.setUpdatesEnabled(True)
+            self.table_files.blockSignals(False)
 
     def _on_navigate_up(self):
         if self.parent_folder_path:
