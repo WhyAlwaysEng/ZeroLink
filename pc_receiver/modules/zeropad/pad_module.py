@@ -167,7 +167,7 @@ class ZeroPadModule(BaseModule):
         t_layout = QVBoxLayout(test_card)
         t_layout.setSpacing(10)
 
-        t_title = QLabel("🧪 Quick Action Tester (Test from PC)")
+        t_title = QLabel("◈ Quick Action Tester (Test from PC)")
         t_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         t_title.setStyleSheet("color: #111827;")
         t_layout.addWidget(t_title)
@@ -175,27 +175,27 @@ class ZeroPadModule(BaseModule):
         grid = QGridLayout()
         grid.setSpacing(8)
 
-        btn_play = QPushButton("⏯️ Play / Pause")
+        btn_play = QPushButton("▷ Play / Pause")
         btn_play.clicked.connect(lambda: self.server._handle_command('{"action":"MEDIA_KEY","key":"PLAY_PAUSE"}', "Local"))
         grid.addWidget(btn_play, 0, 0)
 
-        btn_mute = QPushButton("🔇 Mute Audio")
+        btn_mute = QPushButton("◖ Mute Audio")
         btn_mute.clicked.connect(lambda: self.server._handle_command('{"action":"MEDIA_KEY","key":"MUTE"}', "Local"))
         grid.addWidget(btn_mute, 0, 1)
 
-        btn_vol_up = QPushButton("🔊 Vol +")
+        btn_vol_up = QPushButton("◗ Vol +")
         btn_vol_up.clicked.connect(lambda: self.server._handle_command('{"action":"MEDIA_KEY","key":"VOL_UP"}', "Local"))
         grid.addWidget(btn_vol_up, 1, 0)
 
-        btn_vol_down = QPushButton("🔉 Vol -")
+        btn_vol_down = QPushButton("◗ Vol -")
         btn_vol_down.clicked.connect(lambda: self.server._handle_command('{"action":"MEDIA_KEY","key":"VOL_DOWN"}', "Local"))
         grid.addWidget(btn_vol_down, 1, 1)
 
-        btn_shot = QPushButton("📸 Screenshot (Win+Shift+S)")
+        btn_shot = QPushButton("⧇ Screenshot (Win+Shift+S)")
         btn_shot.clicked.connect(lambda: self.server._handle_command('{"action":"MACRO","name":"SCREENSHOT"}', "Local"))
         grid.addWidget(btn_shot, 2, 0)
 
-        btn_desk = QPushButton("🖥️ Show Desktop (Win+D)")
+        btn_desk = QPushButton("▣ Show Desktop (Win+D)")
         btn_desk.clicked.connect(lambda: self.server._handle_command('{"action":"MACRO","name":"SHOW_DESKTOP"}', "Local"))
         grid.addWidget(btn_desk, 2, 1)
 
@@ -214,7 +214,7 @@ class ZeroPadModule(BaseModule):
         l_layout = QVBoxLayout(log_card)
         l_layout.setSpacing(10)
 
-        l_title = QLabel("📜 Live Macro & Event Log")
+        l_title = QLabel("◈ Live Macro & Event Log")
         l_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         l_title.setStyleSheet("color: #111827;")
         l_layout.addWidget(l_title)
@@ -246,23 +246,29 @@ class ZeroPadModule(BaseModule):
         u_layout = QVBoxLayout(usb_card)
         u_layout.setSpacing(8)
 
-        u_title = QLabel("⚡ USB Cable Zero-Lag Link")
+        u_title = QLabel("⌁ USB Cable Zero-Lag Link")
         u_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         u_title.setStyleSheet("color: #111827;")
         u_layout.addWidget(u_title)
 
-        btn_usb = QPushButton("⚡ Activate USB Cable Tunnel (Port 8894)")
-        btn_usb.setStyleSheet("background-color: #0284C7; color: #FFFFFF; border-radius: 6px; padding: 6px 12px; font-weight: bold;")
+        btn_usb = QPushButton("⌁ Activate USB Cable Tunnel (Port 8894)")
+        btn_usb.setStyleSheet("""
+            QPushButton {
+                background-color: #111827; color: #FFFFFF; border-radius: 6px;
+                padding: 7px 14px; font-size: 11px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #374151; }
+        """)
         lbl_usb_msg = QLabel("Forward port 8894 for 0ms physical wire connection.")
         lbl_usb_msg.setStyleSheet("color: #6B7280; font-size: 10px;")
 
         def _forward_usb():
             ok, msg = self.adb_manager.reverse_port(self.port)
             if ok:
-                lbl_usb_msg.setText("✅ USB Tunnel Active! On phone, connect to 127.0.0.1.")
-                lbl_usb_msg.setStyleSheet("color: #059669; font-size: 10px; font-weight: bold;")
+                lbl_usb_msg.setText("USB Tunnel Active! On phone, connect to 127.0.0.1.")
+                lbl_usb_msg.setStyleSheet("color: #111827; font-size: 10px; font-weight: bold;")
             else:
-                lbl_usb_msg.setText(f"❌ {msg}")
+                lbl_usb_msg.setText(f"{msg}")
                 lbl_usb_msg.setStyleSheet("color: #DC2626; font-size: 10px;")
 
         btn_usb.clicked.connect(_forward_usb)

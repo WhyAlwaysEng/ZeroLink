@@ -281,7 +281,7 @@ class ZeroCamModule(BaseModule):
         u_layout = QVBoxLayout(usb_card)
         u_layout.setSpacing(8)
 
-        u_title = QLabel("⚡ USB Cable High-Speed Mode")
+        u_title = QLabel("⌁ USB Cable High-Speed Mode")
         u_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         u_title.setStyleSheet("color: #111827;")
         u_layout.addWidget(u_title)
@@ -292,26 +292,26 @@ class ZeroCamModule(BaseModule):
         u_desc.setWordWrap(True)
         u_layout.addWidget(u_desc)
 
-        btn_usb_tunnel = QPushButton("⚡ Activate USB Cable Tunnel (Port 8893)")
+        btn_usb_tunnel = QPushButton("⌁ Activate USB Cable Tunnel (Port 8893)")
         btn_usb_tunnel.setStyleSheet("""
             QPushButton {
-                background-color: #0284C7; color: #FFFFFF; border-radius: 6px;
+                background-color: #111827; color: #FFFFFF; border-radius: 6px;
                 padding: 7px 12px; font-size: 11px; font-weight: bold;
             }
-            QPushButton:hover { background-color: #0369A1; }
+            QPushButton:hover { background-color: #374151; }
         """)
-        lbl_usb_status = QLabel("Tip: After clicking, select '⚡ USB Cable (127.0.0.1)' on your phone.")
+        lbl_usb_status = QLabel("Tip: After clicking, select '⌁ USB Cable (127.0.0.1)' on your phone.")
         lbl_usb_status.setStyleSheet("color: #6B7280; font-size: 10px;")
 
         def _on_usb_click():
             if not self.adb_manager.is_available():
-                lbl_usb_status.setText("❌ ADB not detected. Please enable USB Debugging.")
+                lbl_usb_status.setText("ADB not detected. Please enable USB Debugging.")
                 lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px; font-weight: bold;")
                 return
             ok, msg = self.adb_manager.reverse_port(self.port)
             if ok:
-                lbl_usb_status.setText("✅ USB Tunnel Active! On your phone, connect to 127.0.0.1.")
-                lbl_usb_status.setStyleSheet("color: #059669; font-size: 10px; font-weight: bold;")
+                lbl_usb_status.setText("USB Tunnel Active! On your phone, connect to 127.0.0.1.")
+                lbl_usb_status.setStyleSheet("color: #111827; font-size: 10px; font-weight: bold;")
             else:
                 lbl_usb_status.setText(f"❌ {msg}")
                 lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px;")

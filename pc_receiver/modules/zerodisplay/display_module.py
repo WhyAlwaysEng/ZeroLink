@@ -165,7 +165,7 @@ class ZeroDisplayModule(BaseModule):
         cfg_layout = QVBoxLayout(cfg_card)
         cfg_layout.setSpacing(14)
 
-        card_title = QLabel("⚙️ Advanced Quality & Display Settings")
+        card_title = QLabel("◈ Advanced Quality & Display Settings")
         card_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         card_title.setStyleSheet("color: #111827;")
         cfg_layout.addWidget(card_title)
@@ -183,7 +183,7 @@ class ZeroDisplayModule(BaseModule):
         self.combo_monitors.currentIndexChanged.connect(self._on_monitor_changed)
         mon_row.addWidget(self.combo_monitors, 1)
 
-        btn_refresh_mon = QPushButton("🔄 Refresh")
+        btn_refresh_mon = QPushButton("↻ Refresh")
         btn_refresh_mon.setStyleSheet("padding: 4px 10px; font-size: 11px;")
         btn_refresh_mon.clicked.connect(self._populate_monitors)
         mon_row.addWidget(btn_refresh_mon)
@@ -246,7 +246,7 @@ class ZeroDisplayModule(BaseModule):
         cfg_layout.addLayout(scale_row)
 
         # 4:4:4 Chroma Subsampling Checkbox
-        chk_chroma = QCheckBox("🔤 Crystal-Clear Text (4:4:4 Full Chroma Subsampling - No fuzzy text artifacts)")
+        chk_chroma = QCheckBox("◈ Crystal-Clear Text (4:4:4 Full Chroma Subsampling - No fuzzy text artifacts)")
         chk_chroma.setChecked(self.server.enable_444_chroma)
         chk_chroma.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
         chk_chroma.setStyleSheet("color: #111827; margin-top: 4px;")
@@ -269,7 +269,7 @@ class ZeroDisplayModule(BaseModule):
         cfg_layout.addLayout(sharp_row)
 
         # Touch Control Toggle
-        self.chk_touch = QCheckBox("👆 Enable Remote Touch & Stylus Control (Control PC cursor from mobile screen)")
+        self.chk_touch = QCheckBox("⌖ Enable Remote Touch & Stylus Control (Control PC cursor from mobile screen)")
         self.chk_touch.setChecked(self.server.enable_touch)
         self.chk_touch.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
         self.chk_touch.setStyleSheet("color: #111827; margin-top: 6px;")
@@ -284,7 +284,7 @@ class ZeroDisplayModule(BaseModule):
         stats_layout = QVBoxLayout(stats_card)
         stats_layout.setSpacing(12)
 
-        st_title = QLabel("📊 Live Stream Metrics")
+        st_title = QLabel("◈ Live Stream Metrics")
         st_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         st_title.setStyleSheet("color: #111827;")
         stats_layout.addWidget(st_title)
@@ -293,15 +293,16 @@ class ZeroDisplayModule(BaseModule):
         metrics_row.setSpacing(20)
 
         # FPS chip
-        self.lbl_stat_fps = QLabel("⚡ 0 FPS")
+        self.lbl_stat_fps = QLabel("0 FPS")
         self.lbl_stat_fps.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_fps.setStyleSheet("background-color: #F0FDF4; color: #166534; padding: 8px 16px; border-radius: 8px; border: 1px solid #BBF7D0;")
+        self.lbl_stat_fps.setStyleSheet("background-color: #F3F4F6; color: #111827; padding: 6px 14px; border-radius: 6px; border: 1px solid #D1D5DB;")
         metrics_row.addWidget(self.lbl_stat_fps)
 
         # Bitrate chip
-        self.lbl_stat_bitrate = QLabel("📊 0.0 Mbps")
+        self.lbl_stat_bitrate = QLabel("0.0 Mbps")
         self.lbl_stat_bitrate.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_bitrate.setStyleSheet("background-color: #F5F3FF; color: #6D28D9; padding: 8px 16px; border-radius: 8px; border: 1px solid #DDD6FE;")
+        self.lbl_stat_bitrate.setStyleSheet("background-color: #F3F4F6; color: #111827; padding: 6px 14px; border-radius: 6px; border: 1px solid #D1D5DB;")
+        metrics_row.addWidget(self.lbl_stat_bitrate)
         metrics_row.addWidget(self.lbl_stat_bitrate)
 
         metrics_row.addStretch()

@@ -53,7 +53,8 @@ class ModuleCard(QFrame):
         header_row.setSpacing(12)
 
         icon_lbl = QLabel(glyph)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 20))
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 22))
+        icon_lbl.setStyleSheet("color: #111827;")
         header_row.addWidget(icon_lbl)
 
         title_col = QVBoxLayout()
@@ -292,7 +293,7 @@ class DashboardView(QWidget):
         card_cast = ModuleCard(
             module_id="zerocast",
             title="ZeroCast",
-            glyph="📺",
+            glyph="⊡",
             desc="Ultra-low latency GPU H.264 screen & internal audio mirroring with OBS Virtual Camera and reverse control.",
             is_enabled=cast_active,
             is_available=True,
@@ -309,7 +310,7 @@ class DashboardView(QWidget):
         card_drop = ModuleCard(
             module_id="zerodrop",
             title="ZeroDrop",
-            glyph="📁",
+            glyph="⇄",
             desc="High-speed bidirectional LAN & USB file sharing between Windows PC and Android with drag-and-drop.",
             is_enabled=drop_active,
             is_available=True,
@@ -326,7 +327,7 @@ class DashboardView(QWidget):
         card_clip = ModuleCard(
             module_id="zeroclip",
             title="ZeroClip",
-            glyph="📋",
+            glyph="⎘",
             desc="Instant bidirectional shared clipboard. Copy text or links on PC and paste directly on mobile, or vice versa in real-time.",
             is_enabled=clip_active,
             is_available=True,
@@ -343,7 +344,7 @@ class DashboardView(QWidget):
         card_mix = ModuleCard(
             module_id="zeromix",
             title="ZeroMix",
-            glyph="🎛️",
+            glyph="⧉",
             desc="Virtual audio mixer & soundboard. Mix mic with music, auto-duck background audio while speaking, and trigger meme sounds wirelessly.",
             is_enabled=mix_active,
             is_available=True,
@@ -360,7 +361,7 @@ class DashboardView(QWidget):
         card_display = ModuleCard(
             module_id="zerodisplay",
             title="ZeroDisplay",
-            glyph="🖥️",
+            glyph="▣",
             desc="Wireless PC Screen Mirror & Remote Touch Control. Turn your Android tablet or phone into a remote display with full touch gestures.",
             is_enabled=display_active,
             is_available=True,
@@ -377,7 +378,7 @@ class DashboardView(QWidget):
         card_cam = ModuleCard(
             module_id="zerocam",
             title="ZeroCam",
-            glyph="📷",
+            glyph="◎",
             desc="Wireless phone camera streaming into Virtual Webcam for Discord, OBS, and Zoom.",
             is_enabled=cam_active,
             is_available=True,
@@ -394,7 +395,7 @@ class DashboardView(QWidget):
         card_pad = ModuleCard(
             module_id="zeropad",
             title="ZeroPad",
-            glyph="🎮",
+            glyph="▦",
             desc="Wireless PC Media & Macro Remote Controller. Use your phone as a Stream Deck for Windows audio, Discord mute, and shortcuts.",
             is_enabled=pad_active,
             is_available=True,

@@ -251,17 +251,17 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_mix)
         side_layout.addWidget(self.btn_nav_mix)
 
-        self.btn_nav_display = NavButton("ZeroDisplay", "◫", badge="NEW")
+        self.btn_nav_display = NavButton("ZeroDisplay", "▣")
         self.btn_nav_display.clicked.connect(lambda: self.stacked.setCurrentIndex(5))
         self.nav_group.addButton(self.btn_nav_display)
         side_layout.addWidget(self.btn_nav_display)
 
-        self.btn_nav_cam = NavButton("ZeroCam", "◉")
+        self.btn_nav_cam = NavButton("ZeroCam", "◎")
         self.btn_nav_cam.clicked.connect(lambda: self.stacked.setCurrentIndex(6))
         self.nav_group.addButton(self.btn_nav_cam)
         side_layout.addWidget(self.btn_nav_cam)
 
-        self.btn_nav_pad = NavButton("ZeroPad", "⌖", badge="NEW")
+        self.btn_nav_pad = NavButton("ZeroPad", "▦")
         self.btn_nav_pad.clicked.connect(lambda: self.stacked.setCurrentIndex(7))
         self.nav_group.addButton(self.btn_nav_pad)
         side_layout.addWidget(self.btn_nav_pad)

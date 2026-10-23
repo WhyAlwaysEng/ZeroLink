@@ -460,7 +460,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="◫ "
+                    android:text="▣ "
                     android:textColor="@color/text_primary"
                     android:textSize="22sp" />
 
@@ -495,8 +495,8 @@
                     android:paddingTop="3dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="3dp"
-                    android:text="NEW"
-                    android:textColor="#059669"
+                    android:text="MODULE"
+                    android:textColor="@color/text_primary"
                     android:textSize="10sp"
                     android:fontFamily="sans-serif-bold" />
             </LinearLayout>
@@ -527,7 +527,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="◉ "
+                    android:text="◎ "
                     android:textColor="@color/text_primary"
                     android:textSize="22sp" />
 
@@ -553,6 +553,19 @@
                         android:textColor="@color/text_secondary"
                         android:textSize="12sp" />
                 </LinearLayout>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge_pill"
+                    android:paddingStart="8dp"
+                    android:paddingTop="3dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="3dp"
+                    android:text="MODULE"
+                    android:textColor="@color/text_primary"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-bold" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -581,7 +594,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="⌖ "
+                    android:text="▦ "
                     android:textColor="@color/text_primary"
                     android:textSize="22sp" />
 
@@ -616,8 +629,8 @@
                     android:paddingTop="3dp"
                     android:paddingEnd="8dp"
                     android:paddingBottom="3dp"
-                    android:text="NEW"
-                    android:textColor="#059669"
+                    android:text="MODULE"
+                    android:textColor="@color/text_primary"
                     android:textSize="10sp"
                     android:fontFamily="sans-serif-bold" />
             </LinearLayout>
