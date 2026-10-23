@@ -26,6 +26,7 @@ class LanDiscoveryService(QObject):
         self.tcp_port = tcp_port
         self.local_ip = local_ip
         self.hostname = socket.gethostname()
+        self.last_client_ip = "127.0.0.1"
         self.is_running = False
         self._udp_thread: Optional[threading.Thread] = None
         self._tcp_thread: Optional[threading.Thread] = None
@@ -150,6 +151,8 @@ class LanDiscoveryService(QObject):
 
     def _handle_tcp_client(self, sock: socket.socket, addr):
         try:
+            if addr and len(addr) > 0 and addr[0]:
+                self.last_client_ip = addr[0]
             sock.settimeout(4.0)
             data = sock.recv(4096)
             if not data:

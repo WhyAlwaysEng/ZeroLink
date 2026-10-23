@@ -498,6 +498,11 @@ class ZeroPadActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        dragRunnable?.let { dragHandler.removeCallbacks(it) }
+        if (isDragging) {
+            isDragging = false
+            sendMouseUp("left")
+        }
         if (isGyroEnabled) {
             binding.switchGyroAirMouse.isChecked = false
         }
@@ -606,6 +611,10 @@ class ZeroPadActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         dragRunnable?.let { dragHandler.removeCallbacks(it) }
+        if (isDragging) {
+            isDragging = false
+            sendMouseUp("left")
+        }
         disconnect()
         discovery?.stopDiscovery()
     }

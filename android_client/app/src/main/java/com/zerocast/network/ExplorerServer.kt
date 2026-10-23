@@ -188,6 +188,8 @@ class ExplorerServer(
     private fun handleGalleryMedia(out: OutputStream, typeFilter: String, albumFilter: String?, offset: Int = 0, limit: Int = 80) {
         val list = ArrayList<JSONObject>()
 
+        val maxFetch = maxOf(300, (offset + limit) * 2)
+
         // 1. Photos
         if (typeFilter == "all" || typeFilter == "photos") {
             val projection = arrayOf(
@@ -217,7 +219,7 @@ class ExplorerServer(
                     val bucketCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
 
                     var count = 0
-                    while (c.moveToNext() && count < 8000) {
+                    while (c.moveToNext() && count < maxFetch) {
                         val id = c.getLong(idCol)
                         val name = c.getString(nameCol) ?: "Photo"
                         val date = c.getLong(dateCol) * 1000L
@@ -272,7 +274,7 @@ class ExplorerServer(
                     val bucketCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
 
                     var count = 0
-                    while (c.moveToNext() && count < 5000) {
+                    while (c.moveToNext() && count < maxFetch) {
                         val id = c.getLong(idCol)
                         val name = c.getString(nameCol) ?: "Video"
                         val date = c.getLong(dateCol) * 1000L

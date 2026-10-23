@@ -9,7 +9,7 @@ object ZeroLinkConfig {
     const val DEFAULT_DISPLAY_PORT = 8892
     const val DEFAULT_CAM_PORT = 8893
     const val DEFAULT_PAD_PORT = 8894
-    const val DEFAULT_DROP_PORT = 8895
+    const val DEFAULT_DROP_PORT = 8890
     const val DEFAULT_EXPLORER_PORT = 8896
     const val DEFAULT_DEV_PORT = 8897
 

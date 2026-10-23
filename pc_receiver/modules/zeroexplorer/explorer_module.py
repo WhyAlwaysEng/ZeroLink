@@ -111,7 +111,7 @@ class FilesWorker(QThread):
 
 
 class ThumbQueueWorker(QThread):
-    thumb_ready = pyqtSignal(int, QPixmap)
+    thumb_ready = pyqtSignal(int, QImage)
 
     def __init__(self, host: str, port: int):
         super().__init__()
@@ -161,13 +161,13 @@ class ThumbQueueWorker(QThread):
             url = f"http://{self.host}:{self.port}/api/media/thumb?id={p_id}&type={type_param}"
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-                with urllib.request.urlopen(req, timeout=4) as resp:
+                with urllib.request.urlopen(req, timeout=3) as resp:
                     raw_bytes = resp.read()
                     img = QImage.fromData(raw_bytes)
                     if not img.isNull():
-                        # Format into a clean 120x120 centered thumbnail
+                        # Format into a clean 120x120 centered thumbnail using QImage (100% thread-safe)
                         scaled = img.scaled(120, 120, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                        canvas = QPixmap(120, 120)
+                        canvas = QImage(120, 120, QImage.Format.Format_ARGB32_Premultiplied)
                         canvas.fill(QColor(0, 0, 0, 0))
                         painter = QPainter(canvas)
                         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -178,7 +178,7 @@ class ThumbQueueWorker(QThread):
                         self.thumb_ready.emit(p_id, canvas)
             except Exception:
                 pass
-            time.sleep(0.01)
+            time.sleep(0.005)
 
 
 class FileDownloadWorker(QThread):
@@ -959,6 +959,12 @@ class ZeroExplorerModule(BaseModule):
         self.state_changed.emit(self.module_id, False)
         self.status_changed.emit(self.module_id, "Stopped")
         return True
+
+    def set_phone_host(self, host: str):
+        if host and host not in ("0.0.0.0", "255.255.255.255"):
+            self.phone_host = host
+            if hasattr(self, "et_host_ip") and self.et_host_ip:
+                self.et_host_ip.setText(host)
 
     def get_widget(self) -> QWidget:
         if self._widget is None:
@@ -1760,7 +1766,11 @@ class ZeroExplorerModule(BaseModule):
 
     def fetch_storage(self):
         if self._storage_worker and self._storage_worker.isRunning():
-            self._storage_worker.terminate()
+            try:
+                self._storage_worker.result_ready.disconnect()
+                self._storage_worker.error_occurred.disconnect()
+            except Exception:
+                pass
         self._storage_worker = StorageWorker(self.phone_host, self.port)
         self._storage_worker.result_ready.connect(self._on_storage_received)
         self._storage_worker.error_occurred.connect(self._on_error)
@@ -1808,7 +1818,11 @@ class ZeroExplorerModule(BaseModule):
 
     def fetch_media(self, media_type: str, album: Optional[str], offset: int = 0):
         if self._media_worker and self._media_worker.isRunning():
-            self._media_worker.terminate()
+            try:
+                self._media_worker.result_ready.disconnect()
+                self._media_worker.error_occurred.disconnect()
+            except Exception:
+                pass
 
         # Clear items and jump scroll to top for fresh page
         self.gallery_list.clear()
@@ -1904,10 +1918,15 @@ class ZeroExplorerModule(BaseModule):
         if items and self._thumb_queue_worker:
             self._thumb_queue_worker.add_items(items)
 
-    def _on_thumb_ready(self, photo_id: int, pixmap: QPixmap):
+    def _on_thumb_ready(self, photo_id: int, img_or_pixmap):
         itm = self._gallery_item_map.get(photo_id)
-        if itm and not pixmap.isNull():
-            itm.setIcon(QIcon(pixmap))
+        if itm:
+            if isinstance(img_or_pixmap, QImage):
+                pixmap = QPixmap.fromImage(img_or_pixmap)
+            else:
+                pixmap = img_or_pixmap
+            if not pixmap.isNull():
+                itm.setIcon(QIcon(pixmap))
 
     def fetch_files(self, path: str):
         self._files_request_seq = getattr(self, "_files_request_seq", 0) + 1
@@ -1922,7 +1941,6 @@ class ZeroExplorerModule(BaseModule):
         self.table_files.setItem(0, 1, QTableWidgetItem("--"))
         self.table_files.setItem(0, 2, QTableWidgetItem(""))
         self.table_files.setItem(0, 3, QTableWidgetItem(""))
-        QApplication.processEvents()
 
         self._files_worker = FilesWorker(self.phone_host, self.port, path, request_id=req_id)
         self._files_worker.result_ready.connect(self._on_files_received)

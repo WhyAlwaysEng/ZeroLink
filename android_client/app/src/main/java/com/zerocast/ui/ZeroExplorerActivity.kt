@@ -14,6 +14,10 @@ import android.view.ViewGroup
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.zerocast.R
@@ -148,27 +152,33 @@ class ZeroExplorerActivity : AppCompatActivity() {
     }
 
     private fun updateStorageSummary() {
-        try {
-            val root = Environment.getExternalStorageDirectory()
-            val stat = StatFs(root.path)
-            val blockSize = stat.blockSizeLong
-            val totalBlocks = stat.blockCountLong
-            val availableBlocks = stat.availableBlocksLong
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                val root = Environment.getExternalStorageDirectory()
+                val stat = StatFs(root.path)
+                val blockSize = stat.blockSizeLong
+                val totalBlocks = stat.blockCountLong
+                val availableBlocks = stat.availableBlocksLong
 
-            val totalBytes = totalBlocks * blockSize
-            val freeBytes = availableBlocks * blockSize
-            val usedBytes = totalBytes - freeBytes
+                val totalBytes = totalBlocks * blockSize
+                val freeBytes = availableBlocks * blockSize
+                val usedBytes = totalBytes - freeBytes
 
-            val totalGB = totalBytes.toDouble() / (1024 * 1024 * 1024)
-            val usedGB = usedBytes.toDouble() / (1024 * 1024 * 1024)
-            val freePercent = if (totalBytes > 0) ((freeBytes.toDouble() / totalBytes) * 100).toInt() else 0
-            val usedPercent = 100 - freePercent
+                val totalGB = totalBytes.toDouble() / (1024 * 1024 * 1024)
+                val usedGB = usedBytes.toDouble() / (1024 * 1024 * 1024)
+                val freePercent = if (totalBytes > 0) ((freeBytes.toDouble() / totalBytes) * 100).toInt() else 0
+                val usedPercent = 100 - freePercent
 
-            val df = DecimalFormat("#.#")
-            binding.tvStorageSummary.text = "${df.format(usedGB)} GB / ${df.format(totalGB)} GB used (${freePercent}% free)"
-            binding.progressBarStorage.progress = usedPercent
-        } catch (e: Exception) {
-            binding.tvStorageSummary.text = "Storage: Ready"
+                val df = DecimalFormat("#.#")
+                withContext(Dispatchers.Main) {
+                    binding.tvStorageSummary.text = "${df.format(usedGB)} GB / ${df.format(totalGB)} GB used (${freePercent}% free)"
+                    binding.progressBarStorage.progress = usedPercent
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    binding.tvStorageSummary.text = "Storage: Ready"
+                }
+            }
         }
     }
 

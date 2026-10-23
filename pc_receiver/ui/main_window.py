@@ -724,6 +724,11 @@ class MainWindow(QMainWindow):
             if cast_mod and not cast_mod.is_active:
                 self.module_manager.toggle_module("zerocast", True)
                 print(f"[ZeroWake] Synced activation: zerocast activated with zeromix")
+        if module_id == "zeroexplorer":
+            client_ip = getattr(self.discovery_service, "last_client_ip", "")
+            if client_ip and client_ip not in ("127.0.0.1", "0.0.0.0"):
+                if hasattr(self.mod_zeroexplorer, "set_phone_host"):
+                    self.mod_zeroexplorer.set_phone_host(client_ip)
         self._on_navigate_to_module(module_id)
 
     def _on_remote_sleep_module(self, module_id: str):
