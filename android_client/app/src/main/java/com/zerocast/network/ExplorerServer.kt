@@ -69,83 +69,92 @@ class ExplorerServer(
         val clientIp = socket.inetAddress?.hostAddress ?: "Unknown"
         try {
             socket.tcpNoDelay = true
-            socket.sendBufferSize = 1024 * 1024
-            socket.receiveBufferSize = 256 * 1024
-            socket.soTimeout = 15000
+            socket.sendBufferSize = 2 * 1024 * 1024
+            socket.receiveBufferSize = 512 * 1024
+            socket.soTimeout = 20000
             val input = socket.getInputStream()
             val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
             val output = socket.getOutputStream()
 
-            val requestLine = reader.readLine() ?: return
-            val parts = requestLine.split(" ")
-            if (parts.size < 2) return
+            while (isRunning && !socket.isClosed) {
+                val requestLine = reader.readLine() ?: break
+                if (requestLine.isEmpty()) continue
+                val parts = requestLine.split(" ")
+                if (parts.size < 2) break
 
-            val method = parts[0].uppercase()
-            val rawPath = parts[1]
-            val uri = Uri.parse(rawPath)
-            val path = uri.path ?: "/"
+                val method = parts[0].uppercase()
+                val rawPath = parts[1]
+                val uri = Uri.parse(rawPath)
+                val path = uri.path ?: "/"
 
-            val headers = HashMap<String, String>()
-            while (true) {
-                val line = reader.readLine() ?: break
-                if (line.isEmpty()) break
-                val idx = line.indexOf(":")
-                if (idx > 0) {
-                    val key = line.substring(0, idx).trim().lowercase()
-                    val value = line.substring(idx + 1).trim()
-                    headers[key] = value
-                }
-            }
-
-            val rangeHeader = headers["range"]
-
-            when {
-                path == "/api/storage" -> {
-                    handleStorage(output)
-                }
-                path == "/api/gallery/photos" || path == "/api/gallery/media" -> {
-                    val album = uri.getQueryParameter("album")
-                    val type = uri.getQueryParameter("type") ?: "all" // all, photos, videos
-                    val offset = uri.getQueryParameter("offset")?.toIntOrNull() ?: 0
-                    val limit = uri.getQueryParameter("limit")?.toIntOrNull() ?: 80
-                    handleGalleryMedia(output, type, album, offset, limit)
-                }
-                path == "/api/media/thumb" -> {
-                    val idStr = uri.getQueryParameter("id") ?: "0"
-                    val id = idStr.toLongOrNull() ?: 0L
-                    val isVideo = uri.getQueryParameter("type") == "video"
-                    handleThumbnail(output, id, isVideo)
-                }
-                path == "/api/media/raw" -> {
-                    val idStr = uri.getQueryParameter("id") ?: "0"
-                    val id = idStr.toLongOrNull() ?: 0L
-                    val isVideo = uri.getQueryParameter("type") == "video"
-                    val isDownload = uri.getQueryParameter("download") == "true"
-                    val bytesSent = handleRawMedia(output, id, isVideo, rangeHeader)
-                    if (isDownload && bytesSent > 0 && rangeHeader == null) {
-                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", if (isVideo) "Video #$id" else "Photo #$id", bytesSent, clientIp))
+                val headers = HashMap<String, String>()
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    if (line.isEmpty()) break
+                    val idx = line.indexOf(":")
+                    if (idx > 0) {
+                        val key = line.substring(0, idx).trim().lowercase()
+                        val value = line.substring(idx + 1).trim()
+                        headers[key] = value
                     }
                 }
-                path == "/api/files/list" -> {
-                    val folderParam = uri.getQueryParameter("path")
-                    val decodedPath = if (!folderParam.isNullOrEmpty()) URLDecoder.decode(folderParam, "UTF-8") else Environment.getExternalStorageDirectory().path
-                    handleFileList(output, decodedPath)
-                }
-                path == "/api/files/download" -> {
-                    val fileParam = uri.getQueryParameter("path")
-                    val decodedPath = if (!fileParam.isNullOrEmpty()) URLDecoder.decode(fileParam, "UTF-8") else ""
-                    val isDownload = uri.getQueryParameter("download") != "false"
-                    val bytesSent = handleFileDownload(output, decodedPath, rangeHeader)
-                    if (isDownload && bytesSent > 0 && rangeHeader == null) {
-                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
+
+                val rangeHeader = headers["range"]
+                val connHeader = headers["connection"]?.lowercase()
+
+                when {
+                    path == "/api/storage" -> {
+                        handleStorage(output)
+                    }
+                    path == "/api/gallery/photos" || path == "/api/gallery/media" -> {
+                        val album = uri.getQueryParameter("album")
+                        val type = uri.getQueryParameter("type") ?: "all" // all, photos, videos
+                        val offset = uri.getQueryParameter("offset")?.toIntOrNull() ?: 0
+                        val limit = uri.getQueryParameter("limit")?.toIntOrNull() ?: 100
+                        handleGalleryMedia(output, type, album, offset, limit)
+                    }
+                    path == "/api/media/thumb" -> {
+                        val idStr = uri.getQueryParameter("id") ?: "0"
+                        val id = idStr.toLongOrNull() ?: 0L
+                        val isVideo = uri.getQueryParameter("type") == "video"
+                        handleThumbnail(output, id, isVideo)
+                    }
+                    path == "/api/media/raw" -> {
+                        val idStr = uri.getQueryParameter("id") ?: "0"
+                        val id = idStr.toLongOrNull() ?: 0L
+                        val isVideo = uri.getQueryParameter("type") == "video"
+                        val isDownload = uri.getQueryParameter("download") == "true"
+                        val bytesSent = handleRawMedia(output, id, isVideo, rangeHeader)
+                        if (isDownload && bytesSent > 0 && rangeHeader == null) {
+                            onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", if (isVideo) "Video #$id" else "Photo #$id", bytesSent, clientIp))
+                        }
+                    }
+                    path == "/api/files/list" -> {
+                        val folderParam = uri.getQueryParameter("path")
+                        val decodedPath = if (!folderParam.isNullOrEmpty()) URLDecoder.decode(folderParam, "UTF-8") else Environment.getExternalStorageDirectory().path
+                        handleFileList(output, decodedPath)
+                    }
+                    path == "/api/files/download" -> {
+                        val fileParam = uri.getQueryParameter("path")
+                        val decodedPath = if (!fileParam.isNullOrEmpty()) URLDecoder.decode(fileParam, "UTF-8") else ""
+                        val isDownload = uri.getQueryParameter("download") != "false"
+                        val bytesSent = handleFileDownload(output, decodedPath, rangeHeader)
+                        if (isDownload && bytesSent > 0 && rangeHeader == null) {
+                            onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
+                        }
+                    }
+                    else -> {
+                        sendJsonResponse(output, 404, JSONObject().put("error", "Not found").toString())
                     }
                 }
-                else -> {
-                    sendJsonResponse(output, 404, JSONObject().put("error", "Not found").toString())
+                output.flush()
+
+                if (connHeader == "close") {
+                    break
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Request handling error: ${e.message}")
+            // Socket closed or EOF
         } finally {
             try { socket.close() } catch (e: Exception) {}
         }
@@ -293,7 +302,7 @@ class ExplorerServer(
 
         val totalCount = list.size
         val safeOffset = offset.coerceAtLeast(0)
-        val safeLimit = if (limit <= 0) 80 else limit
+        val safeLimit = if (limit <= 0) 100 else limit
         val pagedList = if (safeOffset < totalCount) {
             list.subList(safeOffset, minOf(safeOffset + safeLimit, totalCount))
         } else {
@@ -402,7 +411,7 @@ class ExplorerServer(
                     }
                 }
 
-                val buf = ByteArray(64 * 1024)
+                val buf = ByteArray(128 * 1024)
                 var remaining = contentLength
                 fis.use { inp ->
                     while (remaining > 0) {
@@ -423,7 +432,7 @@ class ExplorerServer(
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = afd.createInputStream()
-                val buf = ByteArray(64 * 1024)
+                val buf = ByteArray(128 * 1024)
                 fis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)
@@ -533,7 +542,7 @@ class ExplorerServer(
                     }
                 }
 
-                val buf = ByteArray(64 * 1024)
+                val buf = ByteArray(128 * 1024)
                 var remaining = contentLength
                 fis.use { inp ->
                     while (remaining > 0) {
@@ -555,7 +564,7 @@ class ExplorerServer(
                 out.write(header.toByteArray(Charsets.UTF_8))
 
                 val fis = FileInputStream(file)
-                val buf = ByteArray(64 * 1024)
+                val buf = ByteArray(128 * 1024)
                 fis.use { inp ->
                     while (true) {
                         val read = inp.read(buf)

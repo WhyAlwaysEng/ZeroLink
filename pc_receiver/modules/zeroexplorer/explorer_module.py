@@ -391,6 +391,7 @@ class ProVideoPlayerDialog(QDialog):
     def __init__(self, stream_url: str, title: str, duration_ms: int = 0, parent=None):
         super().__init__(parent)
         self.stream_url = stream_url
+        self.title = title
         self.duration_ms = duration_ms
         self.is_user_scrubbing = False
 
@@ -580,8 +581,8 @@ class ProVideoPlayerDialog(QDialog):
         self.btn_fs.clicked.connect(self._toggle_fullscreen)
         ctrl_row.addWidget(self.btn_fs)
 
-        self.btn_ext = QPushButton("⚡ Open in App")
-        self.btn_ext.setToolTip("Open video stream in Windows default media player (VLC, etc.)")
+        self.btn_ext = QPushButton("⚡ Play in Windows Player")
+        self.btn_ext.setToolTip("Stream and open in Windows default video player (VLC, Movies & TV) with native GPU decoding")
         self.btn_ext.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
         self.btn_ext.setCursor(Qt.CursorShape.PointingHandCursor)
         self.btn_ext.setStyleSheet("""
@@ -618,7 +619,35 @@ class ProVideoPlayerDialog(QDialog):
 
     def _open_in_external(self):
         self.player.pause()
-        QDesktopServices.openUrl(QUrl(self.stream_url))
+        self.btn_ext.setText("⏳ Opening in Player...")
+        self.btn_ext.setEnabled(False)
+
+        def _worker():
+            try:
+                temp_dir = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")), "ZeroLink_Cache")
+                os.makedirs(temp_dir, exist_ok=True)
+                clean_name = self.title if self.title.lower().endswith((".mp4", ".mkv", ".mov", ".avi", ".webm")) else f"{self.title}.mp4"
+                cached_path = os.path.join(temp_dir, clean_name)
+                if not os.path.exists(cached_path) or os.path.getsize(cached_path) == 0:
+                    req = urllib.request.Request(self.stream_url, headers={"User-Agent": "ZeroLink-PC"})
+                    with urllib.request.urlopen(req, timeout=30) as resp, open(cached_path, "wb") as f_out:
+                        while True:
+                            chunk = resp.read(256 * 1024)
+                            if not chunk:
+                                break
+                            f_out.write(chunk)
+                os.startfile(cached_path)
+            except Exception:
+                try:
+                    QDesktopServices.openUrl(QUrl(self.stream_url))
+                except Exception:
+                    pass
+            finally:
+                QTimer.singleShot(0, lambda: self.btn_ext.setText("⚡ Play in Windows Player"))
+                QTimer.singleShot(0, lambda: self.btn_ext.setEnabled(True))
+
+        import threading
+        threading.Thread(target=_worker, daemon=True).start()
 
     def closeEvent(self, event):
         try:
@@ -725,12 +754,12 @@ class ZeroExplorerModule(BaseModule):
         self._files_worker: Optional[FilesWorker] = None
         self._thumb_queue_worker: Optional[ThumbQueueWorker] = None
 
-        # Pagination & Gallery State
-        self.gallery_offset = 0
-        self.gallery_limit = 80
+        # Pagination & Gallery State (100 items per page)
+        self.gallery_page = 1
+        self.gallery_page_size = 100
         self.gallery_total = 0
-        self.gallery_has_more = False
-        self.is_loading_more_media = False
+        self.gallery_total_pages = 1
+        self.is_loading_media = False
 
         # Pre-create Clean Placeholders
         self._image_placeholder = self._create_placeholder_icon(is_video=False)
@@ -1092,38 +1121,77 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
-        self.gallery_list.verticalScrollBar().valueChanged.connect(self._on_gallery_scroll)
         layout.addWidget(self.gallery_list, 1)
 
-        # Bottom status and Load More bar
-        bottom_row = QHBoxLayout()
-        self.lbl_gallery_count = QLabel("0 media items")
-        self.lbl_gallery_count.setFont(QFont("Segoe UI", 9))
-        self.lbl_gallery_count.setStyleSheet("color: #6B7280;")
-        bottom_row.addWidget(self.lbl_gallery_count)
+        # ==================== Page-by-Page Pagination Bar (100 items/page) ====================
+        page_bar = QHBoxLayout()
+        page_bar.setContentsMargins(4, 6, 4, 4)
+        page_bar.setSpacing(8)
 
-        bottom_row.addStretch()
+        self.lbl_page_info = QLabel("Showing 0 – 0 of 0 items")
+        self.lbl_page_info.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        self.lbl_page_info.setStyleSheet("color: #374151;")
+        page_bar.addWidget(self.lbl_page_info)
 
-        self.btn_load_more = QPushButton("▾ Load More Media")
-        self.btn_load_more.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        self.btn_load_more.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.btn_load_more.setStyleSheet("""
+        page_bar.addStretch()
+
+        page_btn_style = """
             QPushButton {
-                background-color: #F3F4F6;
+                background-color: #FFFFFF;
                 color: #111827;
                 border: 1px solid #D1D5DB;
                 border-radius: 6px;
-                padding: 5px 14px;
+                padding: 5px 12px;
+                font-size: 12px;
+                font-weight: 600;
             }
             QPushButton:hover {
-                background-color: #E5E7EB;
+                background-color: #F3F4F6;
+                border-color: #9CA3AF;
             }
-        """)
-        self.btn_load_more.clicked.connect(self._load_next_gallery_page)
-        self.btn_load_more.setVisible(False)
-        bottom_row.addWidget(self.btn_load_more)
+            QPushButton:disabled {
+                background-color: #F9FAFB;
+                color: #9CA3AF;
+                border-color: #E5E7EB;
+            }
+        """
 
-        layout.addLayout(bottom_row)
+        self.btn_page_first = QPushButton("⏮ First")
+        self.btn_page_first.setStyleSheet(page_btn_style)
+        self.btn_page_first.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_page_first.clicked.connect(self._go_first_page)
+        page_bar.addWidget(self.btn_page_first)
+
+        self.btn_page_prev = QPushButton("◀ Prev")
+        self.btn_page_prev.setStyleSheet(page_btn_style)
+        self.btn_page_prev.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_page_prev.clicked.connect(self._go_prev_page)
+        page_bar.addWidget(self.btn_page_prev)
+
+        self.lbl_page_badge = QLabel("Page 1 / 1")
+        self.lbl_page_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.lbl_page_badge.setStyleSheet("""
+            background-color: #111827;
+            color: #FFFFFF;
+            border-radius: 6px;
+            padding: 5px 14px;
+        """)
+        self.lbl_page_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        page_bar.addWidget(self.lbl_page_badge)
+
+        self.btn_page_next = QPushButton("Next ▶")
+        self.btn_page_next.setStyleSheet(page_btn_style)
+        self.btn_page_next.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_page_next.clicked.connect(self._go_next_page)
+        page_bar.addWidget(self.btn_page_next)
+
+        self.btn_page_last = QPushButton("Last ⏭")
+        self.btn_page_last.setStyleSheet(page_btn_style)
+        self.btn_page_last.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_page_last.clicked.connect(self._go_last_page)
+        page_bar.addWidget(self.btn_page_last)
+
+        layout.addLayout(page_bar)
 
         return tab
 
@@ -1437,21 +1505,43 @@ class ZeroExplorerModule(BaseModule):
     def _set_media_filter(self, media_type: str, album: Optional[str]):
         self.active_media_filter = media_type
         self.active_album_filter = album
-        self.fetch_media(media_type, album, is_append=False)
+        self.gallery_page = 1
+        self._load_gallery_page(1)
 
-    def fetch_media(self, media_type: str, album: Optional[str], is_append: bool = False):
+    def _go_first_page(self):
+        if self.gallery_page > 1:
+            self._load_gallery_page(1)
+
+    def _go_prev_page(self):
+        if self.gallery_page > 1:
+            self._load_gallery_page(self.gallery_page - 1)
+
+    def _go_next_page(self):
+        if self.gallery_page < self.gallery_total_pages:
+            self._load_gallery_page(self.gallery_page + 1)
+
+    def _go_last_page(self):
+        if self.gallery_page < self.gallery_total_pages:
+            self._load_gallery_page(self.gallery_total_pages)
+
+    def _load_gallery_page(self, page_num: int):
+        self.gallery_page = max(1, page_num)
+        offset = (self.gallery_page - 1) * self.gallery_page_size
+        self.fetch_media(self.active_media_filter, self.active_album_filter, offset=offset)
+
+    def fetch_media(self, media_type: str, album: Optional[str], offset: int = 0):
         if self._media_worker and self._media_worker.isRunning():
             self._media_worker.terminate()
 
-        if not is_append:
-            self.gallery_offset = 0
-            self.gallery_items = []
-            self.gallery_list.clear()
-            self._gallery_item_map.clear()
-            if self._thumb_queue_worker:
-                self._thumb_queue_worker.clear()
-            self.lbl_gallery_count.setText("Loading media from device...")
-            self.btn_load_more.setVisible(False)
+        # Clear items and jump scroll to top for fresh page
+        self.gallery_list.clear()
+        self._gallery_item_map.clear()
+        self.gallery_list.verticalScrollBar().setValue(0)
+
+        if self._thumb_queue_worker:
+            self._thumb_queue_worker.clear()
+
+        self.lbl_page_info.setText("Loading media from device...")
 
         if not self._thumb_queue_worker or not self._thumb_queue_worker.isRunning():
             self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port)
@@ -1460,28 +1550,27 @@ class ZeroExplorerModule(BaseModule):
 
         self._media_worker = MediaWorker(
             self.phone_host, self.port, media_type, album,
-            offset=self.gallery_offset, limit=self.gallery_limit
+            offset=offset, limit=self.gallery_page_size
         )
         self._media_worker.result_ready.connect(self._on_media_received)
         self._media_worker.error_occurred.connect(self._on_error)
         self._media_worker.start()
 
     def _on_media_received(self, data):
-        self.is_loading_more_media = False
         if isinstance(data, dict):
-            new_items = data.get("items", [])
-            self.gallery_total = data.get("total", len(new_items))
-            self.gallery_has_more = data.get("hasMore", False)
-            self.gallery_offset += len(new_items)
+            items = data.get("items", [])
+            self.gallery_total = data.get("total", len(items))
+            offset = data.get("offset", 0)
         else:
-            new_items = data if isinstance(data, list) else []
-            self.gallery_total = len(new_items)
-            self.gallery_has_more = False
-            self.gallery_offset += len(new_items)
+            items = data if isinstance(data, list) else []
+            self.gallery_total = len(items)
+            offset = 0
 
-        self.gallery_items.extend(new_items)
+        self.gallery_items = items
+        self.gallery_list.clear()
+        self._gallery_item_map.clear()
 
-        for itm in new_items:
+        for itm in items:
             p_id = itm.get("id")
             name = itm.get("name", "Media")
             is_video = itm.get("type") == "video"
@@ -1515,32 +1604,28 @@ class ZeroExplorerModule(BaseModule):
             if p_id is not None:
                 self._gallery_item_map[p_id] = list_item
 
-        # Update counter and Load More visibility
-        total_str = f"{self.gallery_total:,}" if self.gallery_total > 0 else "0"
-        shown_str = f"{len(self.gallery_items):,}"
-        if self.gallery_has_more:
-            self.lbl_gallery_count.setText(f"Showing {shown_str} of {total_str} media items (scroll down to load more)")
-            self.btn_load_more.setVisible(True)
+        # Compute page boundaries
+        self.gallery_total_pages = max(1, (self.gallery_total + self.gallery_page_size - 1) // self.gallery_page_size) if self.gallery_total > 0 else 1
+        self.gallery_page = (offset // self.gallery_page_size) + 1
+
+        if len(items) > 0:
+            start_num = offset + 1
+            end_num = offset + len(items)
+            self.lbl_page_info.setText(f"Showing {start_num:,} – {end_num:,} of {self.gallery_total:,} items")
         else:
-            self.lbl_gallery_count.setText(f"All {shown_str} media items loaded")
-            self.btn_load_more.setVisible(False)
+            self.lbl_page_info.setText(f"0 of {self.gallery_total:,} items")
 
-        # Queue thumbnails
-        if new_items and self._thumb_queue_worker:
-            self._thumb_queue_worker.add_items(new_items)
+        self.lbl_page_badge.setText(f"Page {self.gallery_page} / {self.gallery_total_pages}")
 
-    def _on_gallery_scroll(self, value: int):
-        sb = self.gallery_list.verticalScrollBar()
-        if sb.maximum() > 0 and value >= int(sb.maximum() * 0.85):
-            if self.gallery_has_more and not self.is_loading_more_media:
-                self._load_next_gallery_page()
+        # Update button enable states
+        self.btn_page_first.setEnabled(self.gallery_page > 1)
+        self.btn_page_prev.setEnabled(self.gallery_page > 1)
+        self.btn_page_next.setEnabled(self.gallery_page < self.gallery_total_pages)
+        self.btn_page_last.setEnabled(self.gallery_page < self.gallery_total_pages)
 
-    def _load_next_gallery_page(self):
-        if self.is_loading_more_media or not self.gallery_has_more:
-            return
-        self.is_loading_more_media = True
-        self.lbl_gallery_count.setText(f"Loading more media ({len(self.gallery_items):,} of {self.gallery_total:,})...")
-        self.fetch_media(self.active_media_filter, self.active_album_filter, is_append=True)
+        # Enqueue thumbnails for this page of 100 items
+        if items and self._thumb_queue_worker:
+            self._thumb_queue_worker.add_items(items)
 
     def _on_thumb_ready(self, photo_id: int, pixmap: QPixmap):
         itm = self._gallery_item_map.get(photo_id)
