@@ -25,9 +25,10 @@
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="@drawable/bg_badge_pill"
-            android:backgroundTint="#B3000000"
+            android:backgroundTint="#E6FFFFFF"
+            android:elevation="3dp"
             android:src="@android:drawable/ic_menu_revert"
-            app:tint="#FFFFFF" />
+            app:tint="@color/text_primary" />
 
         <TextView
             android:id="@+id/tvCamStatus"
@@ -35,13 +36,14 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="12dp"
             android:background="@drawable/bg_badge_pill"
-            android:backgroundTint="#B3000000"
+            android:backgroundTint="#E6FFFFFF"
+            android:elevation="3dp"
             android:paddingStart="12dp"
             android:paddingTop="6dp"
             android:paddingEnd="12dp"
             android:paddingBottom="6dp"
             android:text="○ Camera Ready"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="12sp"
             android:fontFamily="sans-serif-bold" />
 
@@ -56,18 +58,20 @@
             android:layout_height="40dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/bg_badge_pill"
-            android:backgroundTint="#B3000000"
+            android:backgroundTint="#E6FFFFFF"
+            android:elevation="3dp"
             android:src="@android:drawable/btn_star"
-            app:tint="#FFFFFF" />
+            app:tint="@color/text_primary" />
 
         <ImageButton
             android:id="@+id/btnCamSwitch"
             android:layout_width="40dp"
             android:layout_height="40dp"
             android:background="@drawable/bg_badge_pill"
-            android:backgroundTint="#B3000000"
+            android:backgroundTint="#E6FFFFFF"
+            android:elevation="3dp"
             android:src="@android:drawable/ic_menu_rotate"
-            app:tint="#FFFFFF" />
+            app:tint="@color/text_primary" />
     </LinearLayout>
 
     <!-- Bottom Controls Card -->
@@ -76,10 +80,10 @@
         android:layout_height="wrap_content"
         android:layout_gravity="bottom"
         android:layout_margin="16dp"
-        app:cardBackgroundColor="#E60F172A"
-        app:cardCornerRadius="20dp"
-        app:cardElevation="8dp"
-        app:strokeColor="#334155"
+        app:cardBackgroundColor="@color/surface"
+        app:cardCornerRadius="16dp"
+        app:cardElevation="6dp"
+        app:strokeColor="@color/surface_stroke"
         app:strokeWidth="1dp">
 
         <LinearLayout
@@ -98,7 +102,8 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="📷 "
+                    android:text="◎ "
+                    android:textColor="@color/text_primary"
                     android:textSize="20sp" />
 
                 <LinearLayout
@@ -111,40 +116,46 @@
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:fontFamily="sans-serif-bold"
-                        android:text="ZeroCam: PC Wireless Webcam"
-                        android:textColor="#FFFFFF"
+                        android:fontFamily="sans-serif-black"
+                        android:text="ZeroCam: Wireless Webcam"
+                        android:textColor="@color/text_primary"
                         android:textSize="14sp" />
 
                     <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="Low-Latency Streaming to Discord &amp; OBS"
-                        android:textColor="#9CA3AF"
-                        android:textSize="10sp" />
+                        android:textColor="@color/text_secondary"
+                        android:textSize="11sp" />
                 </LinearLayout>
 
                 <TextView
                     android:id="@+id/tvCamFps"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:background="@drawable/bg_badge_pill"
+                    android:backgroundTint="@color/surface_variant"
+                    android:paddingStart="10dp"
+                    android:paddingTop="4dp"
+                    android:paddingEnd="10dp"
+                    android:paddingBottom="4dp"
                     android:fontFamily="sans-serif-bold"
                     android:text="30 FPS"
-                    android:textColor="#22C55E"
-                    android:textSize="12sp" />
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:textColorHint="#94A3B8"
-                app:boxBackgroundColor="#1E293B"
+                android:textColorHint="@color/text_tertiary"
+                app:boxBackgroundColor="@color/surface_variant"
                 app:boxCornerRadiusBottomEnd="10dp"
                 app:boxCornerRadiusBottomStart="10dp"
                 app:boxCornerRadiusTopEnd="10dp"
                 app:boxCornerRadiusTopStart="10dp"
-                app:boxStrokeColor="#38BDF8">
+                app:boxStrokeColor="@color/primary">
 
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/etCamHostIp"
@@ -153,7 +164,7 @@
                     android:hint="PC Host IP (Port 8893)"
                     android:inputType="textUri"
                     android:singleLine="true"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/text_primary"
                     android:textSize="13sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
@@ -167,29 +178,29 @@
                     android:id="@+id/btnCamUsbMode"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
                     android:layout_marginEnd="6dp"
                     android:padding="0dp"
-                    android:text="⚡ USB Cable (127.0.0.1)"
-                    android:textColor="#38BDF8"
+                    android:text="⌁ USB Cable (127.0.0.1)"
+                    android:textColor="@color/text_primary"
                     android:textSize="11sp"
                     app:cornerRadius="8dp"
-                    app:strokeColor="#38BDF8" />
+                    app:strokeColor="@color/surface_stroke" />
 
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnCamAutoWifi"
                     style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
                     android:layout_marginStart="6dp"
                     android:padding="0dp"
-                    android:text="📡 Auto-Detect Wi-Fi"
-                    android:textColor="#94A3B8"
+                    android:text="◫ Auto-Detect Wi-Fi"
+                    android:textColor="@color/text_secondary"
                     android:textSize="11sp"
                     app:cornerRadius="8dp"
-                    app:strokeColor="#475569" />
+                    app:strokeColor="@color/surface_stroke" />
             </LinearLayout>
 
             <com.google.android.material.button.MaterialButton
@@ -200,8 +211,8 @@
                 android:fontFamily="sans-serif-bold"
                 android:text="Start Webcam Stream"
                 android:textAllCaps="false"
-                android:textColor="#000000"
-                app:backgroundTint="#FFFFFF"
+                android:textColor="@color/on_primary"
+                app:backgroundTint="@color/primary"
                 app:cornerRadius="12dp" />
 
             <TextView
@@ -209,8 +220,8 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginTop="8dp"
-                android:text="In Discord, OBS, or Zoom: Select 'ZeroCam' or 'OBS Virtual Camera'"
-                android:textColor="#64748B"
+                android:text="◈ In Discord, OBS, or Zoom: Select 'ZeroCam' or 'OBS Virtual Camera'"
+                android:textColor="@color/text_tertiary"
                 android:textSize="11sp" />
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>

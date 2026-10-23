@@ -18,25 +18,54 @@
         android:id="@+id/layoutSetup"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#E60F172A"
+        android:background="@color/background"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp"
+        android:padding="24dp"
         android:visibility="visible">
 
-        <TextView
+        <!-- Top Navigation Bar for Setup Screen -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="32dp">
+
+            <Button
+                android:id="@+id/btnDisplayBack"
+                style="@style/Widget.Material3.Button.IconButton"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="start|center_vertical"
+                android:text="←"
+                android:textColor="@color/text_primary"
+                android:textSize="20sp" />
+        </FrameLayout>
+
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="🖥️"
-            android:textSize="56sp" />
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="20dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/surface_stroke"
+            app:strokeWidth="1dp">
+
+            <TextView
+                android:layout_width="72dp"
+                android:layout_height="72dp"
+                android:gravity="center"
+                android:text="▣"
+                android:textColor="@color/text_primary"
+                android:textSize="32sp" />
+        </com.google.android.material.card.MaterialCardView>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="16dp"
             android:fontFamily="sans-serif-black"
             android:text="ZeroDisplay"
-            android:textColor="#FFFFFF"
+            android:textColor="@color/text_primary"
             android:textSize="24sp" />
 
         <TextView
@@ -45,54 +74,83 @@
             android:layout_marginTop="6dp"
             android:gravity="center"
             android:text="Wireless PC Screen Mirror &amp; Touch Remote\nTouch screen to click, scroll, and drag windows."
-            android:textColor="#94A3B8"
+            android:textColor="@color/text_secondary"
             android:textSize="13sp" />
 
-        <!-- Host IP Input -->
-        <com.google.android.material.textfield.TextInputLayout
-            android:layout_width="280dp"
+        <!-- Host IP Input Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:textColorHint="#94A3B8"
-            app:boxBackgroundColor="#1E293B"
-            app:boxCornerRadiusBottomEnd="12dp"
-            app:boxCornerRadiusBottomStart="12dp"
-            app:boxCornerRadiusTopEnd="12dp"
-            app:boxCornerRadiusTopStart="12dp"
-            app:boxStrokeColor="#38BDF8">
+            android:layout_marginTop="28dp"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="8dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/surface_stroke"
+            app:strokeWidth="1dp">
 
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/etDisplayHostIp"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:hint="PC Host IP (e.g. 192.168.1.100)"
-                android:inputType="textUri"
-                android:singleLine="true"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp" />
-        </com.google.android.material.textfield.TextInputLayout>
+                android:orientation="vertical"
+                android:padding="20dp">
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnConnectDisplay"
-            android:layout_width="280dp"
-            android:layout_height="52dp"
-            android:layout_marginTop="16dp"
-            android:fontFamily="sans-serif-bold"
-            android:text="Connect as 2nd Monitor"
-            android:textAllCaps="false"
-            android:textColor="#000000"
-            app:backgroundTint="#FFFFFF"
-            app:cornerRadius="12dp" />
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="HOST CONNECTION"
+                    android:textColor="@color/text_tertiary"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-black"
+                    android:letterSpacing="0.08" />
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textColorHint="@color/text_tertiary"
+                    app:boxBackgroundColor="@color/surface_variant"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp"
+                    app:boxStrokeColor="@color/primary">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etDisplayHostIp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="PC Host IP (Port 8892)"
+                        android:inputType="textUri"
+                        android:singleLine="true"
+                        android:textColor="@color/text_primary"
+                        android:textSize="14sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnConnectDisplay"
+                    android:layout_width="match_parent"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="16dp"
+                    android:fontFamily="sans-serif-bold"
+                    android:text="Connect as 2nd Monitor"
+                    android:textAllCaps="false"
+                    android:textColor="@color/on_primary"
+                    app:backgroundTint="@color/primary"
+                    app:cornerRadius="12dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
         <TextView
             android:id="@+id/tvDisplayHelp"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="20dp"
             android:gravity="center"
-            android:text="💡 Ensure ZeroDisplay is enabled on ZeroLink PC (Port 8892)"
-            android:textColor="#64748B"
-            android:textSize="11sp" />
+            android:text="◈ Ensure ZeroDisplay is enabled on ZeroLink PC (Port 8892)"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12sp" />
     </LinearLayout>
 
     <!-- Minimal Floating HUD Bar (Visible when connected) -->
@@ -103,13 +161,13 @@
         android:layout_gravity="top|center_horizontal"
         android:layout_marginTop="16dp"
         android:background="@drawable/bg_badge_pill"
-        android:backgroundTint="#D9000000"
+        android:backgroundTint="#F0111827"
         android:elevation="6dp"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:paddingStart="12dp"
+        android:paddingStart="14dp"
         android:paddingTop="6dp"
-        android:paddingEnd="12dp"
+        android:paddingEnd="14dp"
         android:paddingBottom="6dp"
         android:visibility="gone">
 
@@ -128,7 +186,7 @@
             android:layout_marginStart="8dp"
             android:fontFamily="sans-serif-bold"
             android:text="● 60 FPS"
-            android:textColor="#22C55E"
+            android:textColor="#FFFFFF"
             android:textSize="11sp" />
 
         <TextView
@@ -136,13 +194,14 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="10dp"
-            android:background="#334155"
-            android:paddingStart="6dp"
+            android:background="@drawable/bg_badge_pill"
+            android:backgroundTint="#374151"
+            android:paddingStart="8dp"
             android:paddingTop="2dp"
-            android:paddingEnd="6dp"
+            android:paddingEnd="8dp"
             android:paddingBottom="2dp"
             android:text="Direct Touch"
-            android:textColor="#E2E8F0"
+            android:textColor="#FFFFFF"
             android:textSize="10sp" />
 
         <Button
@@ -153,7 +212,7 @@
             android:layout_marginStart="8dp"
             android:padding="0dp"
             android:text="Disconnect"
-            android:textColor="#EF4444"
+            android:textColor="@color/status_red"
             android:textSize="11sp" />
     </LinearLayout>
 

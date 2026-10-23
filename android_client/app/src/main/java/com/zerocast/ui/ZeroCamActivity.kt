@@ -112,13 +112,13 @@ class ZeroCamActivity : AppCompatActivity() {
         binding.btnCamUsbMode.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.etCamHostIp.setText("127.0.0.1")
-            Toast.makeText(this, "⚡ USB Cable Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "⌁ USB Cable Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnCamAutoWifi.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             discovery?.startDiscovery()
-            Toast.makeText(this, "📡 Searching for PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "◫ Searching for PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnCamTorch.setOnClickListener {

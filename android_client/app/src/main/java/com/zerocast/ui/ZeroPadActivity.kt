@@ -58,7 +58,7 @@ class ZeroPadActivity : AppCompatActivity() {
         binding.btnPadUsbMode.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.etPadHostIp.setText("127.0.0.1")
-            Toast.makeText(this, "⚡ USB Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "⌁ USB Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnPadConnect.setOnClickListener {
@@ -172,8 +172,8 @@ class ZeroPadActivity : AppCompatActivity() {
                 val isWired = host == "127.0.0.1" || host == "localhost"
                 withContext(Dispatchers.Main) {
                     binding.btnPadConnect.text = "Disconnect"
-                    binding.tvPadStatus.text = if (isWired) "● Connected (⚡ USB)" else "● Connected (📡 Wi-Fi)"
-                    binding.tvPadStatus.setTextColor(android.graphics.Color.parseColor("#10B981"))
+                    binding.tvPadStatus.text = if (isWired) "● Connected (⌁ USB)" else "● Connected (◫ Wi-Fi)"
+                    binding.tvPadStatus.setTextColor(android.graphics.Color.parseColor("#111827"))
                 }
 
                 // Keep socket open
@@ -205,7 +205,7 @@ class ZeroPadActivity : AppCompatActivity() {
         runOnUiThread {
             binding.btnPadConnect.text = "Connect"
             binding.tvPadStatus.text = "○ Disconnected"
-            binding.tvPadStatus.setTextColor(android.graphics.Color.parseColor("#94A3B8"))
+            binding.tvPadStatus.setTextColor(android.graphics.Color.parseColor("#4B5563"))
         }
     }
 

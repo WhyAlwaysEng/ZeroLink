@@ -98,6 +98,10 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
             startDisplayStream(ip, DEFAULT_PORT)
         }
 
+        binding.btnDisplayBack.setOnClickListener {
+            finish()
+        }
+
         binding.btnHudBack.setOnClickListener {
             finish()
         }
