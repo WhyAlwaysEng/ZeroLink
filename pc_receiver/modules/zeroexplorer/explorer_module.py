@@ -34,6 +34,7 @@ from core.adb_helper import AdbManager
 from modules.zeroexplorer.manifest import (
     MODULE_ID, MODULE_NAME, MODULE_ICON, MODULE_DESCRIPTION, MODULE_PORT
 )
+from modules.zeroexplorer.download_manager import DownloadManagerDialog
 
 
 # ==================== Background Workers ====================
@@ -227,10 +228,11 @@ class FileDownloadWorker(QThread):
 class ProImageViewerDialog(QDialog):
     """Pro Image Viewer with Mouse Wheel Zoom, Click-Drag Pan, 1:1 vs Fit, and Next/Prev."""
 
-    def __init__(self, host: str, port: int, media_list: List[Dict], initial_index: int, parent=None):
+    def __init__(self, host: str, port: int, media_list: List[Dict], initial_index: int, parent=None, explorer_module=None):
         super().__init__(parent)
         self.host = host
         self.port = port
+        self.explorer_module = explorer_module
         self.media_list = [m for m in media_list if m.get("type") == "image"]
         self.current_index = initial_index
         self.current_pixmap: Optional[QPixmap] = None
@@ -419,9 +421,22 @@ class ProImageViewerDialog(QDialog):
         if not self.media_list or self.current_index < 0:
             return
         itm = self.media_list[self.current_index]
+        p_id = itm.get("id")
         name = itm.get("name", "photo.jpg")
-        save_path, _ = QFileDialog.getSaveFileName(self, "Save Image to PC", name)
-        if save_path and self.current_pixmap:
+        default_dir = os.path.join(os.path.expanduser("~"), "Pictures")
+        if not os.path.exists(default_dir):
+            default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+        default_path = os.path.join(default_dir, name)
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save Image to PC", default_path, "Image Files (*.jpg *.jpeg *.png *.webp);;All Files (*.*)")
+        if not save_path:
+            return
+
+        dl_url = f"http://{self.host}:{self.port}/api/media/raw?id={p_id}&type=image&download=true"
+        if getattr(self, "explorer_module", None):
+            self.explorer_module.start_download(dl_url, save_path, name, "image")
+            self.btn_save.setText("✔ Added")
+            QTimer.singleShot(3000, lambda: self.btn_save.setText("⬇ Save"))
+        elif self.current_pixmap:
             self.current_pixmap.save(save_path)
             QMessageBox.information(self, "Saved", f"Image saved successfully to:\n{save_path}")
 
@@ -431,11 +446,12 @@ class ProImageViewerDialog(QDialog):
 class ProVideoPlayerDialog(QDialog):
     """Pro Video Player with HTTP Range seeking, Timeline Scrubber, Snap Frame, Speed & Fullscreen."""
 
-    def __init__(self, stream_url: str, title: str, duration_ms: int = 0, parent=None):
+    def __init__(self, stream_url: str, title: str, duration_ms: int = 0, parent=None, explorer_module=None):
         super().__init__(parent)
         self.stream_url = stream_url
         self.title = title
         self.duration_ms = duration_ms
+        self.explorer_module = explorer_module
         self.is_user_scrubbing = False
 
         self.setWindowTitle(f"ZeroExplorer Video Player - {title}")
@@ -804,6 +820,12 @@ class ProVideoPlayerDialog(QDialog):
             sep = "&" if "?" in dl_url else "?"
             dl_url += f"{sep}download=true"
 
+        if getattr(self, "explorer_module", None):
+            self.explorer_module.start_download(dl_url, save_path, base_name, "video")
+            self.btn_save_video.setText("✔ Added to Downloads")
+            QTimer.singleShot(3000, lambda: self.btn_save_video.setText("💾 Save Video to PC"))
+            return
+
         self.btn_save_video.setEnabled(False)
         self.btn_save_video.setText("💾 Connecting...")
 
@@ -887,6 +909,11 @@ class ZeroExplorerModule(BaseModule):
         # Pre-create Clean Placeholders
         self._image_placeholder = self._create_placeholder_icon(is_video=False)
         self._video_placeholder = self._create_placeholder_icon(is_video=True)
+
+        # Download Manager & 0-100% Progress Queue
+        self.download_manager = DownloadManagerDialog(parent=None)
+        self.download_manager.active_count_changed.connect(self._on_download_active_count_changed)
+        self.btn_downloads: Optional[QPushButton] = None
 
     def _create_placeholder_icon(self, is_video: bool) -> QIcon:
         pix = QPixmap(120, 120)
@@ -1035,6 +1062,24 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.btn_connect.clicked.connect(self.connect_and_sync)
         header_row.addWidget(self.btn_connect)
+
+        self.btn_downloads = QPushButton("📥 Downloads")
+        self.btn_downloads.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        self.btn_downloads.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_downloads.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #F3F4F6;
+            }
+        """)
+        self.btn_downloads.clicked.connect(self.show_download_manager)
+        header_row.addWidget(self.btn_downloads)
 
         self.status_badge = QLabel("○ IDLE")
         self.status_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
@@ -1974,7 +2019,7 @@ class ZeroExplorerModule(BaseModule):
                 try:
                     stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
                     dur_ms = item_data.get("duration", 0)
-                    dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
+                    dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget, explorer_module=self)
                     dlg.exec()
                 finally:
                     if self._thumb_queue_worker:
@@ -1987,7 +2032,7 @@ class ZeroExplorerModule(BaseModule):
                     if p.get("id") == p_id:
                         idx = i
                         break
-                dlg = ProImageViewerDialog(self.phone_host, self.port, photos_only, idx, parent=self._widget)
+                dlg = ProImageViewerDialog(self.phone_host, self.port, photos_only, idx, parent=self._widget, explorer_module=self)
                 dlg.exec()
         finally:
             self._is_opening_dialog = False
@@ -2008,7 +2053,7 @@ class ZeroExplorerModule(BaseModule):
                 try:
                     encoded = urllib.parse.quote(path)
                     stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}&download=false"
-                    dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
+                    dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget, explorer_module=self)
                     dlg.exec()
                 finally:
                     if self._thumb_queue_worker:
@@ -2016,7 +2061,7 @@ class ZeroExplorerModule(BaseModule):
             elif cat == "image":
                 encoded = urllib.parse.quote(path)
                 img_list = [{"id": 0, "name": name, "type": "image"}]
-                dlg = ProImageViewerDialog(self.phone_host, self.port, img_list, 0, parent=self._widget)
+                dlg = ProImageViewerDialog(self.phone_host, self.port, img_list, 0, parent=self._widget, explorer_module=self)
                 dlg.exec()
             elif cat in ["document", "doc"] or name.lower().endswith((".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".txt", ".json", ".log", ".csv")):
                 encoded = urllib.parse.quote(path)
@@ -2053,6 +2098,49 @@ class ZeroExplorerModule(BaseModule):
         except Exception as e:
             QMessageBox.warning(self._widget, "Copy Error", f"Failed to copy image: {e}")
 
+    def show_download_manager(self):
+        self.download_manager.show()
+        self.download_manager.raise_()
+        self.download_manager.activateWindow()
+
+    def _on_download_active_count_changed(self, active_count: int):
+        if not self.btn_downloads:
+            return
+        if active_count > 0:
+            self.btn_downloads.setText(f"📥 Downloads ({active_count})")
+            self.btn_downloads.setStyleSheet("""
+                QPushButton {
+                    background-color: #059669;
+                    color: #FFFFFF;
+                    border: 1px solid #10B981;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                    font-weight: 700;
+                }
+                QPushButton:hover {
+                    background-color: #047857;
+                }
+            """)
+        else:
+            self.btn_downloads.setText("📥 Downloads")
+            self.btn_downloads.setStyleSheet("""
+                QPushButton {
+                    background-color: #FFFFFF;
+                    color: #111827;
+                    border: 1px solid #D1D5DB;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background-color: #F3F4F6;
+                }
+            """)
+
+    def start_download(self, url: str, save_path: str, display_name: str, file_type: str = "file"):
+        """Enqueues a download into the Download Manager with 0-100% item progress tracking."""
+        return self.download_manager.add_download(url, save_path, display_name, file_type)
+
     def _on_download_selected_file(self):
         # Case 1: File Explorer selection
         if getattr(self, "selected_file_path", None):
@@ -2064,7 +2152,7 @@ class ZeroExplorerModule(BaseModule):
                 return
             encoded = urllib.parse.quote(self.selected_file_path)
             url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
-            self._start_download_with_feedback(url, save_path, file_name)
+            self._start_download_with_feedback(url, save_path, file_name, file_type="file")
             return
 
         # Case 2: Media Gallery selection (Photo or Video)
@@ -2082,46 +2170,15 @@ class ZeroExplorerModule(BaseModule):
             if not save_path:
                 return
             url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type={type_param}&download=true"
-            self._start_download_with_feedback(url, save_path, name)
+            self._start_download_with_feedback(url, save_path, name, file_type="video" if is_video else "image")
             return
 
         QMessageBox.information(self._widget, "Download", "Please select a photo, video, or file to download.")
 
-    def _start_download_with_feedback(self, url: str, save_path: str, display_name: str):
-        self.btn_download_file.setEnabled(False)
-        self.btn_download_file.setText("💾 Connecting...")
-        worker = FileDownloadWorker(url, save_path)
-        self._active_dl_worker = worker
-
-        def _on_prog(dl, total):
-            if total > 0:
-                pct = int((dl / total) * 100)
-                mb_dl = dl / (1024 * 1024)
-                mb_tot = total / (1024 * 1024)
-                self.btn_download_file.setText(f"💾 {pct}% ({mb_dl:.1f}/{mb_tot:.1f} MB)")
-            else:
-                mb_dl = dl / (1024 * 1024)
-                self.btn_download_file.setText(f"💾 {mb_dl:.1f} MB...")
-
-        def _on_done(ok, msg):
-            self.btn_download_file.setEnabled(True)
-            self.btn_download_file.setText("💾 Download to PC")
-            if ok:
-                reply = QMessageBox.information(
-                    self._widget,
-                    "Saved to PC",
-                    f"'{display_name}' saved successfully to:\n{msg}",
-                    QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Ok,
-                    QMessageBox.StandardButton.Ok
-                )
-                if reply == QMessageBox.StandardButton.Open:
-                    QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(msg)))
-            else:
-                QMessageBox.warning(self._widget, "Download Error", f"Failed to save '{display_name}':\n{msg}")
-
-        worker.progress.connect(_on_prog)
-        worker.finished.connect(_on_done)
-        worker.start()
+    def _start_download_with_feedback(self, url: str, save_path: str, display_name: str, file_type: str = "file"):
+        self.start_download(url, save_path, display_name, file_type)
+        self.btn_download_file.setText("✔ Added to Downloads")
+        QTimer.singleShot(2500, lambda: self.btn_download_file.setText("💾 Download to PC"))
 
     def _on_error(self, err: str):
         self.status_badge.setText("○ CONNECTION FAILED")
