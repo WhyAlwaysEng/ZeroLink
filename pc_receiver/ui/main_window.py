@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 
 from core.module_manager import ModuleManager
 from core.updater import UpdateCheckWorker, CURRENT_VERSION
+from core.discovery import LanDiscoveryService
 from modules.zerocast.cast_module import ZeroCastModule
 from modules.zerodrop.drop_module import ZeroDropModule
 from modules.zeroclip.clip_module import ZeroClipModule
@@ -163,6 +164,11 @@ class MainWindow(QMainWindow):
         self._is_quitting = False
         self._tray_notified = False
         self._setup_tray_icon()
+
+        # LAN Auto-Discovery & Notification Bridge (UDP 8887)
+        self.discovery_service = LanDiscoveryService(tcp_port=self.port, local_ip=self.local_ip, parent=self)
+        self.discovery_service.notification_received.connect(self._on_phone_notification)
+        self.discovery_service.start()
 
         # Update Checker
         self.latest_release_url = "https://github.com/WhyAlwaysEng/ZeroCast/releases"
@@ -443,6 +449,15 @@ class MainWindow(QMainWindow):
             self.stacked.setCurrentIndex(0)
             self.btn_nav_dashboard.setChecked(True)
 
+    def send_file_via_zerodrop(self, file_path: str):
+        if not os.path.exists(file_path):
+            return
+        self._restore_from_tray()
+        self._on_navigate_to_module("zerodrop")
+        drop_mod = self.module_manager.get_module("zerodrop")
+        if drop_mod and hasattr(drop_mod, "_send_files"):
+            drop_mod._send_files([file_path])
+
     def _on_module_toggle_requested(self, module_id: str, enable: bool):
         self.module_manager.toggle_module(module_id, enable)
 
@@ -544,6 +559,14 @@ class MainWindow(QMainWindow):
         action_open.triggered.connect(self._restore_from_tray)
         tray_menu.addAction(action_open)
 
+        action_drop = QAction("⇄ Open ZeroDrop (Send/Receive)", self)
+        action_drop.triggered.connect(lambda: (self._restore_from_tray(), self._on_navigate_to_module("zerodrop")))
+        tray_menu.addAction(action_drop)
+
+        action_downloads = QAction("📥 Open Downloads Folder", self)
+        action_downloads.triggered.connect(lambda: QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.join(os.path.expanduser("~"), "Downloads"))))
+        tray_menu.addAction(action_downloads)
+
         tray_menu.addSeparator()
 
         action_quit = QAction("❌ Exit ZeroLink", self)
@@ -567,11 +590,18 @@ class MainWindow(QMainWindow):
 
     def _really_quit(self):
         self._is_quitting = True
+        if hasattr(self, "discovery_service"):
+            self.discovery_service.stop()
         if hasattr(self, "tray_icon"):
             self.tray_icon.hide()
         self.module_manager.stop_all()
         from PyQt6.QtWidgets import QApplication
         QApplication.quit()
+
+    def _on_phone_notification(self, app_name: str, title: str, text: str):
+        if hasattr(self, "tray_icon") and self.tray_icon:
+            msg = f"{title}\n{text}" if title else text
+            self.tray_icon.showMessage(f"📱 {app_name}", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
 
     def closeEvent(self, event):
         if getattr(self, "_is_quitting", False):

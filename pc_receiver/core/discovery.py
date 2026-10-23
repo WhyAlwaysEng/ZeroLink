@@ -1,5 +1,6 @@
-"""ZeroCast LAN Auto-Discovery Service
-Listens and responds to UDP broadcast discovery requests from Android devices on the LAN.
+"""ZeroLink LAN Auto-Discovery & Notification Bridge Service
+Listens and responds to UDP broadcast discovery requests from Android devices on the LAN,
+and receives mirrored mobile notifications.
 """
 
 import json
@@ -7,15 +8,20 @@ import socket
 import threading
 import time
 from typing import Optional
+from PyQt6.QtCore import QObject, pyqtSignal
 
 
-class LanDiscoveryService:
-    DISCOVERY_PORT = 8889
+class LanDiscoveryService(QObject):
+    DISCOVERY_PORT = 8887
     BEACON_INTERVAL = 2.0  # seconds
 
-    def __init__(self, tcp_port: int = 8888, local_ip: str = "127.0.0.1"):
+    notification_received = pyqtSignal(str, str, str)  # app_name, title, text
+
+    def __init__(self, tcp_port: int = 8888, local_ip: str = "127.0.0.1", parent=None):
+        super().__init__(parent)
         self.tcp_port = tcp_port
         self.local_ip = local_ip
+        self.hostname = socket.gethostname()
         self.is_running = False
         self._thread: Optional[threading.Thread] = None
         self._sock: Optional[socket.socket] = None
@@ -35,6 +41,14 @@ class LanDiscoveryService:
             except Exception:
                 pass
             self._sock = None
+
+    def _get_beacon_payload(self) -> bytes:
+        return json.dumps({
+            "type": "ZEROLINK_BEACON",
+            "ip": self.local_ip,
+            "port": self.tcp_port,
+            "name": f"ZeroLink PC ({self.hostname})"
+        }).encode("utf-8")
 
     def _run(self):
         try:
@@ -56,18 +70,26 @@ class LanDiscoveryService:
                 last_beacon_time = now
 
             try:
-                data, addr = self._sock.recvfrom(2048)
+                data, addr = self._sock.recvfrom(4096)
                 msg = data.decode("utf-8", errors="ignore").strip()
 
-                if "ZEROCAST_DISCOVERY_REQ" in msg:
-                    # Reply directly to sender
-                    payload = json.dumps({
-                        "type": "ZEROCAST_BEACON",
-                        "ip": self.local_ip,
-                        "port": self.tcp_port,
-                        "name": "ZeroCast PC"
-                    }).encode("utf-8")
+                if "ZEROLINK_DISCOVER" in msg or "ZEROCAST_DISCOVERY_REQ" in msg:
+                    # Reply directly to phone sender
+                    payload = self._get_beacon_payload()
                     self._sock.sendto(payload, addr)
+
+                elif "ZEROLINK_NOTIFY" in msg:
+                    # Android notification packet
+                    try:
+                        parsed = json.loads(msg)
+                        app = parsed.get("app", "Phone Notification")
+                        title = parsed.get("title", "")
+                        text = parsed.get("text", "")
+                        if title or text:
+                            self.notification_received.emit(app, title, text)
+                    except Exception:
+                        pass
+
             except (socket.timeout, BlockingIOError):
                 continue
             except OSError:
@@ -79,12 +101,7 @@ class LanDiscoveryService:
         if not self._sock:
             return
         try:
-            payload = json.dumps({
-                "type": "ZEROCAST_BEACON",
-                "ip": self.local_ip,
-                "port": self.tcp_port,
-                "name": "ZeroCast PC"
-            }).encode("utf-8")
+            payload = self._get_beacon_payload()
             self._sock.sendto(payload, ("255.255.255.255", self.DISCOVERY_PORT))
         except Exception:
             pass

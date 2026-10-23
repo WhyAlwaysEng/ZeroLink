@@ -23,6 +23,7 @@ object ZeroLinkConfig {
     private const val KEY_CAST_DIM = "cast_dim"
     private const val KEY_CAST_STRICT_CBR = "cast_strict_cbr"
     private const val KEY_CAST_CODEC = "cast_codec"
+    private const val KEY_NOTIFY_MIRROR = "notify_mirror"
 
     fun getServerIp(context: Context): String {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -112,5 +113,15 @@ object ZeroLinkConfig {
     fun setCastCodec(context: Context, index: Int) {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         sp.edit().putInt(KEY_CAST_CODEC, index).apply()
+    }
+
+    fun getNotifyMirror(context: Context): Boolean {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getBoolean(KEY_NOTIFY_MIRROR, false)
+    }
+
+    fun setNotifyMirror(context: Context, enabled: Boolean) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putBoolean(KEY_NOTIFY_MIRROR, enabled).apply()
     }
 }

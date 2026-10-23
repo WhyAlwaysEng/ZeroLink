@@ -9,11 +9,15 @@ import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicBoolean
 
 class NetworkDiscovery(
-    private val onServerFound: (ip: String, port: Int) -> Unit
+    private val onServerFound: (ip: String, port: Int, name: String) -> Unit
 ) {
+    constructor(legacyCallback: (ip: String, port: Int) -> Unit) : this({ ip, port, _ ->
+        legacyCallback(ip, port)
+    })
+
     companion object {
-        private const val TAG = "ZeroCast-Discovery"
-        private const val DISCOVERY_PORT = 8889
+        private const val TAG = "ZeroLink-Discovery"
+        const val DISCOVERY_PORT = 8887
     }
 
     private val isScanning = AtomicBoolean(false)
@@ -28,10 +32,10 @@ class NetworkDiscovery(
             try {
                 socket = DatagramSocket(DISCOVERY_PORT).apply {
                     broadcast = true
-                    soTimeout = 3000
+                    soTimeout = 2500
                 }
 
-                // Send discovery ping
+                // Send discovery ping immediately
                 sendDiscoveryBroadcast()
 
                 val buffer = ByteArray(2048)
@@ -41,15 +45,17 @@ class NetworkDiscovery(
                         socket?.receive(packet)
 
                         val text = String(packet.data, 0, packet.length).trim()
-                        if (text.contains("ZEROCAST_BEACON")) {
+                        if (text.contains("ZEROLINK_BEACON") || text.contains("ZEROCAST_BEACON")) {
                             val json = JSONObject(text)
-                            val ip = json.optString("ip", packet.address.hostAddress ?: "")
+                            val ip = json.optString("ip", packet.address?.hostAddress ?: "")
                             val port = json.optInt("port", 8888)
+                            val name = json.optString("name", "ZeroLink PC")
 
-                            withContext(Dispatchers.Main) {
-                                onServerFound(ip, port)
+                            if (ip.isNotEmpty() && ip != "127.0.0.1") {
+                                withContext(Dispatchers.Main) {
+                                    onServerFound(ip, port, name)
+                                }
                             }
-                            break
                         }
                     } catch (_: Exception) {
                         // Timeout: re-broadcast
@@ -68,7 +74,7 @@ class NetworkDiscovery(
 
     private fun sendDiscoveryBroadcast() {
         try {
-            val msg = "ZEROCAST_DISCOVERY_REQ".toByteArray()
+            val msg = "ZEROLINK_DISCOVER".toByteArray()
             val broadcastAddr = InetAddress.getByName("255.255.255.255")
             val pingPacket = DatagramPacket(msg, msg.size, broadcastAddr, DISCOVERY_PORT)
             socket?.send(pingPacket)
@@ -84,4 +90,7 @@ class NetworkDiscovery(
         scope?.cancel()
         scope = null
     }
+
+    fun startListening() = startDiscovery()
+    fun stopListening() = stopDiscovery()
 }

@@ -116,6 +116,16 @@
             android:enabled="true"
             android:exported="false" />
 
+        <service
+            android:name=".service.ZeroNotificationListenerService"
+            android:label="ZeroLink Notification Mirror"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>

@@ -914,6 +914,7 @@ class ZeroExplorerModule(BaseModule):
         self.download_manager = DownloadManagerDialog(parent=None)
         self.download_manager.active_count_changed.connect(self._on_download_active_count_changed)
         self.btn_downloads: Optional[QPushButton] = None
+        self.is_multi_select = False
 
     def _create_placeholder_icon(self, is_video: bool) -> QIcon:
         pix = QPixmap(120, 120)
@@ -1233,6 +1234,25 @@ class ZeroExplorerModule(BaseModule):
 
         filter_row.addStretch()
 
+        self.btn_multi_select = QPushButton("☑ Multi-Select")
+        self.btn_multi_select.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_multi_select.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_multi_select.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #F3F4F6;
+                border-color: #9CA3AF;
+            }
+        """)
+        self.btn_multi_select.clicked.connect(self._toggle_multi_select_mode)
+        filter_row.addWidget(self.btn_multi_select)
+
         self.btn_copy_image = QPushButton("Copy Image to Clipboard")
         self.btn_copy_image.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
         self.btn_copy_image.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -1289,9 +1309,93 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
+        self.gallery_list.itemSelectionChanged.connect(self._on_gallery_selection_changed)
         self.gallery_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.gallery_list.customContextMenuRequested.connect(self._show_gallery_context_menu)
         layout.addWidget(self.gallery_list, 1)
+
+        # Batch Action Bar (Shown when Multi-Select is Active)
+        self.batch_bar_widget = QFrame()
+        self.batch_bar_widget.setStyleSheet("""
+            QFrame {
+                background-color: #111827;
+                border-radius: 8px;
+                padding: 2px;
+            }
+        """)
+        batch_layout = QHBoxLayout(self.batch_bar_widget)
+        batch_layout.setContentsMargins(14, 8, 14, 8)
+        batch_layout.setSpacing(10)
+
+        self.lbl_batch_info = QLabel("0 items selected")
+        self.lbl_batch_info.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.lbl_batch_info.setStyleSheet("color: #FFFFFF;")
+        batch_layout.addWidget(self.lbl_batch_info)
+
+        batch_layout.addStretch()
+
+        self.btn_batch_all = QPushButton("Select All on Page")
+        self.btn_batch_all.setStyleSheet("""
+            QPushButton {
+                background-color: #1F2937;
+                color: #F9FAFB;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #374151;
+            }
+        """)
+        self.btn_batch_all.clicked.connect(self._select_all_gallery_items)
+        batch_layout.addWidget(self.btn_batch_all)
+
+        self.btn_batch_clear = QPushButton("Clear")
+        self.btn_batch_clear.setStyleSheet("""
+            QPushButton {
+                background-color: #1F2937;
+                color: #9CA3AF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 5px 12px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background-color: #374151;
+                color: #FFFFFF;
+            }
+        """)
+        self.btn_batch_clear.clicked.connect(self._clear_gallery_selection)
+        batch_layout.addWidget(self.btn_batch_clear)
+
+        self.btn_batch_download = QPushButton("💾 Download Selected to PC")
+        self.btn_batch_download.setEnabled(False)
+        self.btn_batch_download.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #111827;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #F3F4F6;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #6B7280;
+            }
+        """)
+        self.btn_batch_download.clicked.connect(self._download_selected_batch)
+        batch_layout.addWidget(self.btn_batch_download)
+
+        self.batch_bar_widget.hide()
+        layout.addWidget(self.batch_bar_widget)
 
         # ==================== Page-by-Page Pagination Bar (100 items/page) ====================
         page_bar = QHBoxLayout()
@@ -1961,6 +2065,18 @@ class ZeroExplorerModule(BaseModule):
                 self.btn_download_file.setText("💾 Save Photo to PC")
 
     def _show_gallery_context_menu(self, pos):
+        selected_items = self.gallery_list.selectedItems()
+        if len(selected_items) > 1:
+            menu = QMenu(self._widget)
+            act_batch = menu.addAction(f"💾 Download ({len(selected_items)}) Selected Items to PC...")
+            act_clear = menu.addAction("Clear Selection")
+            chosen = menu.exec(self.gallery_list.mapToGlobal(pos))
+            if chosen == act_batch:
+                self._download_selected_batch()
+            elif chosen == act_clear:
+                self._clear_gallery_selection()
+            return
+
         item = self.gallery_list.itemAt(pos)
         if not item:
             return
@@ -1987,6 +2103,98 @@ class ZeroExplorerModule(BaseModule):
             p_id = data.get("id")
             url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
             QDesktopServices.openUrl(QUrl(url))
+
+    def _toggle_multi_select_mode(self):
+        self.is_multi_select = not getattr(self, "is_multi_select", False)
+        if self.is_multi_select:
+            self.gallery_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
+            self.btn_multi_select.setText("✖ Exit Select")
+            self.btn_multi_select.setStyleSheet("""
+                QPushButton {
+                    background-color: #111827;
+                    color: #FFFFFF;
+                    border: 1px solid #111827;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                }
+                QPushButton:hover {
+                    background-color: #1F2937;
+                }
+            """)
+            self.batch_bar_widget.show()
+            self._on_gallery_selection_changed()
+        else:
+            self.gallery_list.setSelectionMode(QListWidget.SelectionMode.SingleSelection)
+            self.btn_multi_select.setText("☑ Multi-Select")
+            self.btn_multi_select.setStyleSheet("""
+                QPushButton {
+                    background-color: #FFFFFF;
+                    color: #111827;
+                    border: 1px solid #D1D5DB;
+                    border-radius: 6px;
+                    padding: 6px 14px;
+                }
+                QPushButton:hover {
+                    background-color: #F3F4F6;
+                    border-color: #9CA3AF;
+                }
+            """)
+            self.gallery_list.clearSelection()
+            self.batch_bar_widget.hide()
+
+    def _on_gallery_selection_changed(self):
+        if not getattr(self, "is_multi_select", False):
+            return
+        selected = self.gallery_list.selectedItems()
+        count = len(selected)
+        total_bytes = 0
+        for itm in selected:
+            data = itm.data(Qt.ItemDataRole.UserRole)
+            if data:
+                total_bytes += data.get("size", 0)
+        mb = total_bytes / (1024 * 1024)
+        self.lbl_batch_info.setText(f"{count} item{'s' if count != 1 else ''} selected ({mb:.1f} MB)")
+        self.btn_batch_download.setEnabled(count > 0)
+        self.btn_batch_download.setText(f"💾 Download Selected ({count}) to PC")
+
+    def _select_all_gallery_items(self):
+        self.gallery_list.selectAll()
+
+    def _clear_gallery_selection(self):
+        self.gallery_list.clearSelection()
+
+    def _download_selected_batch(self):
+        selected_items = self.gallery_list.selectedItems()
+        if not selected_items:
+            QMessageBox.information(self._widget, "Batch Download", "No items selected.")
+            return
+
+        target_dir = QFileDialog.getExistingDirectory(
+            self._widget,
+            f"Select Destination Folder for {len(selected_items)} Files",
+            os.path.join(os.path.expanduser("~"), "Downloads")
+        )
+        if not target_dir:
+            return
+
+        queued = 0
+        for item in selected_items:
+            data = item.data(Qt.ItemDataRole.UserRole)
+            if not data:
+                continue
+            p_id = data.get("id")
+            name = data.get("name", f"media_{p_id}")
+            is_video = data.get("type") == "video"
+            type_param = "video" if is_video else "image"
+            file_type = "video" if is_video else "image"
+            url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type={type_param}&download=true"
+            dest_path = os.path.join(target_dir, name)
+            self.download_manager.add_download(url, dest_path, name, file_type=file_type)
+            queued += 1
+
+        self.download_manager.show()
+        self.download_manager.raise_()
+        self.download_manager.activateWindow()
 
     def _on_gallery_item_double_clicked(self, item: QListWidgetItem):
         data = item.data(Qt.ItemDataRole.UserRole)
