@@ -118,8 +118,9 @@ class ExplorerServer(
                     val idStr = uri.getQueryParameter("id") ?: "0"
                     val id = idStr.toLongOrNull() ?: 0L
                     val isVideo = uri.getQueryParameter("type") == "video"
+                    val isDownload = uri.getQueryParameter("download") == "true"
                     val bytesSent = handleRawMedia(output, id, isVideo, rangeHeader)
-                    if (bytesSent > 0 && rangeHeader == null) {
+                    if (isDownload && bytesSent > 0 && rangeHeader == null) {
                         onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", if (isVideo) "Video #$id" else "Photo #$id", bytesSent, clientIp))
                     }
                 }
@@ -131,8 +132,9 @@ class ExplorerServer(
                 path == "/api/files/download" -> {
                     val fileParam = uri.getQueryParameter("path")
                     val decodedPath = if (!fileParam.isNullOrEmpty()) URLDecoder.decode(fileParam, "UTF-8") else ""
+                    val isDownload = uri.getQueryParameter("download") != "false"
                     val bytesSent = handleFileDownload(output, decodedPath, rangeHeader)
-                    if (bytesSent > 0 && rangeHeader == null) {
+                    if (isDownload && bytesSent > 0 && rangeHeader == null) {
                         onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
                     }
                 }

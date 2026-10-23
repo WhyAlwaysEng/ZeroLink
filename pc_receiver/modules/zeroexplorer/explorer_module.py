@@ -283,7 +283,7 @@ class ProImageViewerDialog(QDialog):
         self.btn_prev.setEnabled(self.current_index > 0)
         self.btn_next.setEnabled(self.current_index < len(self.media_list) - 1)
 
-        url = f"http://{self.host}:{self.port}/api/media/raw?id={p_id}&type=image"
+        url = f"http://{self.host}:{self.port}/api/media/raw?id={p_id}&type=image&download=false"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
             with urllib.request.urlopen(req, timeout=8) as resp:
@@ -963,9 +963,9 @@ class ZeroExplorerModule(BaseModule):
         # Gallery Grid View
         self.gallery_list = QListWidget()
         self.gallery_list.setViewMode(QListWidget.ViewMode.IconMode)
-        self.gallery_list.setIconSize(QSize(130, 130))
-        self.gallery_list.setGridSize(QSize(145, 165))
-        self.gallery_list.setSpacing(10)
+        self.gallery_list.setIconSize(QSize(120, 120))
+        self.gallery_list.setGridSize(QSize(140, 175))
+        self.gallery_list.setSpacing(12)
         self.gallery_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.gallery_list.setUniformItemSizes(True)
         self.gallery_list.setMovement(QListWidget.Movement.Static)
@@ -994,7 +994,6 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
-        self.gallery_list.itemActivated.connect(self._on_gallery_item_double_clicked)
         layout.addWidget(self.gallery_list, 1)
 
         return tab
@@ -1336,12 +1335,22 @@ class ZeroExplorerModule(BaseModule):
             dur_ms = itm.get("duration", 0)
             size_mb = itm.get("size", 0) / (1024 * 1024)
 
+            # Format clean, truncated name so grid layout remains perfectly proportioned
+            clean_name = name
+            if len(clean_name) > 16:
+                base, ext = os.path.splitext(clean_name)
+                if len(base) > 10:
+                    clean_name = f"{base[:8]}…{base[-3:]}{ext}"
+                else:
+                    clean_name = clean_name[:14] + "…"
+
             if is_video and dur_ms > 0:
                 s = dur_ms // 1000
-                dur_str = f"▶ {s // 60:02d}:{s % 60:02d}"
-                text = f"{name}\n{dur_str} • {size_mb:.1f}MB"
+                badge_str = f"▶ {s // 60:02d}:{s % 60:02d}"
             else:
-                text = f"{name}\n{size_mb:.1f} MB"
+                badge_str = f"{size_mb:.1f} MB"
+
+            text = f"{clean_name}\n{badge_str}"
 
             list_item = QListWidgetItem(text)
             list_item.setData(Qt.ItemDataRole.UserRole, itm)
@@ -1452,6 +1461,8 @@ class ZeroExplorerModule(BaseModule):
                 self.lbl_preview_meta.setText(f"Category: {cat}\nSize: {size_b / (1024*1024):.2f} MB\nPath: {self.selected_file_path}")
                 if cat in ["VIDEO", "IMAGE"]:
                     self.btn_open_preview.setText("Play / Stream" if cat == "VIDEO" else "View Image")
+                elif cat in ["DOCUMENT", "DOC", "PDF"] or name.lower().endswith((".pdf", ".docx", ".doc", ".xlsx", ".txt", ".json")):
+                    self.btn_open_preview.setText("Open Document / PDF")
                 else:
                     self.btn_open_preview.setText("Inspect File")
 
@@ -1496,43 +1507,68 @@ class ZeroExplorerModule(BaseModule):
             self._open_file_item(self.selected_item_data)
 
     def _open_media_item(self, item_data: Dict):
-        is_video = item_data.get("type") == "video"
-        p_id = item_data.get("id")
-        name = item_data.get("name", "Media")
+        if getattr(self, "_is_opening_dialog", False):
+            return
+        self._is_opening_dialog = True
 
-        if is_video:
-            stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video"
-            dur_ms = item_data.get("duration", 0)
-            dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
-            dlg.exec()
-        else:
-            # Find index in current gallery photo list
-            photos_only = [m for m in self.gallery_items if m.get("type") == "image"]
-            idx = 0
-            for i, p in enumerate(photos_only):
-                if p.get("id") == p_id:
-                    idx = i
-                    break
-            dlg = ProImageViewerDialog(self.phone_host, self.port, photos_only, idx, parent=self._widget)
-            dlg.exec()
+        try:
+            is_video = item_data.get("type") == "video"
+            p_id = item_data.get("id")
+            name = item_data.get("name", "Media")
+
+            if is_video:
+                stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
+                dur_ms = item_data.get("duration", 0)
+                dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
+                dlg.exec()
+            else:
+                # Find index in current gallery photo list
+                photos_only = [m for m in self.gallery_items if m.get("type") == "image"]
+                idx = 0
+                for i, p in enumerate(photos_only):
+                    if p.get("id") == p_id:
+                        idx = i
+                        break
+                dlg = ProImageViewerDialog(self.phone_host, self.port, photos_only, idx, parent=self._widget)
+                dlg.exec()
+        finally:
+            self._is_opening_dialog = False
 
     def _open_file_item(self, file_data: Dict):
-        cat = file_data.get("category", "")
-        path = file_data.get("path", "")
-        name = file_data.get("name", "")
+        if getattr(self, "_is_opening_dialog", False):
+            return
+        self._is_opening_dialog = True
 
-        if cat == "video":
-            encoded = urllib.parse.quote(path)
-            stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
-            dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
-            dlg.exec()
-        elif cat == "image":
-            encoded = urllib.parse.quote(path)
-            # Create temporary single-item list
-            img_list = [{"id": 0, "name": name, "type": "image"}]
-            # Open direct viewer
-            dlg = ProImageViewerDialog(self.phone_host, self.port, img_list, 0, parent=self._widget)
-            dlg.exec()
+        try:
+            cat = file_data.get("category", "")
+            path = file_data.get("path", "")
+            name = file_data.get("name", "")
+
+            if cat == "video":
+                encoded = urllib.parse.quote(path)
+                stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}&download=false"
+                dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
+                dlg.exec()
+            elif cat == "image":
+                encoded = urllib.parse.quote(path)
+                img_list = [{"id": 0, "name": name, "type": "image"}]
+                dlg = ProImageViewerDialog(self.phone_host, self.port, img_list, 0, parent=self._widget)
+                dlg.exec()
+            elif cat in ["document", "doc"] or name.lower().endswith((".pdf", ".docx", ".doc", ".xlsx", ".pptx", ".txt", ".json", ".log", ".csv")):
+                encoded = urllib.parse.quote(path)
+                temp_dir = os.path.join(os.environ.get("TEMP", os.path.expanduser("~")), "ZeroLink_Cache")
+                os.makedirs(temp_dir, exist_ok=True)
+                cached_path = os.path.join(temp_dir, name)
+                url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}&download=false"
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
+                    with urllib.request.urlopen(req, timeout=15) as resp, open(cached_path, "wb") as f_out:
+                        f_out.write(resp.read())
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(cached_path))
+                except Exception as e:
+                    QMessageBox.warning(self._widget, "Error", f"Failed to open document: {e}")
+        finally:
+            self._is_opening_dialog = False
 
     def _on_copy_selected_image(self):
         if not self.selected_item_data or self.selected_item_data.get("type") != "image":
@@ -1540,7 +1576,7 @@ class ZeroExplorerModule(BaseModule):
             return
 
         p_id = self.selected_item_data.get("id")
-        url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=image"
+        url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=image&download=false"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
             with urllib.request.urlopen(req, timeout=8) as resp:
