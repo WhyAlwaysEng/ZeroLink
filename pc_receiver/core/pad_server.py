@@ -40,6 +40,49 @@ MOUSEEVENTF_MIDDLEDOWN = 0x0020
 MOUSEEVENTF_MIDDLEUP = 0x0040
 MOUSEEVENTF_WHEEL = 0x0800
 
+from ctypes import wintypes
+
+class KEYBDINPUT(ctypes.Structure):
+    _fields_ = [
+        ('wVk', wintypes.WORD),
+        ('wScan', wintypes.WORD),
+        ('dwFlags', wintypes.DWORD),
+        ('time', wintypes.DWORD),
+        ('dwExtraInfo', ctypes.c_ulonglong)
+    ]
+
+class INPUT(ctypes.Structure):
+    class _INPUT(ctypes.Union):
+        _fields_ = [('ki', KEYBDINPUT)]
+    _anonymous_ = ('_input',)
+    _fields_ = [
+        ('type', wintypes.DWORD),
+        ('_input', _INPUT)
+    ]
+
+KEYEVENTF_UNICODE = 0x0004
+INPUT_KEYBOARD = 1
+
+
+def _type_unicode_text(text: str):
+    """Types any UTF-8/Unicode string (English, Thai, etc.) into the active window."""
+    if os.name != 'nt' or not text:
+        return
+    inputs = []
+    for char in text:
+        if char == '\n':
+            down = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=0, time=0, dwExtraInfo=0))
+            up = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0x0D, wScan=0, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0))
+            inputs.extend([down, up])
+        else:
+            code = ord(char)
+            down = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0, wScan=code, dwFlags=KEYEVENTF_UNICODE, time=0, dwExtraInfo=0))
+            up = INPUT(type=INPUT_KEYBOARD, ki=KEYBDINPUT(wVk=0, wScan=code, dwFlags=KEYEVENTF_UNICODE | KEYEVENTF_KEYUP, time=0, dwExtraInfo=0))
+            inputs.extend([down, up])
+    if inputs:
+        arr = (INPUT * len(inputs))(*inputs)
+        ctypes.windll.user32.SendInput(len(inputs), arr, ctypes.sizeof(INPUT))
+
 
 def _press_and_release(vk_code: int):
     """Presses and releases a single virtual key."""
@@ -216,6 +259,27 @@ class PadServer(QObject):
                 dy = int(msg.get("dy", 0))
                 if os.name == 'nt' and dy != 0:
                     ctypes.windll.user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, dy, 0)
+                return
+
+            elif action == "TYPE_TEXT":
+                text = msg.get("text", "")
+                _type_unicode_text(text)
+                self.command_executed.emit("Type", text[:25] if len(text) > 25 else text)
+                return
+
+            elif action == "SPECIAL_KEY":
+                key = msg.get("key", "").upper()
+                if key == "BACKSPACE":
+                    _press_and_release(0x08)
+                elif key == "ENTER":
+                    _press_and_release(0x0D)
+                elif key == "SPACE":
+                    _press_and_release(0x20)
+                elif key == "TAB":
+                    _press_and_release(0x09)
+                elif key == "ESC":
+                    _press_and_release(0x1B)
+                self.command_executed.emit("Key", key)
                 return
 
             if action == "MEDIA_KEY":

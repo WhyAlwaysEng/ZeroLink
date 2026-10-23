@@ -129,6 +129,9 @@ class ZeroPadActivity : AppCompatActivity() {
 
         // Section 3: Precision Trackpad Setup
         setupTouchpad()
+
+        // Section 4: Remote Keyboard & Text Injection
+        setupRemoteKeyboard()
     }
 
     private fun connect(host: String, port: Int) {
@@ -237,6 +240,9 @@ class ZeroPadActivity : AppCompatActivity() {
     private var startTouchY = 0f
     private var touchDownTime = 0L
     private var isTapCandidate = false
+    private var isDragging = false
+    private val dragHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var dragRunnable: Runnable? = null
     private val moveSensitivity = 1.6f
     private val scrollSensitivity = 1.2f
 
@@ -252,21 +258,45 @@ class ZeroPadActivity : AppCompatActivity() {
                     lastTouchY = event.y
                     touchDownTime = System.currentTimeMillis()
                     isTapCandidate = true
+                    isDragging = false
+
+                    // Schedule Hold-to-Drag gesture (press and hold still for 260ms)
+                    dragRunnable?.let { dragHandler.removeCallbacks(it) }
+                    dragRunnable = Runnable {
+                        if (isTapCandidate && !isDragging) {
+                            isDragging = true
+                            isTapCandidate = false
+                            view.performHapticFeedback(HapticFeedbackConstants.LONG_PRESS)
+                            sendMouseDown("left")
+                            binding.tvTrackpadHint.text = "● DRAGGING / SELECTING (Lift finger to drop)"
+                            binding.tvTrackpadHint.setTextColor(android.graphics.Color.parseColor("#111827"))
+                        }
+                    }
+                    dragHandler.postDelayed(dragRunnable!!, 260)
                     true
                 }
                 android.view.MotionEvent.ACTION_POINTER_DOWN -> {
                     isTapCandidate = false
+                    dragRunnable?.let { dragHandler.removeCallbacks(it) }
+                    if (isDragging) {
+                        sendMouseUp("left")
+                        isDragging = false
+                        binding.tvTrackpadHint.text = "Slide to move • Hold still to drag"
+                        binding.tvTrackpadHint.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                    }
                     lastTouchX = event.x
                     lastTouchY = event.y
                     true
                 }
                 android.view.MotionEvent.ACTION_MOVE -> {
                     if (event.pointerCount == 1) {
+                        val dist = Math.hypot((event.x - startTouchX).toDouble(), (event.y - startTouchY).toDouble())
+                        if (!isDragging && dist > 14.0) {
+                            isTapCandidate = false
+                            dragRunnable?.let { dragHandler.removeCallbacks(it) }
+                        }
                         val dx = (event.x - lastTouchX) * moveSensitivity
                         val dy = (event.y - lastTouchY) * moveSensitivity
-                        if (Math.abs(event.x - startTouchX) > 12f || Math.abs(event.y - startTouchY) > 12f) {
-                            isTapCandidate = false
-                        }
                         if (dx.toInt() != 0 || dy.toInt() != 0) {
                             sendMouseMove(dx.toInt(), dy.toInt())
                         }
@@ -274,6 +304,13 @@ class ZeroPadActivity : AppCompatActivity() {
                         lastTouchY = event.y
                     } else if (event.pointerCount >= 2) {
                         isTapCandidate = false
+                        dragRunnable?.let { dragHandler.removeCallbacks(it) }
+                        if (isDragging) {
+                            sendMouseUp("left")
+                            isDragging = false
+                            binding.tvTrackpadHint.text = "Slide to move • Hold still to drag"
+                            binding.tvTrackpadHint.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                        }
                         val dy = (event.y - lastTouchY) * scrollSensitivity
                         if (dy.toInt() != 0) {
                             sendMouseScroll((dy * 15).toInt())
@@ -284,8 +321,15 @@ class ZeroPadActivity : AppCompatActivity() {
                 }
                 android.view.MotionEvent.ACTION_UP -> {
                     view.parent.requestDisallowInterceptTouchEvent(false)
+                    dragRunnable?.let { dragHandler.removeCallbacks(it) }
                     val elapsed = System.currentTimeMillis() - touchDownTime
-                    if (isTapCandidate && elapsed < 220) {
+                    if (isDragging) {
+                        view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                        sendMouseUp("left")
+                        isDragging = false
+                        binding.tvTrackpadHint.text = "Slide to move • Hold still to drag"
+                        binding.tvTrackpadHint.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                    } else if (isTapCandidate && elapsed < 220) {
                         view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
                         sendMouseClick("left")
                     }
@@ -293,6 +337,13 @@ class ZeroPadActivity : AppCompatActivity() {
                 }
                 android.view.MotionEvent.ACTION_CANCEL -> {
                     view.parent.requestDisallowInterceptTouchEvent(false)
+                    dragRunnable?.let { dragHandler.removeCallbacks(it) }
+                    if (isDragging) {
+                        sendMouseUp("left")
+                        isDragging = false
+                        binding.tvTrackpadHint.text = "Slide to move • Hold still to drag"
+                        binding.tvTrackpadHint.setTextColor(android.graphics.Color.parseColor("#4B5563"))
+                    }
                     true
                 }
                 else -> false
@@ -318,6 +369,64 @@ class ZeroPadActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             sendMouseClick("right")
         }
+    }
+
+    private fun setupRemoteKeyboard() {
+        binding.btnPadSendText.setOnClickListener {
+            val text = binding.etPadInputText.text?.toString() ?: ""
+            if (text.isNotEmpty()) {
+                it.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+                sendTypeText(text)
+                binding.etPadInputText.setText("")
+            }
+        }
+
+        binding.etPadInputText.setOnEditorActionListener { _, actionId, event ->
+            if (actionId == android.view.inputmethod.EditorInfo.IME_ACTION_SEND ||
+                (event != null && event.keyCode == android.view.KeyEvent.KEYCODE_ENTER && !event.isShiftPressed)) {
+                val text = binding.etPadInputText.text?.toString() ?: ""
+                if (text.isNotEmpty()) {
+                    sendTypeText(text)
+                    binding.etPadInputText.setText("")
+                }
+                true
+            } else {
+                false
+            }
+        }
+
+        binding.btnKeyBackspace.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            sendSpecialKey("BACKSPACE")
+        }
+        binding.btnKeySpace.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            sendSpecialKey("SPACE")
+        }
+        binding.btnKeyEnter.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            sendSpecialKey("ENTER")
+        }
+        binding.btnKeyTab.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+            sendSpecialKey("TAB")
+        }
+    }
+
+    private fun sendTypeText(text: String) {
+        val json = JSONObject().apply {
+            put("action", "TYPE_TEXT")
+            put("text", text)
+        }
+        sendJson(json)
+    }
+
+    private fun sendSpecialKey(key: String) {
+        val json = JSONObject().apply {
+            put("action", "SPECIAL_KEY")
+            put("key", key)
+        }
+        sendJson(json)
     }
 
     private fun sendMouseMove(dx: Int, dy: Int) {
@@ -363,6 +472,7 @@ class ZeroPadActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        dragRunnable?.let { dragHandler.removeCallbacks(it) }
         disconnect()
         discovery?.stopDiscovery()
     }
