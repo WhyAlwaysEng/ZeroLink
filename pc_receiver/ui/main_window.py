@@ -272,7 +272,7 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_pad)
         side_layout.addWidget(self.btn_nav_pad)
 
-        self.btn_nav_explorer = NavButton("ZeroExplorer", "📁")
+        self.btn_nav_explorer = NavButton("ZeroExplorer", "▤")
         self.btn_nav_explorer.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
         self.nav_group.addButton(self.btn_nav_explorer)
         side_layout.addWidget(self.btn_nav_explorer)

@@ -108,3 +108,23 @@ class AdbManager:
                 return False, f"ADB error: {err}"
         except Exception as e:
             return False, f"Failed to execute ADB: {e}"
+
+    def forward_port(self, port: int = 8896) -> Tuple[bool, str]:
+        """Runs 'adb forward tcp:<port> tcp:<port>' to allow PC to connect to Android server via 127.0.0.1."""
+        if not self.is_available():
+            return False, "ADB was not found."
+        try:
+            cmd = [self.adb_path, "forward", f"tcp:{port}", f"tcp:{port}"]
+            res = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+            )
+            if res.returncode == 0:
+                return True, f"Port {port} forwarded successfully."
+            else:
+                return False, res.stderr.strip() or res.stdout.strip()
+        except Exception as e:
+            return False, str(e)
