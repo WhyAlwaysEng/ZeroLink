@@ -70,6 +70,7 @@ class AudioMixerEngine(QObject):
         # Audio Buffers & Playback state
         self._lock = threading.Lock()
         self._phone_buffer = bytearray()
+        self._phone_prebuffering = True
         self._last_phone_audio_time: float = 0.0
         self._phone_streaming_active: bool = False
 
@@ -388,16 +389,20 @@ class AudioMixerEngine(QObject):
         with self._lock:
             # 2a. Priority: Incoming Live Phone Cast Audio from ZeroCast
             needed_bytes = frames * 4
-            if len(self._phone_buffer) >= 4:
-                take_bytes = min(len(self._phone_buffer), needed_bytes)
-                take_bytes = (take_bytes // 4) * 4
-                if take_bytes > 0:
-                    raw_bytes = bytes(self._phone_buffer[:take_bytes])
-                    del self._phone_buffer[:take_bytes]
+            target_prebuffer = int(self.sample_rate * 4 * 0.080)  # 80ms jitter absorption
+            if self._phone_prebuffering:
+                if len(self._phone_buffer) >= target_prebuffer:
+                    self._phone_prebuffering = False
+
+            if not self._phone_prebuffering:
+                if len(self._phone_buffer) >= needed_bytes:
+                    raw_bytes = bytes(self._phone_buffer[:needed_bytes])
+                    del self._phone_buffer[:needed_bytes]
                     int16_arr = np.frombuffer(raw_bytes, dtype=np.int16).reshape(-1, 2)
-                    sample_count = len(int16_arr)
-                    music_stereo[:sample_count] = int16_arr.astype(np.float32) / 32768.0
+                    music_stereo[:] = int16_arr.astype(np.float32) / 32768.0
                     has_phone_audio = True
+                elif len(self._phone_buffer) == 0:
+                    self._phone_prebuffering = True
 
             # 2b. Secondary: Local Music File Playback
             if not has_phone_audio and self._is_music_playing and self._music_data is not None:
@@ -473,13 +478,13 @@ class AudioMixerEngine(QObject):
         if not self.is_running or not pcm_data:
             return
         with self._lock:
-            # Ultra-low latency cap: 45ms backlog eliminates drift and matches real-time playback
-            max_bytes = int(self.sample_rate * 4 * 0.045)
+            self._phone_buffer.extend(pcm_data)
+            # 150ms backlog cap prevents runaway latency while absorbing Wi-Fi jitter seamlessly
+            max_bytes = int(self.sample_rate * 4 * 0.150)
             if len(self._phone_buffer) > max_bytes:
                 excess = len(self._phone_buffer) - max_bytes
                 excess = (excess // 4) * 4
                 del self._phone_buffer[:excess]
-            self._phone_buffer.extend(pcm_data)
             self._last_phone_audio_time = time.time()
 
     # Audio file decoding using PyAV

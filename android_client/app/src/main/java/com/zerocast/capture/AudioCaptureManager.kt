@@ -53,11 +53,11 @@ class AudioCaptureManager(
                 AudioFormat.ENCODING_PCM_16BIT
             )
 
-            // Ultra-low latency buffer: 40ms buffer eliminates Android OS accumulation lag
+            // 16KB buffer matches Android Audio HAL buffer quantum, preventing sample drops
             val bufferSize = if (minBufferSize > 0) {
-                maxOf(minBufferSize * 2, 7680)
+                maxOf(minBufferSize * 2, 4096 * 4)
             } else {
-                7680
+                16384
             }
 
             val record = AudioRecord.Builder()
@@ -77,8 +77,8 @@ class AudioCaptureManager(
             record.startRecording()
 
             recordThread = Thread({
-                // 1920 bytes = exactly 10ms frame at 48000 Hz 16-bit stereo for real-time streaming
-                val buffer = ByteArray(1920)
+                // 4096 bytes matches Android Audio HAL buffer quantum (1024 stereo samples), perfectly aligned to 512/1024 frames
+                val buffer = ByteArray(4096)
                 while (isRecording.get() && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val read = record.read(buffer, 0, buffer.size)
                     if (read > 0) {
