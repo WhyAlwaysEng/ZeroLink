@@ -52,27 +52,44 @@ class ZeroNotificationListenerService : NotificationListenerService() {
         }
 
         val serverIp = ZeroLinkConfig.getServerIp(this)
-        if (serverIp.isEmpty() || serverIp == "127.0.0.1") return
+        if (serverIp.isEmpty()) return
 
-        // Send UDP packet asynchronously to PC
+        // Send notification asynchronously to PC (Supports both TCP Master Gateway & UDP)
         CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val payload = JSONObject().apply {
-                    put("type", "ZEROLINK_NOTIFY")
-                    put("app", appName)
-                    put("title", title)
-                    put("text", text)
-                    put("package", sbn.packageName)
-                    put("time", System.currentTimeMillis())
-                }.toString().toByteArray(Charsets.UTF_8)
+            val jsonPayload = JSONObject().apply {
+                put("type", "ZEROLINK_NOTIFY")
+                put("app", appName)
+                put("title", title)
+                put("text", text)
+                put("package", sbn.packageName)
+                put("time", System.currentTimeMillis())
+            }
 
-                DatagramSocket().use { socket ->
-                    val address = InetAddress.getByName(serverIp)
-                    val packet = DatagramPacket(payload, payload.size, address, NOTIFY_PORT)
-                    socket.send(packet)
+            var sentViaTcp = false
+            // 1. Try TCP Master Gateway (works over both USB 127.0.0.1 and Wi-Fi)
+            try {
+                val sock = java.net.Socket()
+                sock.soTimeout = 1500
+                sock.connect(java.net.InetSocketAddress(serverIp, 8886), 1200)
+                val writer = java.io.OutputStreamWriter(sock.getOutputStream(), Charsets.UTF_8)
+                writer.write(jsonPayload.toString() + "\n")
+                writer.flush()
+                sock.close()
+                sentViaTcp = true
+            } catch (_: Exception) {}
+
+            // 2. Fallback to UDP if not sent via TCP and not loopback
+            if (!sentViaTcp && serverIp != "127.0.0.1") {
+                try {
+                    val payload = jsonPayload.toString().toByteArray(Charsets.UTF_8)
+                    DatagramSocket().use { socket ->
+                        val address = InetAddress.getByName(serverIp)
+                        val packet = DatagramPacket(payload, payload.size, address, NOTIFY_PORT)
+                        socket.send(packet)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to send notification via UDP: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to send notification to $serverIp: ${e.message}")
             }
         }
     }

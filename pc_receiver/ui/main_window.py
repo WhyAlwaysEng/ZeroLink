@@ -165,9 +165,10 @@ class MainWindow(QMainWindow):
         self._tray_notified = False
         self._setup_tray_icon()
 
-        # LAN Auto-Discovery & Notification Bridge (UDP 8887)
+        # LAN Auto-Discovery & Notification Bridge (UDP 8887 & TCP 8886 Master Gateway)
         self.discovery_service = LanDiscoveryService(tcp_port=self.port, local_ip=self.local_ip, parent=self)
         self.discovery_service.notification_received.connect(self._on_phone_notification)
+        self.discovery_service.module_wake_requested.connect(self._on_remote_wake_module)
         self.discovery_service.start()
 
         # Update Checker
@@ -602,6 +603,12 @@ class MainWindow(QMainWindow):
         if hasattr(self, "tray_icon") and self.tray_icon:
             msg = f"{title}\n{text}" if title else text
             self.tray_icon.showMessage(f"📱 {app_name}", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
+
+    def _on_remote_wake_module(self, module_id: str):
+        mod = self.module_manager.get_module(module_id)
+        if mod and not mod.is_active:
+            self.module_manager.toggle_module(module_id, True)
+            print(f"[ZeroWake] Remotely activated module: {module_id}")
 
     def closeEvent(self, event):
         if getattr(self, "_is_quitting", False):

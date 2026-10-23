@@ -3,9 +3,10 @@ package com.zerocast.network
 import android.util.Log
 import kotlinx.coroutines.*
 import org.json.JSONObject
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import java.net.InetAddress
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
+import java.net.*
 import java.util.concurrent.atomic.AtomicBoolean
 
 class NetworkDiscovery(
@@ -17,7 +18,44 @@ class NetworkDiscovery(
 
     companion object {
         private const val TAG = "ZeroLink-Discovery"
-        const val DISCOVERY_PORT = 8887
+        const val DISCOVERY_PORT = 8887 // UDP beacon & notifications
+        const val GATEWAY_PORT = 8886   // TCP Master Gateway & ZeroWake
+
+        /**
+         * Sends a remote wake-up request to the PC Master Gateway to activate a specific module on-demand.
+         */
+        fun wakeModule(host: String, moduleId: String, callback: ((Boolean) -> Unit)? = null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                var success = false
+                try {
+                    val socket = Socket()
+                    socket.soTimeout = 2500
+                    socket.connect(InetSocketAddress(host, GATEWAY_PORT), 2000)
+
+                    val writer = OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8)
+                    val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+
+                    val req = JSONObject().apply {
+                        put("action", "WAKE")
+                        put("module", moduleId)
+                    }.toString() + "\n"
+
+                    writer.write(req)
+                    writer.flush()
+
+                    val resp = reader.readLine()
+                    if (resp != null && resp.contains("READY")) {
+                        success = true
+                    }
+                    socket.close()
+                } catch (e: Exception) {
+                    Log.d(TAG, "Wake module '$moduleId' attempt: ${e.message}")
+                }
+                withContext(Dispatchers.Main) {
+                    callback?.invoke(success)
+                }
+            }
+        }
     }
 
     private val isScanning = AtomicBoolean(false)
@@ -28,47 +66,68 @@ class NetworkDiscovery(
         if (isScanning.getAndSet(true)) return
 
         scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-        scope?.launch {
-            try {
-                socket = DatagramSocket(DISCOVERY_PORT).apply {
-                    broadcast = true
-                    soTimeout = 2500
-                }
+        val currentScope = scope ?: return
 
-                // Send discovery ping immediately
-                sendDiscoveryBroadcast()
+        // 1. UDP Broadcast Listener & Ping
+        currentScope.launch {
+            runUdpDiscovery()
+        }
 
-                val buffer = ByteArray(2048)
-                while (isScanning.get()) {
-                    try {
-                        val packet = DatagramPacket(buffer, buffer.size)
-                        socket?.receive(packet)
+        // 2. USB / ADB Loopback Gateway Probe (127.0.0.1:8886)
+        currentScope.launch {
+            delay(100)
+            if (isScanning.get()) {
+                probeTcpGateway("127.0.0.1")
+            }
+        }
 
-                        val text = String(packet.data, 0, packet.length).trim()
-                        if (text.contains("ZEROLINK_BEACON") || text.contains("ZEROCAST_BEACON")) {
-                            val json = JSONObject(text)
-                            val ip = json.optString("ip", packet.address?.hostAddress ?: "")
-                            val port = json.optInt("port", 8888)
-                            val name = json.optString("name", "ZeroLink PC")
+        // 3. Fast Parallel Subnet TCP Scanner (bypasses Wi-Fi router AP Isolation / UDP blocks)
+        currentScope.launch {
+            delay(300)
+            if (isScanning.get()) {
+                scanLocalSubnet()
+            }
+        }
+    }
 
-                            if (ip.isNotEmpty() && ip != "127.0.0.1") {
-                                withContext(Dispatchers.Main) {
-                                    onServerFound(ip, port, name)
-                                }
+    private suspend fun runUdpDiscovery() {
+        try {
+            socket = DatagramSocket(null).apply {
+                reuseAddress = true
+                broadcast = true
+                bind(InetSocketAddress(DISCOVERY_PORT))
+                soTimeout = 2500
+            }
+
+            sendDiscoveryBroadcast()
+
+            val buffer = ByteArray(2048)
+            while (isScanning.get()) {
+                try {
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    socket?.receive(packet)
+
+                    val text = String(packet.data, 0, packet.length).trim()
+                    if (text.contains("ZEROLINK_BEACON") || text.contains("ZEROCAST_BEACON")) {
+                        val json = JSONObject(text)
+                        val ip = json.optString("ip", packet.address?.hostAddress ?: "")
+                        val port = json.optInt("port", 8888)
+                        val name = json.optString("name", "ZeroLink PC")
+
+                        if (ip.isNotEmpty() && ip != "127.0.0.1") {
+                            withContext(Dispatchers.Main) {
+                                onServerFound(ip, port, name)
                             }
                         }
-                    } catch (_: Exception) {
-                        // Timeout: re-broadcast
-                        if (isScanning.get()) {
-                            sendDiscoveryBroadcast()
-                        }
+                    }
+                } catch (_: Exception) {
+                    if (isScanning.get()) {
+                        sendDiscoveryBroadcast()
                     }
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Discovery socket error: ${e.message}")
-            } finally {
-                stopDiscovery()
             }
+        } catch (e: Exception) {
+            Log.d(TAG, "UDP Discovery stopped: ${e.message}")
         }
     }
 
@@ -79,6 +138,85 @@ class NetworkDiscovery(
             val pingPacket = DatagramPacket(msg, msg.size, broadcastAddr, DISCOVERY_PORT)
             socket?.send(pingPacket)
         } catch (_: Exception) {}
+    }
+
+    private suspend fun probeTcpGateway(ip: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                val sock = Socket()
+                sock.soTimeout = 400
+                sock.connect(InetSocketAddress(ip, GATEWAY_PORT), 350)
+
+                val writer = OutputStreamWriter(sock.getOutputStream(), Charsets.UTF_8)
+                val reader = BufferedReader(InputStreamReader(sock.getInputStream(), Charsets.UTF_8))
+
+                writer.write("{\"action\":\"PING\"}\n")
+                writer.flush()
+
+                val line = reader.readLine()
+                sock.close()
+
+                if (line != null && line.contains("PONG")) {
+                    val json = JSONObject(line)
+                    val resolvedIp = if (ip == "127.0.0.1") "127.0.0.1" else json.optString("ip", ip)
+                    val port = json.optInt("port", 8888)
+                    val name = json.optString("name", "ZeroLink PC")
+
+                    withContext(Dispatchers.Main) {
+                        onServerFound(resolvedIp, port, name)
+                    }
+                    return@withContext true
+                }
+            } catch (_: Exception) {}
+            false
+        }
+    }
+
+    private suspend fun scanLocalSubnet() {
+        val localIps = getLocalIpAddresses()
+        for (localIp in localIps) {
+            val parts = localIp.split(".")
+            if (parts.size != 4) continue
+            val subnetPrefix = "${parts[0]}.${parts[1]}.${parts[2]}."
+
+            // Scan in batches of 32 parallel probes
+            val hostBatch = (1..254).toList()
+            hostBatch.chunked(32).forEach { batch ->
+                if (!isScanning.get()) return
+                coroutineScope {
+                    batch.map { hostNum ->
+                        async(Dispatchers.IO) {
+                            val targetIp = "$subnetPrefix$hostNum"
+                            if (targetIp != localIp && isScanning.get()) {
+                                probeTcpGateway(targetIp)
+                            }
+                        }
+                    }.awaitAll()
+                }
+            }
+        }
+    }
+
+    private fun getLocalIpAddresses(): List<String> {
+        val result = mutableListOf<String>()
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val addrs = iface.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                        val host = addr.hostAddress
+                        if (host != null && host.startsWith("192.168.")) {
+                            result.add(host)
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return result
     }
 
     fun stopDiscovery() {

@@ -29,7 +29,7 @@ class AudioMixerEngine(QObject):
     voice_effect_changed = pyqtSignal(str)                # effect_id e.g. "OFF", "RADIO", "DEEP", ...
     state_changed = pyqtSignal()
 
-    def __init__(self, sample_rate: int = 48000, block_size: int = 1024, parent=None):
+    def __init__(self, sample_rate: int = 48000, block_size: int = 512, parent=None):
         super().__init__(parent)
         self.sample_rate = sample_rate
         self.block_size = block_size
@@ -94,10 +94,10 @@ class AudioMixerEngine(QObject):
         self._out_monitor_stream: Optional[sd.OutputStream] = None
         self._out_broadcast_stream: Optional[sd.OutputStream] = None
 
-        # Output ring queues for non-blocking PortAudio callbacks
+        # Output ring queues for non-blocking PortAudio callbacks (low-latency queue)
         self._out_lock = threading.Lock()
-        self._monitor_queue = collections.deque(maxlen=16)
-        self._broadcast_queue = collections.deque(maxlen=16)
+        self._monitor_queue = collections.deque(maxlen=4)
+        self._broadcast_queue = collections.deque(maxlen=4)
 
         # Level smoothing for VU meters
         self._peak_mic = 0.0
@@ -216,15 +216,20 @@ class AudioMixerEngine(QObject):
             return True
 
         try:
-            # Setup output monitor stream (Headphones) using non-blocking callback
+            # Setup output monitor stream (Headphones) using non-blocking low-latency callback
             if self.output_monitor_device is not None:
                 try:
+                    dev_info = sd.query_devices(self.output_monitor_device)
+                    m_sr = int(dev_info.get("default_samplerate", self.sample_rate))
+                    if m_sr <= 0:
+                        m_sr = self.sample_rate
                     self._out_monitor_stream = sd.OutputStream(
-                        samplerate=self.sample_rate,
+                        samplerate=m_sr,
                         blocksize=self.block_size,
                         device=self.output_monitor_device,
                         channels=2,
                         dtype='float32',
+                        latency='low',
                         callback=self._monitor_out_callback
                     )
                     self._out_monitor_stream.start()
@@ -237,6 +242,8 @@ class AudioMixerEngine(QObject):
                 try:
                     dev_info = sd.query_devices(self.output_broadcast_device)
                     b_sr = int(dev_info.get("default_samplerate", self.sample_rate))
+                    if b_sr <= 0:
+                        b_sr = self.sample_rate
                     ch = min(2, max(1, dev_info.get("max_output_channels", 2)))
                     self._out_broadcast_stream = sd.OutputStream(
                         samplerate=b_sr,
@@ -244,6 +251,7 @@ class AudioMixerEngine(QObject):
                         device=self.output_broadcast_device,
                         channels=ch,
                         dtype='float32',
+                        latency='low',
                         callback=self._broadcast_out_callback
                     )
                     self._out_broadcast_stream.start()
@@ -253,12 +261,17 @@ class AudioMixerEngine(QObject):
             # Setup input mic stream
             if self.input_mic_device is not None:
                 try:
+                    dev_info = sd.query_devices(self.input_mic_device)
+                    in_sr = int(dev_info.get("default_samplerate", self.sample_rate))
+                    if in_sr <= 0:
+                        in_sr = self.sample_rate
                     self._in_stream = sd.InputStream(
-                        samplerate=self.sample_rate,
+                        samplerate=in_sr,
                         blocksize=self.block_size,
                         device=self.input_mic_device,
                         channels=1,
                         dtype='float32',
+                        latency='low',
                         callback=self._audio_callback
                     )
                     self._in_stream.start()
@@ -460,8 +473,8 @@ class AudioMixerEngine(QObject):
         if not self.is_running or not pcm_data:
             return
         with self._lock:
-            # Bound buffer backlog to ~0.35s to eliminate latency drift
-            max_bytes = int(self.sample_rate * 4 * 0.35)
+            # Ultra-low latency cap: 45ms backlog eliminates drift and matches real-time playback
+            max_bytes = int(self.sample_rate * 4 * 0.045)
             if len(self._phone_buffer) > max_bytes:
                 excess = len(self._phone_buffer) - max_bytes
                 excess = (excess // 4) * 4

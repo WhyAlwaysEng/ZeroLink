@@ -149,68 +149,68 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun openModuleWithWake(moduleId: String, activityClass: Class<*>) {
+        val serverIp = ZeroLinkConfig.getServerIp(this)
+        if (serverIp.isNotEmpty()) {
+            NetworkDiscovery.wakeModule(serverIp, moduleId)
+        }
+        val intent = Intent(this, activityClass)
+        startActivity(intent)
+    }
+
     private fun setupModuleCards() {
         // Module 1: ZeroCast (Core Mirroring)
         binding.cardModuleZeroCast.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroCastActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zerocast", ZeroCastActivity::class.java)
         }
 
         // Module 2: ZeroDrop (File Transfer)
         binding.cardModuleZeroDrop.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroDropActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zerodrop", ZeroDropActivity::class.java)
         }
 
         // Module 3: ZeroClip (Universal Clipboard)
         binding.cardModuleZeroClip.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroClipActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zeroclip", ZeroClipActivity::class.java)
         }
 
         // Module 4: ZeroMix (Virtual Audio Mixer & Sound Deck)
         binding.cardModuleZeroMix.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroMixActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zeromix", ZeroMixActivity::class.java)
         }
 
         // Module 5: ZeroDisplay (Extended 2nd Monitor)
         binding.cardModuleZeroDisplay.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroDisplayActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zerodisplay", ZeroDisplayActivity::class.java)
         }
 
         // Module 6: ZeroCam (Wireless 4K Webcam)
         binding.cardModuleZeroCam.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroCamActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zerocam", ZeroCamActivity::class.java)
         }
 
         // Module 7: ZeroPad (Stream Deck & PC Media Remote)
         binding.cardModuleZeroPad.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroPadActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zeropad", ZeroPadActivity::class.java)
         }
 
         // Module 8: ZeroExplorer (Phone Gallery & Storage Explorer)
         binding.cardModuleZeroExplorer.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroExplorerActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zeroexplorer", ZeroExplorerActivity::class.java)
         }
 
         // Module 9: ZeroDev (Module Workshop & Latency Probe)
         binding.cardModuleZeroDev.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            val intent = Intent(this, ZeroDevActivity::class.java)
-            startActivity(intent)
+            openModuleWithWake("zerodev", ZeroDevActivity::class.java)
         }
     }
 }
