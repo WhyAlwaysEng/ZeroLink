@@ -23,7 +23,8 @@ class ScreenCaptureH264Manager(
     private val dpi: Int,
     private val targetFps: Int = 60,
     private val bitrateKbps: Int = 8000,
-    private val streamSender: StreamSender
+    private val streamSender: StreamSender,
+    private val useCbrCap: Boolean = true
 ) {
     companion object {
         private const val TAG = "ScreenCaptureH264"
@@ -48,25 +49,63 @@ class ScreenCaptureH264Manager(
             val alignedWidth = (width + 1) and 1.inv()
             val alignedHeight = (height + 1) and 1.inv()
 
+            // Probe if hardware encoder supports CBR (Constant Bitrate / Hard Ceiling)
+            val isCbrSupported = try {
+                val probeCodec = MediaCodec.createEncoderByType(MIME_TYPE)
+                val supported = probeCodec.codecInfo.getCapabilitiesForType(MIME_TYPE)
+                    .encoderCapabilities.isBitrateModeSupported(MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR)
+                probeCodec.release()
+                supported
+            } catch (_: Exception) {
+                false
+            }
+
+            val bitrateMode = if (useCbrCap && isCbrSupported) {
+                Log.d(TAG, "Bitrate Mode: BITRATE_MODE_CBR (Strict Bandwidth Cap / Hard Ceiling)")
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_CBR
+            } else {
+                Log.d(TAG, "Bitrate Mode: BITRATE_MODE_VBR (Adaptive Dynamic)")
+                MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR
+            }
+
             val format = MediaFormat.createVideoFormat(MIME_TYPE, alignedWidth, alignedHeight).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
                 setInteger(MediaFormat.KEY_BIT_RATE, bitrateKbps * 1000)
                 setInteger(MediaFormat.KEY_FRAME_RATE, targetFps)
-                // Hardware cap incoming surface VSync framerate
+                setInteger(MediaFormat.KEY_CAPTURE_RATE, targetFps)
+                setInteger(MediaFormat.KEY_OPERATING_RATE, targetFps)
+
+                // Hardware-level framerate constraints for high-refresh displays (90Hz / 120Hz)
                 setFloat(MediaFormat.KEY_MAX_FPS_TO_ENCODER, targetFps.toFloat())
+                setInteger("max-fps-to-encoder", targetFps)
+                setFloat("max-fps-to-encoder", targetFps.toFloat())
+                setInteger("max-fps", targetFps)
+                setInteger("frame-rate", targetFps)
+
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1) // Keyframe every 1s
-                // Use Baseline Profile for ZERO decoder buffer delay (no B-frames)
+                // Baseline Profile for ZERO decoder buffer latency (no B-frames)
                 setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
-                setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
-                // Idle refresh: Only repeat previous frame if screen has been static for 100ms (10 FPS idle fallback)
-                // This prevents flood/duplication of frames on 90Hz/120Hz displays
-                setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 100_000L)
+                setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
+
+                // Idle refresh: set to 10 seconds so it doesn't pump redundant ghost frames every 100ms
+                setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 10_000_000L)
             }
 
             mediaCodec = MediaCodec.createEncoderByType(MIME_TYPE)
             mediaCodec?.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
             inputSurface = mediaCodec?.createInputSurface()
             mediaCodec?.start()
+
+            // Pass dynamic runtime parameters to enforce max FPS on vendor OMX/C2 drivers
+            try {
+                val fpsBundle = Bundle().apply {
+                    putFloat("max-fps-to-encoder", targetFps.toFloat())
+                    putInt("max-fps-to-encoder", targetFps)
+                    putInt("max-fps", targetFps)
+                    putInt("frame-rate", targetFps)
+                }
+                mediaCodec?.setParameters(fpsBundle)
+            } catch (_: Exception) {}
 
             // Request initial sync frame
             requestKeyFrame()

@@ -24,7 +24,12 @@ import com.zerocast.network.NetworkDiscovery
 import com.zerocast.network.StreamSender
 import com.zerocast.service.FloatingOverlayService
 import com.zerocast.service.StreamForegroundService
+import com.zerocast.speedtest.SpeedTestManager
 import com.zerocast.util.ZeroLinkConfig
+import android.widget.ProgressBar
+import android.widget.TextView
+import android.widget.Button
+import android.view.View
 
 class ZeroCastActivity : AppCompatActivity() {
 
@@ -40,6 +45,19 @@ class ZeroCastActivity : AppCompatActivity() {
             6000,  // 6 Mbps
             3000,  // 3 Mbps
             1500   // 1.5 Mbps
+        )
+
+        val BITRATE_LABELS = listOf(
+            "80 Mbps (⚡ Extreme USB 3.0)",
+            "50 Mbps (🔥 Master Quality)",
+            "35 Mbps (💎 Crystal Clear)",
+            "25 Mbps (🚀 High Performance)",
+            "18 Mbps (✨ High Quality)",
+            "14 Mbps (⚖️ Balanced)",
+            "10 Mbps (📶 Standard)",
+            "6 Mbps (⚡ Low Latency)",
+            "3 Mbps (🍃 Ultra-Fast)",
+            "1.5 Mbps (🔋 Battery Saver)"
         )
     }
 
@@ -131,6 +149,7 @@ class ZeroCastActivity : AppCompatActivity() {
 
         binding.chkAudio.isChecked = ZeroLinkConfig.getCastAudio(this)
         binding.switchDimScreen.isChecked = ZeroLinkConfig.getCastDimScreen(this)
+        binding.switchStrictCbr.isChecked = ZeroLinkConfig.getCastStrictCbr(this)
         updateConnectionHint()
     }
 
@@ -143,6 +162,7 @@ class ZeroCastActivity : AppCompatActivity() {
         ZeroLinkConfig.setCastBitrate(this, binding.spinnerBitrate.selectedItemPosition)
         ZeroLinkConfig.setCastAudio(this, binding.chkAudio.isChecked)
         ZeroLinkConfig.setCastDimScreen(this, binding.switchDimScreen.isChecked)
+        ZeroLinkConfig.setCastStrictCbr(this, binding.switchStrictCbr.isChecked)
     }
 
     private fun detectNativeScreenSize() {
@@ -258,6 +278,11 @@ class ZeroCastActivity : AppCompatActivity() {
             discovery?.startDiscovery()
         }
 
+        binding.btnSpeedTest.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            showSpeedTestDialog()
+        }
+
         binding.switchFloatingOverlay.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 if (!Settings.canDrawOverlays(this)) {
@@ -345,6 +370,7 @@ class ZeroCastActivity : AppCompatActivity() {
             putExtra(StreamForegroundService.EXTRA_USE_H264, true)
             putExtra(StreamForegroundService.EXTRA_CAPTURE_AUDIO, binding.chkAudio.isChecked)
             putExtra(StreamForegroundService.EXTRA_BITRATE_KBPS, bitrateKbps)
+            putExtra(StreamForegroundService.EXTRA_USE_CBR, binding.switchStrictCbr.isChecked)
         }
 
         if (dimScreen) {
@@ -450,5 +476,89 @@ class ZeroCastActivity : AppCompatActivity() {
         saveSettings()
         StreamForegroundService.stateListener = null
         discovery?.stopDiscovery()
+    }
+
+    private fun showSpeedTestDialog() {
+        val host = binding.etServerIp.text.toString().trim().ifEmpty { "127.0.0.1" }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_speed_test, null)
+        val dialog = com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setView(dialogView)
+            .create()
+
+        val tvMediumBadge = dialogView.findViewById<TextView>(R.id.tvMediumBadge)
+        val tvSpeedVal = dialogView.findViewById<TextView>(R.id.tvSpeedVal)
+        val progressBar = dialogView.findViewById<ProgressBar>(R.id.progressBarSpeed)
+        val tvPingVal = dialogView.findViewById<TextView>(R.id.tvPingVal)
+        val tvJitterVal = dialogView.findViewById<TextView>(R.id.tvJitterVal)
+        val tvRecommendation = dialogView.findViewById<TextView>(R.id.tvRecommendation)
+        val btnApply = dialogView.findViewById<Button>(R.id.btnApplyRecommendation)
+        val btnStart = dialogView.findViewById<Button>(R.id.btnStartTest)
+        val btnClose = dialogView.findViewById<Button>(R.id.btnCloseDialog)
+
+        val isUsb = host == "127.0.0.1" || host == "localhost"
+        tvMediumBadge.text = if (isUsb) "⚡ USB CABLE" else "📡 WI-FI ($host)"
+        tvMediumBadge.setTextColor(if (isUsb) android.graphics.Color.parseColor("#0284C7") else android.graphics.Color.parseColor("#059669"))
+
+        var testManager: SpeedTestManager? = null
+
+        btnStart.setOnClickListener {
+            btnStart.isEnabled = false
+            btnStart.text = "TESTING..."
+            btnApply.visibility = View.GONE
+            tvSpeedVal.text = "0.0"
+            progressBar.progress = 0
+            tvPingVal.text = "..."
+            tvJitterVal.text = "..."
+            tvRecommendation.text = "Measuring real-time latency and raw TCP throughput..."
+
+            testManager = SpeedTestManager(host, 8890, object : SpeedTestManager.SpeedTestListener {
+                override fun onPingCompleted(avgPingMs: Float, jitterMs: Float) {
+                    tvPingVal.text = String.format("%.1f ms", avgPingMs)
+                    tvJitterVal.text = String.format("%.1f ms", jitterMs)
+                }
+
+                override fun onProgress(progress: Float, currentMbps: Float) {
+                    progressBar.progress = (progress * 100).toInt()
+                    tvSpeedVal.text = String.format("%.1f", currentMbps)
+                }
+
+                override fun onCompleted(result: SpeedTestManager.SpeedTestResult) {
+                    btnStart.isEnabled = true
+                    btnStart.text = "RUN AGAIN"
+                    progressBar.progress = 100
+                    tvSpeedVal.text = String.format("%.1f", result.mbps)
+                    tvRecommendation.text = result.recommendation
+                    btnApply.visibility = View.VISIBLE
+                    val label = BITRATE_LABELS.getOrElse(result.recommendedBitrateIndex) { "" }
+                    btnApply.text = "Apply Optimal Bitrate ($label)"
+                    btnApply.setOnClickListener {
+                        if (result.recommendedBitrateIndex < binding.spinnerBitrate.count) {
+                            binding.spinnerBitrate.setSelection(result.recommendedBitrateIndex)
+                        }
+                        dialog.dismiss()
+                    }
+                }
+
+                override fun onError(message: String) {
+                    btnStart.isEnabled = true
+                    btnStart.text = "RETRY"
+                    tvRecommendation.text = "❌ Error: $message\nEnsure PC Hub is running and port 8890 is reachable."
+                }
+            })
+            testManager?.startTest()
+        }
+
+        btnClose.setOnClickListener {
+            testManager?.cancel()
+            dialog.dismiss()
+        }
+
+        dialog.setOnDismissListener {
+            testManager?.cancel()
+        }
+
+        dialog.show()
+        // Automatically start benchmark when dialog opens
+        btnStart.performClick()
     }
 }

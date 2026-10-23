@@ -55,6 +55,7 @@ class StreamForegroundService : LifecycleService() {
         const val EXTRA_USE_H264 = "extra_use_h264"
         const val EXTRA_CAPTURE_AUDIO = "extra_capture_audio"
         const val EXTRA_BITRATE_KBPS = "extra_bitrate_kbps"
+        const val EXTRA_USE_CBR = "extra_use_cbr"
 
         var isStreaming = false
             private set
@@ -82,6 +83,7 @@ class StreamForegroundService : LifecycleService() {
     private var streamFps = 60
     private var streamQuality = 75
     private var streamBitrateKbps = 14000
+    private var useCbrCap = true
     private var currentHost = "127.0.0.1"
     private var isH264Mode = true
     private var lastRotation = -1
@@ -237,6 +239,7 @@ class StreamForegroundService : LifecycleService() {
         streamFps = intent.getIntExtra(EXTRA_FPS, 60)
         streamQuality = intent.getIntExtra(EXTRA_QUALITY, 75)
         streamBitrateKbps = intent.getIntExtra(EXTRA_BITRATE_KBPS, 14000)
+        useCbrCap = intent.getBooleanExtra(EXTRA_USE_CBR, true)
         isH264Mode = intent.getBooleanExtra(EXTRA_USE_H264, true)
         val captureAudio = intent.getBooleanExtra(EXTRA_CAPTURE_AUDIO, true)
 
@@ -350,7 +353,8 @@ class StreamForegroundService : LifecycleService() {
                 dpi = streamDpi,
                 targetFps = streamFps,
                 bitrateKbps = bitrateKbps,
-                streamSender = sender
+                streamSender = sender,
+                useCbrCap = useCbrCap
             )
             screenCaptureH264Manager?.start()
         } else {

@@ -16,6 +16,7 @@ object ZeroLinkConfig {
     private const val KEY_CAST_BITRATE = "cast_bitrate"
     private const val KEY_CAST_AUDIO = "cast_audio"
     private const val KEY_CAST_DIM = "cast_dim"
+    private const val KEY_CAST_STRICT_CBR = "cast_strict_cbr"
 
     fun getServerIp(context: Context): String {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -85,5 +86,15 @@ object ZeroLinkConfig {
     fun setCastDimScreen(context: Context, enabled: Boolean) {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         sp.edit().putBoolean(KEY_CAST_DIM, enabled).apply()
+    }
+
+    fun getCastStrictCbr(context: Context): Boolean {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getBoolean(KEY_CAST_STRICT_CBR, true) // Default true for hard ceiling
+    }
+
+    fun setCastStrictCbr(context: Context, enabled: Boolean) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putBoolean(KEY_CAST_STRICT_CBR, enabled).apply()
     }
 }

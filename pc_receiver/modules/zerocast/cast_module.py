@@ -30,6 +30,8 @@ from core.discovery import LanDiscoveryService
 from core.input_controller import InputController
 from core.virtual_cam import VirtualCameraManager
 from core.protocol import TYPE_VIDEO_MJPEG
+from core.speedtest_server import SpeedTestServer, SPEEDTEST_PORT
+from ui.speedtest_dialog import SpeedTestDialog
 from modules.zerocast.manifest import (
     MODULE_ID, MODULE_NAME, MODULE_ICON, MODULE_DESCRIPTION, DEFAULT_PORT
 )
@@ -422,6 +424,7 @@ class ZeroCastModule(BaseModule):
         self.input_controller = InputController(self.adb_manager)
         self.virtual_cam = VirtualCameraManager(target_width=1280, target_height=720, fps=30)
         self.discovery = LanDiscoveryService(tcp_port=self.port, local_ip=self.local_ip)
+        self.speedtest_server = SpeedTestServer(port=SPEEDTEST_PORT, parent=self)
 
         self.current_codec_name = "MJPEG"
         self._widget: Optional[QWidget] = None
@@ -479,6 +482,7 @@ class ZeroCastModule(BaseModule):
     def start_service(self) -> bool:
         self.server.start()
         self.discovery.start()
+        self.speedtest_server.start()
         self._is_active = True
         if self._widget:
             self.canvas.is_module_active = True
@@ -507,6 +511,7 @@ class ZeroCastModule(BaseModule):
     def stop_service(self) -> bool:
         self.server.stop()
         self.discovery.stop()
+        self.speedtest_server.stop()
         self.audio_player.stop()
         self.virtual_cam.stop()
         self._is_active = False
@@ -727,6 +732,11 @@ class ZeroCastModule(BaseModule):
         self.btn_qr.clicked.connect(self._show_qr_dialog)
         bar_layout.addWidget(self.btn_qr)
 
+        self.btn_speedtest = QPushButton("⚡ Speed Test")
+        self.btn_speedtest.setToolTip("Benchmark connection latency and throughput (USB vs Wi-Fi)")
+        self.btn_speedtest.clicked.connect(self._show_speedtest_dialog)
+        bar_layout.addWidget(self.btn_speedtest)
+
         layout.addWidget(top_bar)
 
         # Video Canvas
@@ -919,13 +929,15 @@ class ZeroCastModule(BaseModule):
         if frame_type == 0x02:  # TYPE_VIDEO_H264
             self.current_codec_name = "H.264"
             images = self.h264_decoder.decode(payload)
-            for img in images:
-                if self.virtual_cam.is_active:
-                    self.virtual_cam.push_frame(img)
-                stats = self.telemetry.update(len(payload), timestamp_us)
-                pixmap = QPixmap.fromImage(img)
-                if self.canvas:
-                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+            if images:
+                bytes_per_img = len(payload) // len(images)
+                for img in images:
+                    if self.virtual_cam.is_active:
+                        self.virtual_cam.push_frame(img)
+                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                    pixmap = QPixmap.fromImage(img)
+                    if self.canvas:
+                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
         else:  # TYPE_VIDEO_MJPEG
             self.current_codec_name = "MJPEG"
             pixmap = QPixmap()
@@ -936,6 +948,13 @@ class ZeroCastModule(BaseModule):
                 stats = self.telemetry.update(len(payload), timestamp_us)
                 if self.canvas:
                     self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+
+    def _show_speedtest_dialog(self):
+        client_ip = "127.0.0.1"
+        if self.server.current_client_info:
+            client_ip = self.server.current_client_info.get("ip", "127.0.0.1")
+        dlg = SpeedTestDialog(target_host=client_ip, parent=self._widget)
+        dlg.exec()
 
     def _on_audio_received(self, pcm_data: bytes):
         if self.is_active:

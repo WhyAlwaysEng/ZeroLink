@@ -188,6 +188,18 @@
                     android:text="⚡ USB Active: Zero-latency via 127.0.0.1:8888"
                     android:textColor="@color/text_secondary"
                     android:textSize="11sp" />
+
+                <Button
+                    android:id="@+id/btnSpeedTest"
+                    style="@style/Widget.Material3.Button.TonalButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="44dp"
+                    android:layout_marginTop="8dp"
+                    android:text="⚡ Benchmark Speed (USB vs Wi-Fi)"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    app:cornerRadius="8dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
@@ -291,7 +303,7 @@
                         <TextView
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="TARGET BITRATE"
+                            android:text="BITRATE CAP"
                             android:textColor="@color/text_tertiary"
                             android:textSize="10sp"
                             android:fontFamily="sans-serif-bold"
@@ -307,6 +319,25 @@
                             android:paddingEnd="8dp" />
                     </LinearLayout>
                 </LinearLayout>
+
+                <!-- Strict Bitrate Cap Toggle -->
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/switchStrictCbr"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:checked="true"
+                    android:text="Strict Bitrate Cap (CBR • Hard Ceiling)"
+                    android:textColor="@color/text_primary"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Prevents bitrate spikes from exceeding the chosen limit during heavy screen motion."
+                    android:textColor="@color/text_secondary"
+                    android:textSize="10sp" />
 
                 <!-- Source Choice -->
                 <TextView
