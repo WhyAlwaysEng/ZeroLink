@@ -7,7 +7,10 @@ import os
 import io
 import json
 import time
+from datetime import datetime
 from typing import Optional
+import cv2
+import numpy as np
 
 from PyQt6.QtCore import Qt, QPoint, QRect, QTimer, pyqtSignal, QUrl
 from PyQt6.QtGui import (
@@ -481,6 +484,17 @@ class ZeroCastModule(BaseModule):
         self.btn_screen_only: Optional[QPushButton] = None
         self.chk_auto_popout: Optional[QCheckBox] = None
 
+        # Screen Video Recording State
+        self.is_recording: bool = False
+        self.video_writer = None
+        self.record_start_time: float = 0.0
+        self.record_file_path: str = ""
+        self._record_width: int = 0
+        self._record_height: int = 0
+        self.record_timer = QTimer(self)
+        self.record_timer.timeout.connect(self._on_record_tick)
+        self.btn_record: Optional[QPushButton] = None
+
         self._bind_events()
         self._init_usb_tunnel()
 
@@ -534,6 +548,8 @@ class ZeroCastModule(BaseModule):
         return True
 
     def stop_service(self) -> bool:
+        if self.is_recording:
+            self._toggle_recording()
         self.server.stop()
         self.discovery.stop()
         self.speedtest_server.stop()
@@ -722,6 +738,11 @@ class ZeroCastModule(BaseModule):
         self.btn_snapshot = QPushButton("⧇ Snapshot")
         self.btn_snapshot.clicked.connect(self._take_snapshot)
         bar_layout.addWidget(self.btn_snapshot)
+
+        self.btn_record = QPushButton("⏺ Record Video")
+        self.btn_record.setToolTip("Record live screen mirroring stream to an MP4 video file on PC")
+        self.btn_record.clicked.connect(self._toggle_recording)
+        bar_layout.addWidget(self.btn_record)
 
         self.btn_qr = QPushButton("▦ QR Code")
         self.btn_qr.clicked.connect(self._show_qr_dialog)
@@ -924,6 +945,8 @@ class ZeroCastModule(BaseModule):
             pass
 
     def _on_client_disconnected(self):
+        if self.is_recording:
+            self._toggle_recording()
         self.is_audio_only_stream = False
         if self.canvas:
             self.canvas.connection_mode = "STANDBY"
@@ -955,6 +978,8 @@ class ZeroCastModule(BaseModule):
                 latest = images[-1]
                 if self.virtual_cam.is_active:
                     self.virtual_cam.push_frame(latest)
+                if self.is_recording:
+                    self._write_record_frame(latest)
                 stats = self.telemetry.update(bytes_per_img, timestamp_us)
                 pixmap = QPixmap.fromImage(latest)
                 if self.canvas:
@@ -971,6 +996,8 @@ class ZeroCastModule(BaseModule):
                 latest = images[-1]
                 if self.virtual_cam.is_active:
                     self.virtual_cam.push_frame(latest)
+                if self.is_recording:
+                    self._write_record_frame(latest)
                 stats = self.telemetry.update(bytes_per_img, timestamp_us)
                 pixmap = QPixmap.fromImage(latest)
                 if self.canvas:
@@ -987,6 +1014,8 @@ class ZeroCastModule(BaseModule):
                 latest = images[-1]
                 if self.virtual_cam.is_active:
                     self.virtual_cam.push_frame(latest)
+                if self.is_recording:
+                    self._write_record_frame(latest)
                 stats = self.telemetry.update(bytes_per_img, timestamp_us)
                 pixmap = QPixmap.fromImage(latest)
                 if self.canvas:
@@ -998,6 +1027,8 @@ class ZeroCastModule(BaseModule):
             if not pixmap.isNull():
                 if self.virtual_cam.is_active:
                     self.virtual_cam.push_frame(pixmap.toImage())
+                if self.is_recording:
+                    self._write_record_frame(pixmap.toImage())
                 stats = self.telemetry.update(len(payload), timestamp_us)
                 if self.canvas:
                     self.canvas.update_frame(pixmap, stats, self.current_codec_name)
@@ -1119,6 +1150,108 @@ class ZeroCastModule(BaseModule):
         path = os.path.join(save_dir, fname)
         self.canvas.current_pixmap.save(path, "PNG")
         self.log_label.setText(f"Snapshot saved: {fname}")
+
+    def _toggle_recording(self):
+        if not self.is_recording:
+            # Start Recording
+            if not self.canvas or self.canvas.current_pixmap.isNull():
+                QMessageBox.information(self._widget, "Recording", "No video stream is currently active to record.")
+                return
+
+            pm = self.canvas.current_pixmap
+            self._record_width = pm.width()
+            self._record_height = pm.height()
+            # Dimensions must be even for standard MP4 codecs
+            if self._record_width % 2 != 0:
+                self._record_width -= 1
+            if self._record_height % 2 != 0:
+                self._record_height -= 1
+
+            if self._record_width < 10 or self._record_height < 10:
+                return
+
+            save_dir = os.path.join(os.path.expanduser("~"), "Videos", "ZeroCast")
+            os.makedirs(save_dir, exist_ok=True)
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            fname = f"ZeroCast_Recording_{timestamp_str}.mp4"
+            self.record_file_path = os.path.join(save_dir, fname)
+
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            self.video_writer = cv2.VideoWriter(self.record_file_path, fourcc, 30.0, (self._record_width, self._record_height))
+            if not self.video_writer.isOpened():
+                QMessageBox.warning(self._widget, "Recording Error", "Failed to initialize MP4 video writer.")
+                return
+
+            self.is_recording = True
+            self.record_start_time = time.time()
+            if self.btn_record:
+                self.btn_record.setText("■ Stop (00:00)")
+                self.btn_record.setStyleSheet("""
+                    QPushButton {
+                        background-color: #DC2626;
+                        color: #FFFFFF;
+                        font-weight: 700;
+                        border: none;
+                        border-radius: 6px;
+                        padding: 5px 12px;
+                    }
+                    QPushButton:hover {
+                        background-color: #B91C1C;
+                    }
+                """)
+            self.record_timer.start(1000)
+            if self.log_label:
+                self.log_label.setText(f"Recording: {fname}")
+        else:
+            # Stop Recording
+            self.is_recording = False
+            self.record_timer.stop()
+            if self.video_writer:
+                self.video_writer.release()
+                self.video_writer = None
+
+            if self.btn_record:
+                self.btn_record.setText("⏺ Record Video")
+                self.btn_record.setStyleSheet("")
+
+            saved_path = self.record_file_path
+            if self.log_label:
+                self.log_label.setText(f"Video saved: {os.path.basename(saved_path)}")
+
+            if os.path.exists(saved_path) and os.path.getsize(saved_path) > 0:
+                reply = QMessageBox.information(
+                    self._widget,
+                    "Video Recording Saved",
+                    f"Screen recording successfully saved to PC:\n{saved_path}",
+                    QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Ok,
+                    QMessageBox.StandardButton.Ok
+                )
+                if reply == QMessageBox.StandardButton.Open:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(saved_path)))
+
+    def _on_record_tick(self):
+        if not self.is_recording:
+            return
+        elapsed = int(time.time() - self.record_start_time)
+        m = elapsed // 60
+        s = elapsed % 60
+        if self.btn_record:
+            self.btn_record.setText(f"■ Stop ({m:02d}:{s:02d})")
+
+    def _write_record_frame(self, qimage: QImage):
+        if not self.is_recording or not self.video_writer:
+            return
+        try:
+            rgba = qimage.convertToFormat(QImage.Format.Format_RGBA8888)
+            ptr = rgba.bits()
+            ptr.setsize(rgba.sizeInBytes())
+            arr = np.frombuffer(ptr, np.uint8).reshape((rgba.height(), rgba.width(), 4))
+            bgr = cv2.cvtColor(arr, cv2.COLOR_RGBA2BGR)
+            if (bgr.shape[1], bgr.shape[0]) != (self._record_width, self._record_height):
+                bgr = cv2.resize(bgr, (self._record_width, self._record_height))
+            self.video_writer.write(bgr)
+        except Exception:
+            pass
 
     def _show_qr_dialog(self):
         dlg = QDialog(self._widget)

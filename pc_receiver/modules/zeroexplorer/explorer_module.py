@@ -24,7 +24,7 @@ from PyQt6.QtWidgets import (
     QFrame, QTabWidget, QSplitter, QListWidget, QListWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox,
     QProgressBar, QFileDialog, QMessageBox, QApplication, QDialog,
-    QSlider, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
+    QSlider, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem, QMenu
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -178,6 +178,48 @@ class ThumbQueueWorker(QThread):
             except Exception:
                 pass
             time.sleep(0.01)
+
+
+class FileDownloadWorker(QThread):
+    """Background file downloader with chunked transfer and progress reporting."""
+    progress = pyqtSignal(int, int)   # downloaded_bytes, total_bytes
+    finished = pyqtSignal(bool, str)  # success, message/path
+
+    def __init__(self, download_url: str, save_path: str):
+        super().__init__()
+        self.download_url = download_url
+        self.save_path = save_path
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
+
+    def run(self):
+        try:
+            req = urllib.request.Request(self.download_url, headers={"User-Agent": "ZeroLink-PC"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                total_len = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(self.save_path, "wb") as f_out:
+                    while not self._is_cancelled:
+                        chunk = resp.read(131072)  # 128 KB
+                        if not chunk:
+                            break
+                        f_out.write(chunk)
+                        downloaded += len(chunk)
+                        self.progress.emit(downloaded, total_len)
+
+                if self._is_cancelled:
+                    if os.path.exists(self.save_path):
+                        try:
+                            os.remove(self.save_path)
+                        except Exception:
+                            pass
+                    self.finished.emit(False, "Download cancelled")
+                else:
+                    self.finished.emit(True, self.save_path)
+        except Exception as e:
+            self.finished.emit(False, str(e))
 
 
 # ==================== Pro Interactive Image Viewer Dialog ====================
@@ -564,6 +606,30 @@ class ProVideoPlayerDialog(QDialog):
         self.btn_snap.clicked.connect(self._snap_frame)
         ctrl_row.addWidget(self.btn_snap)
 
+        # Save Full Video Button
+        self.btn_save_video = QPushButton("💾 Save Video to PC")
+        self.btn_save_video.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_save_video.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_save_video.setStyleSheet("""
+            QPushButton {
+                background-color: #059669;
+                color: #FFFFFF;
+                border: 1px solid #10B981;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #047857;
+            }
+            QPushButton:disabled {
+                background-color: #374151;
+                color: #9CA3AF;
+                border-color: #4B5563;
+            }
+        """)
+        self.btn_save_video.clicked.connect(self._save_video_to_pc)
+        ctrl_row.addWidget(self.btn_save_video)
+
         self.btn_fs = QPushButton("Fullscreen (F)")
         self.btn_fs.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
         self.btn_fs.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -718,6 +784,62 @@ class ProVideoPlayerDialog(QDialog):
             if save_path:
                 pix.save(save_path)
                 QMessageBox.information(self, "Snapshot Saved", f"Frame snapshot saved to:\n{save_path}")
+
+    def _save_video_to_pc(self):
+        default_dir = os.path.join(os.path.expanduser("~"), "Videos")
+        if not os.path.exists(default_dir):
+            default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+        base_name = self.title.strip()
+        if not base_name.lower().endswith((".mp4", ".mov", ".mkv", ".webm", ".avi")):
+            base_name += ".mp4"
+        default_path = os.path.join(default_dir, base_name)
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save Video to PC", default_path, "Video Files (*.mp4 *.mov *.mkv *.webm);;All Files (*.*)")
+        if not save_path:
+            return
+
+        dl_url = self.stream_url
+        if "download=" in dl_url:
+            dl_url = dl_url.replace("download=false", "download=true")
+        else:
+            sep = "&" if "?" in dl_url else "?"
+            dl_url += f"{sep}download=true"
+
+        self.btn_save_video.setEnabled(False)
+        self.btn_save_video.setText("💾 Connecting...")
+
+        self._dl_worker = FileDownloadWorker(dl_url, save_path)
+
+        def _on_prog(dl, total):
+            if total > 0:
+                pct = int((dl / total) * 100)
+                mb_dl = dl / (1024 * 1024)
+                mb_tot = total / (1024 * 1024)
+                self.btn_save_video.setText(f"💾 Saving {pct}% ({mb_dl:.1f}/{mb_tot:.1f} MB)")
+            else:
+                mb_dl = dl / (1024 * 1024)
+                self.btn_save_video.setText(f"💾 Saving {mb_dl:.1f} MB...")
+
+        def _on_done(ok, msg):
+            self.btn_save_video.setEnabled(True)
+            if ok:
+                self.btn_save_video.setText("✔ Video Saved!")
+                QTimer.singleShot(4000, lambda: self.btn_save_video.setText("💾 Save Video to PC"))
+                reply = QMessageBox.information(
+                    self,
+                    "Video Saved Successfully",
+                    f"Video file has been downloaded and saved to:\n{msg}",
+                    QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Ok,
+                    QMessageBox.StandardButton.Ok
+                )
+                if reply == QMessageBox.StandardButton.Open:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(msg)))
+            else:
+                self.btn_save_video.setText("💾 Save Video to PC")
+                QMessageBox.warning(self, "Download Error", f"Failed to save video:\n{msg}")
+
+        self._dl_worker.progress.connect(_on_prog)
+        self._dl_worker.finished.connect(_on_done)
+        self._dl_worker.start()
 
     def closeEvent(self, event):
         self.player.stop()
@@ -1122,6 +1244,8 @@ class ZeroExplorerModule(BaseModule):
         """)
         self.gallery_list.itemClicked.connect(self._on_gallery_item_clicked)
         self.gallery_list.itemDoubleClicked.connect(self._on_gallery_item_double_clicked)
+        self.gallery_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.gallery_list.customContextMenuRequested.connect(self._show_gallery_context_menu)
         layout.addWidget(self.gallery_list, 1)
 
         # ==================== Page-by-Page Pagination Bar (100 items/page) ====================
@@ -1775,6 +1899,7 @@ class ZeroExplorerModule(BaseModule):
         data = item.data(Qt.ItemDataRole.UserRole)
         if data:
             self.selected_item_data = data
+            self.selected_file_path = ""  # Clear file tree selection to prioritize gallery item
             name = data.get("name", "")
             is_video = data.get("type") == "video"
             album = data.get("album", "")
@@ -1784,9 +1909,39 @@ class ZeroExplorerModule(BaseModule):
                 dur_s = data.get("duration", 0) // 1000
                 self.lbl_preview_meta.setText(f"Video ({dur_s//60:02d}:{dur_s%60:02d})\nAlbum: {album}\nSize: {size_mb:.2f} MB")
                 self.btn_open_preview.setText("Play Video ▶")
+                self.btn_download_file.setText("💾 Save Video to PC")
             else:
                 self.lbl_preview_meta.setText(f"Photo\nAlbum: {album}\nSize: {size_mb:.2f} MB")
                 self.btn_open_preview.setText("View Image")
+                self.btn_download_file.setText("💾 Save Photo to PC")
+
+    def _show_gallery_context_menu(self, pos):
+        item = self.gallery_list.itemAt(pos)
+        if not item:
+            return
+        data = item.data(Qt.ItemDataRole.UserRole)
+        if not data:
+            return
+        self.selected_item_data = data
+        self._on_gallery_item_clicked(item)
+
+        menu = QMenu(self._widget)
+        is_video = data.get("type") == "video"
+        act_open = menu.addAction("▶ Play Video" if is_video else "👁 View Image")
+        act_save = menu.addAction("💾 Save to PC...")
+        act_ext = None
+        if is_video:
+            act_ext = menu.addAction("⚡ Play in Windows Player (VLC / Movies)")
+
+        chosen = menu.exec(self.gallery_list.mapToGlobal(pos))
+        if chosen == act_open:
+            self._open_media_item(data)
+        elif chosen == act_save:
+            self._on_download_selected_file()
+        elif is_video and chosen == act_ext:
+            p_id = data.get("id")
+            url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video&download=false"
+            QDesktopServices.openUrl(QUrl(url))
 
     def _on_gallery_item_double_clicked(self, item: QListWidgetItem):
         data = item.data(Qt.ItemDataRole.UserRole)
@@ -1899,28 +2054,74 @@ class ZeroExplorerModule(BaseModule):
             QMessageBox.warning(self._widget, "Copy Error", f"Failed to copy image: {e}")
 
     def _on_download_selected_file(self):
-        if not self.selected_file_path:
-            QMessageBox.information(self._widget, "Download", "Please select a file to download.")
+        # Case 1: File Explorer selection
+        if getattr(self, "selected_file_path", None):
+            file_name = os.path.basename(self.selected_file_path)
+            default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            default_path = os.path.join(default_dir, file_name)
+            save_path, _ = QFileDialog.getSaveFileName(self._widget, "Save File to PC", default_path, "All Files (*.*)")
+            if not save_path:
+                return
+            encoded = urllib.parse.quote(self.selected_file_path)
+            url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
+            self._start_download_with_feedback(url, save_path, file_name)
             return
 
-        file_name = os.path.basename(self.selected_file_path)
-        save_path, _ = QFileDialog.getSaveFileName(self._widget, "Save File to PC", file_name)
-        if not save_path:
+        # Case 2: Media Gallery selection (Photo or Video)
+        if getattr(self, "selected_item_data", None):
+            p_id = self.selected_item_data.get("id")
+            name = self.selected_item_data.get("name", "Media")
+            is_video = self.selected_item_data.get("type") == "video"
+            type_param = "video" if is_video else "image"
+            default_dir = os.path.join(os.path.expanduser("~"), "Videos" if is_video else "Pictures")
+            if not os.path.exists(default_dir):
+                default_dir = os.path.join(os.path.expanduser("~"), "Downloads")
+            default_path = os.path.join(default_dir, name)
+            filter_str = "Video Files (*.mp4 *.mov *.mkv *.webm);;All Files (*.*)" if is_video else "Image Files (*.jpg *.png *.webp);;All Files (*.*)"
+            save_path, _ = QFileDialog.getSaveFileName(self._widget, f"Save {'Video' if is_video else 'Image'} to PC", default_path, filter_str)
+            if not save_path:
+                return
+            url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type={type_param}&download=true"
+            self._start_download_with_feedback(url, save_path, name)
             return
 
-        encoded = urllib.parse.quote(self.selected_file_path)
-        url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=30) as resp, open(save_path, "wb") as f_out:
-                while True:
-                    chunk = resp.read(65536)
-                    if not chunk:
-                        break
-                    f_out.write(chunk)
-            QMessageBox.information(self._widget, "Downloaded", f"File saved successfully to:\n{save_path}")
-        except Exception as e:
-            QMessageBox.warning(self._widget, "Download Error", f"Failed to download: {e}")
+        QMessageBox.information(self._widget, "Download", "Please select a photo, video, or file to download.")
+
+    def _start_download_with_feedback(self, url: str, save_path: str, display_name: str):
+        self.btn_download_file.setEnabled(False)
+        self.btn_download_file.setText("💾 Connecting...")
+        worker = FileDownloadWorker(url, save_path)
+        self._active_dl_worker = worker
+
+        def _on_prog(dl, total):
+            if total > 0:
+                pct = int((dl / total) * 100)
+                mb_dl = dl / (1024 * 1024)
+                mb_tot = total / (1024 * 1024)
+                self.btn_download_file.setText(f"💾 {pct}% ({mb_dl:.1f}/{mb_tot:.1f} MB)")
+            else:
+                mb_dl = dl / (1024 * 1024)
+                self.btn_download_file.setText(f"💾 {mb_dl:.1f} MB...")
+
+        def _on_done(ok, msg):
+            self.btn_download_file.setEnabled(True)
+            self.btn_download_file.setText("💾 Download to PC")
+            if ok:
+                reply = QMessageBox.information(
+                    self._widget,
+                    "Saved to PC",
+                    f"'{display_name}' saved successfully to:\n{msg}",
+                    QMessageBox.StandardButton.Open | QMessageBox.StandardButton.Ok,
+                    QMessageBox.StandardButton.Ok
+                )
+                if reply == QMessageBox.StandardButton.Open:
+                    QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.dirname(msg)))
+            else:
+                QMessageBox.warning(self._widget, "Download Error", f"Failed to save '{display_name}':\n{msg}")
+
+        worker.progress.connect(_on_prog)
+        worker.finished.connect(_on_done)
+        worker.start()
 
     def _on_error(self, err: str):
         self.status_badge.setText("○ CONNECTION FAILED")
