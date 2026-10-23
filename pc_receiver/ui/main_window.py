@@ -459,23 +459,25 @@ class MainWindow(QMainWindow):
     def _bind_events(self):
         # Auto-Lifecycle: When a mobile device connects, auto-start and focus that module.
         # When all mobile clients disconnect, auto-stop that module and return to Dashboard!
-        self.mod_zerocast.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocast"))
-        self.mod_zerocast.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocast"))
+        if hasattr(self.mod_zerocast, "server"):
+            self.mod_zerocast.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocast"))
+            self.mod_zerocast.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocast"))
 
-        self.mod_zerocam.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocam"))
-        self.mod_zerocam.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocam"))
+        if hasattr(self.mod_zerocam, "server"):
+            self.mod_zerocam.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocam"))
+            self.mod_zerocam.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocam"))
 
-        self.mod_zerodisplay.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerodisplay"))
-        self.mod_zerodisplay.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerodisplay"))
+        if hasattr(self.mod_zerodisplay, "server"):
+            self.mod_zerodisplay.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerodisplay"))
+            self.mod_zerodisplay.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerodisplay"))
 
-        self.mod_zeropad.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeropad"))
-        self.mod_zeropad.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeropad"))
+        if hasattr(self.mod_zeropad, "server"):
+            self.mod_zeropad.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeropad"))
+            self.mod_zeropad.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeropad"))
 
-        self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeromix"))
-        self.mod_zeromix.service.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeromix"))
-
-        self.mod_zeroexplorer.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeroexplorer"))
-        self.mod_zeroexplorer.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeroexplorer"))
+        if hasattr(self.mod_zeromix, "service"):
+            self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeromix"))
+            self.mod_zeromix.service.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeromix"))
 
     def _on_client_connected_lifecycle(self, module_id: str):
         print(f"[AutoLifecycle] Mobile client linked to '{module_id}' -> activating & switching view.")
