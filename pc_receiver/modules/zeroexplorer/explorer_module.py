@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Optional, List, Dict
 
 from PyQt6.QtCore import Qt, pyqtSignal, QThread, QSize, QTimer
-from PyQt6.QtGui import QFont, QPixmap, QImage, QClipboard, QDesktopServices
+from PyQt6.QtGui import QFont, QPixmap, QImage, QClipboard, QDesktopServices, QIcon
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QTabWidget, QSplitter, QListWidget, QListWidgetItem,
@@ -781,7 +781,7 @@ class ZeroExplorerModule(BaseModule):
             itm = self.gallery_list.item(i)
             data = itm.data(Qt.ItemDataRole.UserRole)
             if data and data.get("id") == photo_id:
-                itm.setIcon(pixmap)
+                itm.setIcon(QIcon(pixmap))
                 break
 
     def fetch_files(self, path: str):
