@@ -20,7 +20,7 @@ import java.net.URLDecoder
 import java.util.concurrent.Executors
 
 data class AuditLogEntry(
-    val action: String,      // VIEW, DOWNLOAD, BROWSE, STORAGE
+    val action: String,      // DOWNLOAD, UPLOAD, MOVE, DELETE
     val path: String,
     val sizeBytes: Long,
     val clientIp: String,
@@ -68,7 +68,7 @@ class ExplorerServer(
     private fun handleClient(socket: Socket) {
         val clientIp = socket.inetAddress?.hostAddress ?: "Unknown"
         try {
-            socket.soTimeout = 10000
+            socket.soTimeout = 12000
             val input = socket.getInputStream()
             val reader = BufferedReader(InputStreamReader(input, Charsets.UTF_8))
             val output = socket.getOutputStream()
@@ -82,31 +82,42 @@ class ExplorerServer(
             val uri = Uri.parse(rawPath)
             val path = uri.path ?: "/"
 
-            // Consume remaining headers
+            val headers = HashMap<String, String>()
             while (true) {
                 val line = reader.readLine() ?: break
                 if (line.isEmpty()) break
+                val idx = line.indexOf(":")
+                if (idx > 0) {
+                    val key = line.substring(0, idx).trim().lowercase()
+                    val value = line.substring(idx + 1).trim()
+                    headers[key] = value
+                }
             }
+
+            val rangeHeader = headers["range"]
 
             when {
                 path == "/api/storage" -> {
                     handleStorage(output)
                 }
-                path == "/api/gallery/photos" -> {
+                path == "/api/gallery/photos" || path == "/api/gallery/media" -> {
                     val album = uri.getQueryParameter("album")
-                    handleGalleryPhotos(output, album)
+                    val type = uri.getQueryParameter("type") ?: "all" // all, photos, videos
+                    handleGalleryMedia(output, type, album)
                 }
                 path == "/api/media/thumb" -> {
                     val idStr = uri.getQueryParameter("id") ?: "0"
                     val id = idStr.toLongOrNull() ?: 0L
-                    handleThumbnail(output, id)
+                    val isVideo = uri.getQueryParameter("type") == "video"
+                    handleThumbnail(output, id, isVideo)
                 }
                 path == "/api/media/raw" -> {
                     val idStr = uri.getQueryParameter("id") ?: "0"
                     val id = idStr.toLongOrNull() ?: 0L
-                    val bytesSent = handleRawMedia(output, id)
-                    if (bytesSent > 0) {
-                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", "Photo #$id", bytesSent, clientIp))
+                    val isVideo = uri.getQueryParameter("type") == "video"
+                    val bytesSent = handleRawMedia(output, id, isVideo, rangeHeader)
+                    if (bytesSent > 0 && rangeHeader == null) {
+                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", if (isVideo) "Video #$id" else "Photo #$id", bytesSent, clientIp))
                     }
                 }
                 path == "/api/files/list" -> {
@@ -117,8 +128,8 @@ class ExplorerServer(
                 path == "/api/files/download" -> {
                     val fileParam = uri.getQueryParameter("path")
                     val decodedPath = if (!fileParam.isNullOrEmpty()) URLDecoder.decode(fileParam, "UTF-8") else ""
-                    val bytesSent = handleFileDownload(output, decodedPath)
-                    if (bytesSent > 0) {
+                    val bytesSent = handleFileDownload(output, decodedPath, rangeHeader)
+                    if (bytesSent > 0 && rangeHeader == null) {
                         onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
                     }
                 }
@@ -158,74 +169,147 @@ class ExplorerServer(
         sendJsonResponse(out, 200, json.toString())
     }
 
-    private fun handleGalleryPhotos(out: OutputStream, albumFilter: String?) {
-        val array = JSONArray()
-        val projection = arrayOf(
-            MediaStore.Images.Media._ID,
-            MediaStore.Images.Media.DISPLAY_NAME,
-            MediaStore.Images.Media.DATE_MODIFIED,
-            MediaStore.Images.Media.SIZE,
-            MediaStore.Images.Media.BUCKET_DISPLAY_NAME
-        )
-        val sortOrder = "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+    private fun handleGalleryMedia(out: OutputStream, typeFilter: String, albumFilter: String?) {
+        val list = ArrayList<JSONObject>()
 
-        var selection: String? = null
-        var selectionArgs: Array<String>? = null
-        if (!albumFilter.isNullOrEmpty() && albumFilter != "all") {
-            selection = "${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
-            selectionArgs = arrayOf(albumFilter)
+        // 1. Photos
+        if (typeFilter == "all" || typeFilter == "photos") {
+            val projection = arrayOf(
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.DATE_MODIFIED,
+                MediaStore.Images.Media.SIZE,
+                MediaStore.Images.Media.BUCKET_DISPLAY_NAME
+            )
+            var selection: String? = null
+            var selectionArgs: Array<String>? = null
+            if (!albumFilter.isNullOrEmpty() && albumFilter != "all") {
+                selection = "${MediaStore.Images.Media.BUCKET_DISPLAY_NAME} = ?"
+                selectionArgs = arrayOf(albumFilter)
+            }
+            try {
+                val cursor = context.contentResolver.query(
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                    projection, selection, selectionArgs,
+                    "${MediaStore.Images.Media.DATE_MODIFIED} DESC"
+                )
+                cursor?.use { c ->
+                    val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
+                    val nameCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
+                    val dateCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
+                    val sizeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
+                    val bucketCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
+
+                    var count = 0
+                    while (c.moveToNext() && count < 250) {
+                        val id = c.getLong(idCol)
+                        val name = c.getString(nameCol) ?: "Photo"
+                        val date = c.getLong(dateCol) * 1000L
+                        val size = c.getLong(sizeCol)
+                        val album = c.getString(bucketCol) ?: "Other"
+
+                        list.add(JSONObject().apply {
+                            put("id", id)
+                            put("name", name)
+                            put("date", date)
+                            put("size", size)
+                            put("album", album)
+                            put("type", "image")
+                            put("duration", 0L)
+                        })
+                        count++
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Image query error: ${e.message}")
+            }
         }
 
-        try {
-            val cursor = context.contentResolver.query(
-                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                projection,
-                selection,
-                selectionArgs,
-                sortOrder
+        // 2. Videos
+        if (typeFilter == "all" || typeFilter == "videos") {
+            val projection = arrayOf(
+                MediaStore.Video.Media._ID,
+                MediaStore.Video.Media.DISPLAY_NAME,
+                MediaStore.Video.Media.DATE_MODIFIED,
+                MediaStore.Video.Media.SIZE,
+                MediaStore.Video.Media.DURATION,
+                MediaStore.Video.Media.BUCKET_DISPLAY_NAME
             )
-            cursor?.use { c ->
-                val idCol = c.getColumnIndexOrThrow(MediaStore.Images.Media._ID)
-                val nameCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DISPLAY_NAME)
-                val dateCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.DATE_MODIFIED)
-                val sizeCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.SIZE)
-                val bucketCol = c.getColumnIndexOrThrow(MediaStore.Images.Media.BUCKET_DISPLAY_NAME)
-
-                var count = 0
-                while (c.moveToNext() && count < 300) {
-                    val id = c.getLong(idCol)
-                    val name = c.getString(nameCol) ?: "Unknown"
-                    val date = c.getLong(dateCol) * 1000L
-                    val size = c.getLong(sizeCol)
-                    val album = c.getString(bucketCol) ?: "Other"
-
-                    val item = JSONObject().apply {
-                        put("id", id)
-                        put("name", name)
-                        put("date", date)
-                        put("size", size)
-                        put("album", album)
-                    }
-                    array.put(item)
-                    count++
-                }
+            var selection: String? = null
+            var selectionArgs: Array<String>? = null
+            if (!albumFilter.isNullOrEmpty() && albumFilter != "all") {
+                selection = "${MediaStore.Video.Media.BUCKET_DISPLAY_NAME} = ?"
+                selectionArgs = arrayOf(albumFilter)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Gallery query error: ${e.message}")
+            try {
+                val cursor = context.contentResolver.query(
+                    MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
+                    projection, selection, selectionArgs,
+                    "${MediaStore.Video.Media.DATE_MODIFIED} DESC"
+                )
+                cursor?.use { c ->
+                    val idCol = c.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+                    val nameCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DISPLAY_NAME)
+                    val dateCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_MODIFIED)
+                    val sizeCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
+                    val durationCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
+                    val bucketCol = c.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
+
+                    var count = 0
+                    while (c.moveToNext() && count < 150) {
+                        val id = c.getLong(idCol)
+                        val name = c.getString(nameCol) ?: "Video"
+                        val date = c.getLong(dateCol) * 1000L
+                        val size = c.getLong(sizeCol)
+                        val duration = c.getLong(durationCol)
+                        val album = c.getString(bucketCol) ?: "Videos"
+
+                        list.add(JSONObject().apply {
+                            put("id", id)
+                            put("name", name)
+                            put("date", date)
+                            put("size", size)
+                            put("album", album)
+                            put("type", "video")
+                            put("duration", duration)
+                        })
+                        count++
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Video query error: ${e.message}")
+            }
+        }
+
+        // Sort descending by date
+        list.sortByDescending { it.optLong("date") }
+
+        val array = JSONArray()
+        for (item in list.take(350)) {
+            array.put(item)
         }
 
         sendJsonResponse(out, 200, array.toString())
     }
 
-    private fun handleThumbnail(out: OutputStream, id: Long) {
-        val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+    private fun handleThumbnail(out: OutputStream, id: Long, isVideo: Boolean) {
+        val uri = if (isVideo) {
+            ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+        } else {
+            ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+        }
+
         try {
             val bmp: Bitmap? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 context.contentResolver.loadThumbnail(uri, Size(256, 256), null)
             } else {
-                val input = context.contentResolver.openInputStream(uri)
-                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
-                BitmapFactory.decodeStream(input, null, options)
+                if (isVideo) {
+                    MediaStore.Video.Thumbnails.getThumbnail(context.contentResolver, id, MediaStore.Video.Thumbnails.MINI_KIND, null)
+                } else {
+                    val input = context.contentResolver.openInputStream(uri)
+                    val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                    BitmapFactory.decodeStream(input, null, options)
+                }
             }
 
             if (bmp != null) {
@@ -249,33 +333,71 @@ class ExplorerServer(
         sendJsonResponse(out, 404, JSONObject().put("error", "Thumbnail not found").toString())
     }
 
-    private fun handleRawMedia(out: OutputStream, id: Long): Long {
-        val uri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+    private fun handleRawMedia(out: OutputStream, id: Long, isVideo: Boolean, rangeHeader: String?): Long {
+        val uri = if (isVideo) {
+            ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, id)
+        } else {
+            ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id)
+        }
+
         var totalSent = 0L
         try {
-            val input = context.contentResolver.openInputStream(uri) ?: return 0L
-            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
-            val length = pfd?.statSize ?: -1L
-            pfd?.close()
+            val afd = context.contentResolver.openAssetFileDescriptor(uri, "r") ?: return 0L
+            val totalLength = afd.length
+            val mime = context.contentResolver.getType(uri) ?: (if (isVideo) "video/mp4" else "image/jpeg")
 
-            val header = "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: application/octet-stream\r\n" +
-                    (if (length > 0) "Content-Length: $length\r\n" else "") +
-                    "Connection: close\r\n\r\n"
-            out.write(header.toByteArray(Charsets.UTF_8))
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=") && totalLength > 0) {
+                val rangeVal = rangeHeader.removePrefix("bytes=").trim()
+                val parts = rangeVal.split("-")
+                val start = parts[0].toLongOrNull() ?: 0L
+                val end = if (parts.size > 1 && parts[1].isNotEmpty()) parts[1].toLongOrNull() ?: (totalLength - 1) else (totalLength - 1)
+                val contentLength = end - start + 1
 
-            val buf = ByteArray(65536)
-            input.use { inp ->
-                while (true) {
-                    val read = inp.read(buf)
-                    if (read <= 0) break
-                    out.write(buf, 0, read)
-                    totalSent += read
+                val header = "HTTP/1.1 206 Partial Content\r\n" +
+                        "Content-Type: $mime\r\n" +
+                        "Accept-Ranges: bytes\r\n" +
+                        "Content-Range: bytes $start-$end/$totalLength\r\n" +
+                        "Content-Length: $contentLength\r\n" +
+                        "Connection: close\r\n\r\n"
+                out.write(header.toByteArray(Charsets.UTF_8))
+
+                val fis = afd.createInputStream()
+                fis.skip(start)
+                val buf = ByteArray(65536)
+                var remaining = contentLength
+                fis.use { inp ->
+                    while (remaining > 0) {
+                        val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
+                        val read = inp.read(buf, 0, toRead)
+                        if (read <= 0) break
+                        out.write(buf, 0, read)
+                        totalSent += read
+                        remaining -= read
+                    }
+                }
+            } else {
+                val header = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: $mime\r\n" +
+                        "Accept-Ranges: bytes\r\n" +
+                        (if (totalLength > 0) "Content-Length: $totalLength\r\n" else "") +
+                        "Connection: close\r\n\r\n"
+                out.write(header.toByteArray(Charsets.UTF_8))
+
+                val fis = afd.createInputStream()
+                val buf = ByteArray(65536)
+                fis.use { inp ->
+                    while (true) {
+                        val read = inp.read(buf)
+                        if (read <= 0) break
+                        out.write(buf, 0, read)
+                        totalSent += read
+                    }
                 }
             }
             out.flush()
+            afd.close()
         } catch (e: Exception) {
-            Log.e(TAG, "Raw media error: ${e.message}")
+            Log.e(TAG, "Raw media streaming error: ${e.message}")
         }
         return totalSent
     }
@@ -289,12 +411,23 @@ class ExplorerServer(
             if (files != null) {
                 val sorted = files.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
                 for (f in sorted) {
+                    val ext = if (f.isDirectory) "" else f.extension.lowercase()
+                    val category = when {
+                        f.isDirectory -> "folder"
+                        ext in listOf("jpg", "jpeg", "png", "webp", "gif") -> "image"
+                        ext in listOf("mp4", "mkv", "mov", "avi", "webm") -> "video"
+                        ext in listOf("pdf", "doc", "docx", "txt", "xlsx") -> "document"
+                        ext in listOf("zip", "rar", "7z", "tar", "gz") -> "archive"
+                        ext == "apk" -> "apk"
+                        else -> "file"
+                    }
                     val item = JSONObject().apply {
                         put("name", f.name)
                         put("path", f.absolutePath)
                         put("isDir", f.isDirectory)
                         put("size", if (f.isDirectory) 0L else f.length())
                         put("date", f.lastModified())
+                        put("category", category)
                     }
                     array.put(item)
                 }
@@ -309,7 +442,7 @@ class ExplorerServer(
         sendJsonResponse(out, 200, json.toString())
     }
 
-    private fun handleFileDownload(out: OutputStream, path: String): Long {
+    private fun handleFileDownload(out: OutputStream, path: String, rangeHeader: String?): Long {
         val file = File(path)
         if (!file.exists() || file.isDirectory) {
             sendJsonResponse(out, 404, JSONObject().put("error", "File not found").toString())
@@ -317,23 +450,66 @@ class ExplorerServer(
         }
 
         var totalSent = 0L
-        try {
-            val length = file.length()
-            val header = "HTTP/1.1 200 OK\r\n" +
-                    "Content-Type: application/octet-stream\r\n" +
-                    "Content-Disposition: attachment; filename=\"${file.name}\"\r\n" +
-                    "Content-Length: $length\r\n" +
-                    "Connection: close\r\n\r\n"
-            out.write(header.toByteArray(Charsets.UTF_8))
+        val totalLength = file.length()
+        val ext = file.extension.lowercase()
+        val mime = when (ext) {
+            "mp4" -> "video/mp4"
+            "mkv" -> "video/x-matroska"
+            "webm" -> "video/webm"
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "pdf" -> "application/pdf"
+            else -> "application/octet-stream"
+        }
 
-            val fis = FileInputStream(file)
-            val buf = ByteArray(65536)
-            fis.use { inp ->
-                while (true) {
-                    val read = inp.read(buf)
-                    if (read <= 0) break
-                    out.write(buf, 0, read)
-                    totalSent += read
+        try {
+            if (rangeHeader != null && rangeHeader.startsWith("bytes=") && totalLength > 0) {
+                val rangeVal = rangeHeader.removePrefix("bytes=").trim()
+                val parts = rangeVal.split("-")
+                val start = parts[0].toLongOrNull() ?: 0L
+                val end = if (parts.size > 1 && parts[1].isNotEmpty()) parts[1].toLongOrNull() ?: (totalLength - 1) else (totalLength - 1)
+                val contentLength = end - start + 1
+
+                val header = "HTTP/1.1 206 Partial Content\r\n" +
+                        "Content-Type: $mime\r\n" +
+                        "Accept-Ranges: bytes\r\n" +
+                        "Content-Range: bytes $start-$end/$totalLength\r\n" +
+                        "Content-Length: $contentLength\r\n" +
+                        "Connection: close\r\n\r\n"
+                out.write(header.toByteArray(Charsets.UTF_8))
+
+                val fis = FileInputStream(file)
+                fis.skip(start)
+                val buf = ByteArray(65536)
+                var remaining = contentLength
+                fis.use { inp ->
+                    while (remaining > 0) {
+                        val toRead = if (remaining < buf.size) remaining.toInt() else buf.size
+                        val read = inp.read(buf, 0, toRead)
+                        if (read <= 0) break
+                        out.write(buf, 0, read)
+                        totalSent += read
+                        remaining -= read
+                    }
+                }
+            } else {
+                val header = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: $mime\r\n" +
+                        "Accept-Ranges: bytes\r\n" +
+                        "Content-Disposition: attachment; filename=\"${file.name}\"\r\n" +
+                        "Content-Length: $totalLength\r\n" +
+                        "Connection: close\r\n\r\n"
+                out.write(header.toByteArray(Charsets.UTF_8))
+
+                val fis = FileInputStream(file)
+                val buf = ByteArray(65536)
+                fis.use { inp ->
+                    while (true) {
+                        val read = inp.read(buf)
+                        if (read <= 0) break
+                        out.write(buf, 0, read)
+                        totalSent += read
+                    }
                 }
             }
             out.flush()

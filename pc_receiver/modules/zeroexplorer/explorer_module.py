@@ -1,5 +1,7 @@
 """ZeroLink Hub - ZeroExplorer Module
 All-in-One Phone Gallery, Storage Explorer, Media Streamer & File Manager.
+Featuring Pro Image Viewer (Zoom & Pan), Full Video Player (Timeline & Snap Frame),
+and Clear File Explorer with Instant Filter & Category Badges.
 """
 
 import os
@@ -10,14 +12,20 @@ import urllib.parse
 from datetime import datetime
 from typing import Optional, List, Dict
 
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, QSize, QTimer
-from PyQt6.QtGui import QFont, QPixmap, QImage, QClipboard, QDesktopServices, QIcon
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, QSize, QTimer, QUrl, QPointF
+from PyQt6.QtGui import (
+    QFont, QPixmap, QImage, QClipboard, QDesktopServices, QIcon,
+    QColor, QPainter, QTransform, QKeySequence, QShortcut
+)
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QFrame, QTabWidget, QSplitter, QListWidget, QListWidgetItem,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QComboBox,
-    QProgressBar, QFileDialog, QMessageBox, QApplication, QDialog
+    QProgressBar, QFileDialog, QMessageBox, QApplication, QDialog,
+    QSlider, QGraphicsView, QGraphicsScene, QGraphicsPixmapItem
 )
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtMultimediaWidgets import QVideoWidget
 
 from core.base_module import BaseModule
 from core.adb_helper import AdbManager
@@ -48,20 +56,23 @@ class StorageWorker(QThread):
             self.error_occurred.emit(str(e))
 
 
-class GalleryWorker(QThread):
+class MediaWorker(QThread):
     result_ready = pyqtSignal(list)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, host: str, port: int, album: Optional[str] = None):
+    def __init__(self, host: str, port: int, media_type: str = "all", album: Optional[str] = None):
         super().__init__()
         self.host = host
         self.port = port
+        self.media_type = media_type
         self.album = album
 
     def run(self):
-        url = f"http://{self.host}:{self.port}/api/gallery/photos"
+        params = [f"type={self.media_type}"]
         if self.album:
-            url += f"?album={urllib.parse.quote(self.album)}"
+            params.append(f"album={urllib.parse.quote(self.album)}")
+        query_str = "&".join(params)
+        url = f"http://{self.host}:{self.port}/api/gallery/media?{query_str}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
             with urllib.request.urlopen(req, timeout=6) as resp:
@@ -96,21 +107,24 @@ class FilesWorker(QThread):
 class ThumbQueueWorker(QThread):
     thumb_ready = pyqtSignal(int, QPixmap)
 
-    def __init__(self, host: str, port: int, photo_ids: List[int]):
+    def __init__(self, host: str, port: int, items_to_fetch: List[Dict]):
         super().__init__()
         self.host = host
         self.port = port
-        self.photo_ids = photo_ids
+        self.items_to_fetch = items_to_fetch
         self._is_cancelled = False
 
     def cancel(self):
         self._is_cancelled = True
 
     def run(self):
-        for pid in self.photo_ids:
+        for itm in self.items_to_fetch:
             if self._is_cancelled:
                 break
-            url = f"http://{self.host}:{self.port}/api/media/thumb?id={pid}"
+            p_id = itm.get("id")
+            is_video = itm.get("type") == "video"
+            type_param = "video" if is_video else "image"
+            url = f"http://{self.host}:{self.port}/api/media/thumb?id={p_id}&type={type_param}"
             try:
                 req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
                 with urllib.request.urlopen(req, timeout=4) as resp:
@@ -118,11 +132,497 @@ class ThumbQueueWorker(QThread):
                     img = QImage.fromData(raw_bytes)
                     if not img.isNull():
                         pix = QPixmap.fromImage(img)
-                        self.thumb_ready.emit(pid, pix)
+                        self.thumb_ready.emit(p_id, pix)
             except Exception:
                 pass
-            pass
 
+
+# ==================== Pro Interactive Image Viewer Dialog ====================
+
+class ProImageViewerDialog(QDialog):
+    """Pro Image Viewer with Mouse Wheel Zoom, Click-Drag Pan, 1:1 vs Fit, and Next/Prev."""
+
+    def __init__(self, host: str, port: int, media_list: List[Dict], initial_index: int, parent=None):
+        super().__init__(parent)
+        self.host = host
+        self.port = port
+        self.media_list = [m for m in media_list if m.get("type") == "image"]
+        self.current_index = initial_index
+        self.current_pixmap: Optional[QPixmap] = None
+        self.rotation_angle = 0
+
+        self.setWindowTitle("ZeroExplorer Image Viewer")
+        self.resize(1000, 720)
+        self.setStyleSheet("background-color: #111827; color: #FFFFFF;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 12, 16, 14)
+        layout.setSpacing(10)
+
+        # Top Toolbar
+        top_bar = QHBoxLayout()
+        top_bar.setSpacing(8)
+
+        self.lbl_title = QLabel("Loading image...")
+        self.lbl_title.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self.lbl_title.setStyleSheet("color: #F9FAFB;")
+        top_bar.addWidget(self.lbl_title, 1)
+
+        self.btn_fit = QPushButton("Fit")
+        self.btn_original = QPushButton("1:1")
+        self.btn_rot_left = QPushButton("↶ Rotate")
+        self.btn_rot_right = QPushButton("↷ Rotate")
+        self.btn_copy = QPushButton("📋 Copy")
+        self.btn_save = QPushButton("⬇ Save")
+
+        for b in [self.btn_fit, self.btn_original, self.btn_rot_left, self.btn_rot_right, self.btn_copy, self.btn_save]:
+            b.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet("""
+                QPushButton {
+                    background-color: #1F2937;
+                    color: #F9FAFB;
+                    border: 1px solid #374151;
+                    border-radius: 6px;
+                    padding: 5px 12px;
+                }
+                QPushButton:hover {
+                    background-color: #374151;
+                    border-color: #6B7280;
+                }
+            """)
+            top_bar.addWidget(b)
+
+        self.btn_fit.clicked.connect(self._fit_to_view)
+        self.btn_original.clicked.connect(self._reset_to_100)
+        self.btn_rot_left.clicked.connect(lambda: self._rotate_image(-90))
+        self.btn_rot_right.clicked.connect(lambda: self._rotate_image(90))
+        self.btn_copy.clicked.connect(self._copy_image)
+        self.btn_save.clicked.connect(self._save_image)
+
+        layout.addLayout(top_bar)
+
+        # Main Graphics View for Smooth Zoom & Pan
+        self.scene = QGraphicsScene(self)
+        self.view = QGraphicsView(self.scene)
+        self.view.setStyleSheet("background-color: #0B0D13; border: 1px solid #1F2937; border-radius: 8px;")
+        self.view.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)
+        self.view.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.view.setResizeAnchor(QGraphicsView.ViewportAnchor.AnchorUnderMouse)
+        self.pixmap_item = QGraphicsPixmapItem()
+        self.scene.addItem(self.pixmap_item)
+
+        layout.addWidget(self.view, 1)
+
+        # Bottom Bar: Next / Prev Navigation
+        bottom_bar = QHBoxLayout()
+        bottom_bar.setSpacing(12)
+
+        self.btn_prev = QPushButton("◀ Previous (Left Arrow)")
+        self.btn_next = QPushButton("Next (Right Arrow) ▶")
+
+        for b in [self.btn_prev, self.btn_next]:
+            b.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet("""
+                QPushButton {
+                    background-color: #1F2937;
+                    color: #FFFFFF;
+                    border: 1px solid #374151;
+                    border-radius: 6px;
+                    padding: 7px 18px;
+                }
+                QPushButton:hover {
+                    background-color: #374151;
+                }
+            """)
+
+        self.btn_prev.clicked.connect(self._prev_image)
+        self.btn_next.clicked.connect(self._next_image)
+
+        bottom_bar.addWidget(self.btn_prev)
+        bottom_bar.addStretch()
+
+        self.lbl_hint = QLabel("Tip: Mouse wheel to Zoom • Click & Drag to Pan")
+        self.lbl_hint.setFont(QFont("Segoe UI", 9))
+        self.lbl_hint.setStyleSheet("color: #9CA3AF;")
+        bottom_bar.addWidget(self.lbl_hint)
+
+        bottom_bar.addStretch()
+        bottom_bar.addWidget(self.btn_next)
+        layout.addLayout(bottom_bar)
+
+        # Shortcuts
+        QShortcut(QKeySequence(Qt.Key.Key_Left), self, self._prev_image)
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self, self._next_image)
+        QShortcut(QKeySequence(Qt.Key.Key_Escape), self, self.close)
+
+        # Override wheel event for zoom
+        self.view.wheelEvent = self._on_view_wheel
+
+        # Load first image
+        self._load_current_image()
+
+    def _on_view_wheel(self, event):
+        angle = event.angleDelta().y()
+        factor = 1.15 if angle > 0 else 0.85
+        self.view.scale(factor, factor)
+
+    def _load_current_image(self):
+        if not self.media_list or self.current_index < 0 or self.current_index >= len(self.media_list):
+            return
+
+        itm = self.media_list[self.current_index]
+        p_id = itm.get("id")
+        name = itm.get("name", "Image")
+        size_mb = itm.get("size", 0) / (1024 * 1024)
+
+        self.lbl_title.setText(f"[{self.current_index + 1} / {len(self.media_list)}]  {name}  ({size_mb:.2f} MB)")
+        self.btn_prev.setEnabled(self.current_index > 0)
+        self.btn_next.setEnabled(self.current_index < len(self.media_list) - 1)
+
+        url = f"http://{self.host}:{self.port}/api/media/raw?id={p_id}&type=image"
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                raw_bytes = resp.read()
+                img = QImage.fromData(raw_bytes)
+                if not img.isNull():
+                    self.current_pixmap = QPixmap.fromImage(img)
+                    self.rotation_angle = 0
+                    self._update_display_pixmap()
+                    self._fit_to_view()
+        except Exception as e:
+            self.lbl_title.setText(f"Error loading {name}: {e}")
+
+    def _update_display_pixmap(self):
+        if not self.current_pixmap:
+            return
+        t = QTransform().rotate(self.rotation_angle)
+        rotated = self.current_pixmap.transformed(t, Qt.TransformationMode.SmoothTransformation)
+        self.pixmap_item.setPixmap(rotated)
+        self.scene.setSceneRect(self.pixmap_item.boundingRect())
+
+    def _rotate_image(self, degrees: int):
+        self.rotation_angle = (self.rotation_angle + degrees) % 360
+        self._update_display_pixmap()
+
+    def _fit_to_view(self):
+        if not self.pixmap_item.pixmap().isNull():
+            self.view.resetTransform()
+            self.view.fitInView(self.pixmap_item, Qt.AspectRatioMode.KeepAspectRatio)
+
+    def _reset_to_100(self):
+        self.view.resetTransform()
+
+    def _prev_image(self):
+        if self.current_index > 0:
+            self.current_index -= 1
+            self._load_current_image()
+
+    def _next_image(self):
+        if self.current_index < len(self.media_list) - 1:
+            self.current_index += 1
+            self._load_current_image()
+
+    def _copy_image(self):
+        if self.current_pixmap:
+            QApplication.clipboard().setPixmap(self.current_pixmap)
+            QMessageBox.information(self, "Copied", "Image copied to Windows Clipboard!")
+
+    def _save_image(self):
+        if not self.media_list or self.current_index < 0:
+            return
+        itm = self.media_list[self.current_index]
+        name = itm.get("name", "photo.jpg")
+        save_path, _ = QFileDialog.getSaveFileName(self, "Save Image to PC", name)
+        if save_path and self.current_pixmap:
+            self.current_pixmap.save(save_path)
+            QMessageBox.information(self, "Saved", f"Image saved successfully to:\n{save_path}")
+
+
+# ==================== Pro Video Player Dialog ====================
+
+class ProVideoPlayerDialog(QDialog):
+    """Pro Video Player with HTTP Range seeking, Timeline Scrubber, Snap Frame, Speed & Fullscreen."""
+
+    def __init__(self, stream_url: str, title: str, duration_ms: int = 0, parent=None):
+        super().__init__(parent)
+        self.stream_url = stream_url
+        self.duration_ms = duration_ms
+        self.is_user_scrubbing = False
+
+        self.setWindowTitle(f"ZeroExplorer Video Player - {title}")
+        self.resize(960, 660)
+        self.setStyleSheet("background-color: #0B0D13; color: #FFFFFF;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 14)
+        layout.setSpacing(10)
+
+        # Video Viewport Widget
+        self.video_widget = QVideoWidget(self)
+        self.video_widget.setStyleSheet("background-color: #000000; border-radius: 8px;")
+        layout.addWidget(self.video_widget, 1)
+
+        # Multimedia Player
+        self.audio_output = QAudioOutput(self)
+        self.audio_output.setVolume(0.85)
+
+        self.player = QMediaPlayer(self)
+        self.player.setAudioOutput(self.audio_output)
+        self.player.setVideoOutput(self.video_widget)
+
+        # Timeline Scrubber Row
+        time_row = QHBoxLayout()
+        time_row.setSpacing(10)
+
+        self.lbl_time = QLabel("00:00 / 00:00")
+        self.lbl_time.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.lbl_time.setStyleSheet("color: #E5E7EB;")
+        time_row.addWidget(self.lbl_time)
+
+        self.seek_slider = QSlider(Qt.Orientation.Horizontal)
+        self.seek_slider.setRange(0, 1000)
+        self.seek_slider.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.seek_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                height: 6px;
+                background: #374151;
+                border-radius: 3px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #FFFFFF;
+                border-radius: 3px;
+            }
+            QSlider::handle:horizontal {
+                background: #FFFFFF;
+                width: 14px;
+                height: 14px;
+                margin: -4px 0;
+                border-radius: 7px;
+            }
+        """)
+        self.seek_slider.sliderPressed.connect(self._on_seek_pressed)
+        self.seek_slider.sliderReleased.connect(self._on_seek_released)
+        time_row.addWidget(self.seek_slider, 1)
+
+        layout.addLayout(time_row)
+
+        # Controls Row: Play/Pause, Rewind, Forward, Speed, Volume, Snap Frame, Fullscreen
+        ctrl_row = QHBoxLayout()
+        ctrl_row.setSpacing(8)
+
+        self.btn_play = QPushButton("❚❚ Pause")
+        self.btn_play.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_play.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_play.setStyleSheet("""
+            QPushButton {
+                background-color: #FFFFFF;
+                color: #111827;
+                border: none;
+                border-radius: 6px;
+                padding: 6px 16px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+            }
+        """)
+        self.btn_play.clicked.connect(self._toggle_play)
+        ctrl_row.addWidget(self.btn_play)
+
+        self.btn_skip_back = QPushButton("-5s")
+        self.btn_skip_fwd = QPushButton("+5s")
+        for b in [self.btn_skip_back, self.btn_skip_fwd]:
+            b.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+            b.setCursor(Qt.CursorShape.PointingHandCursor)
+            b.setStyleSheet("""
+                QPushButton {
+                    background-color: #1F2937;
+                    color: #FFFFFF;
+                    border: 1px solid #374151;
+                    border-radius: 6px;
+                    padding: 6px 12px;
+                }
+                QPushButton:hover {
+                    background-color: #374151;
+                }
+            """)
+            ctrl_row.addWidget(b)
+
+        self.btn_skip_back.clicked.connect(lambda: self._skip(-5000))
+        self.btn_skip_fwd.clicked.connect(lambda: self._skip(5000))
+
+        # Speed Dropdown
+        self.cmb_speed = QComboBox()
+        self.cmb_speed.setFont(QFont("Segoe UI", 9))
+        self.cmb_speed.addItems(["1.0x", "1.25x", "1.5x", "2.0x", "0.75x"])
+        self.cmb_speed.setStyleSheet("""
+            QComboBox {
+                background-color: #1F2937;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 5px 8px;
+            }
+        """)
+        self.cmb_speed.currentIndexChanged.connect(self._on_speed_changed)
+        ctrl_row.addWidget(self.cmb_speed)
+
+        ctrl_row.addStretch()
+
+        # Volume
+        lbl_vol = QLabel("Vol:")
+        lbl_vol.setFont(QFont("Segoe UI", 9))
+        lbl_vol.setStyleSheet("color: #9CA3AF;")
+        ctrl_row.addWidget(lbl_vol)
+
+        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider.setRange(0, 100)
+        self.vol_slider.setValue(85)
+        self.vol_slider.setFixedWidth(80)
+        self.vol_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                height: 4px;
+                background: #374151;
+                border-radius: 2px;
+            }
+            QSlider::sub-page:horizontal {
+                background: #E5E7EB;
+            }
+            QSlider::handle:horizontal {
+                background: #FFFFFF;
+                width: 10px;
+                height: 10px;
+                margin: -3px 0;
+                border-radius: 5px;
+            }
+        """)
+        self.vol_slider.valueChanged.connect(lambda v: self.audio_output.setVolume(v / 100.0))
+        ctrl_row.addWidget(self.vol_slider)
+
+        # Snap Frame Button (Bonus)
+        self.btn_snap = QPushButton("📸 Snap Frame")
+        self.btn_snap.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_snap.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_snap.setStyleSheet("""
+            QPushButton {
+                background-color: #1F2937;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 6px 14px;
+            }
+            QPushButton:hover {
+                background-color: #374151;
+            }
+        """)
+        self.btn_snap.clicked.connect(self._snap_frame)
+        ctrl_row.addWidget(self.btn_snap)
+
+        self.btn_fs = QPushButton("Fullscreen (F)")
+        self.btn_fs.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
+        self.btn_fs.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_fs.setStyleSheet("""
+            QPushButton {
+                background-color: #1F2937;
+                color: #FFFFFF;
+                border: 1px solid #374151;
+                border-radius: 6px;
+                padding: 6px 12px;
+            }
+            QPushButton:hover {
+                background-color: #374151;
+            }
+        """)
+        self.btn_fs.clicked.connect(self._toggle_fullscreen)
+        ctrl_row.addWidget(self.btn_fs)
+
+        layout.addLayout(ctrl_row)
+
+        # Wire Player events
+        self.player.positionChanged.connect(self._on_player_position)
+        self.player.durationChanged.connect(self._on_player_duration)
+        self.player.playbackStateChanged.connect(self._on_playback_state)
+
+        # Shortcuts
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self, self._toggle_play)
+        QShortcut(QKeySequence(Qt.Key.Key_Left), self, lambda: self._skip(-5000))
+        QShortcut(QKeySequence(Qt.Key.Key_Right), self, lambda: self._skip(5000))
+        QShortcut(QKeySequence(Qt.Key.Key_F), self, self._toggle_fullscreen)
+
+        # Start playback
+        self.player.setSource(QUrl(self.stream_url))
+        self.player.play()
+
+    def _toggle_play(self):
+        if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+            self.player.pause()
+        else:
+            self.player.play()
+
+    def _on_playback_state(self, state):
+        if state == QMediaPlayer.PlaybackState.PlayingState:
+            self.btn_play.setText("❚❚ Pause")
+        else:
+            self.btn_play.setText("▶ Play")
+
+    def _skip(self, ms: int):
+        new_pos = max(0, min(self.player.duration(), self.player.position() + ms))
+        self.player.setPosition(new_pos)
+
+    def _on_player_position(self, pos: int):
+        if not self.is_user_scrubbing and self.player.duration() > 0:
+            val = int((pos / self.player.duration()) * 1000)
+            self.seek_slider.setValue(val)
+        self._update_time_label(pos, self.player.duration())
+
+    def _on_player_duration(self, dur: int):
+        self._update_time_label(self.player.position(), dur)
+
+    def _update_time_label(self, pos: int, dur: int):
+        pos_s = pos // 1000
+        dur_s = max(0, dur // 1000)
+        cur_str = f"{pos_s // 60:02d}:{pos_s % 60:02d}"
+        tot_str = f"{dur_s // 60:02d}:{dur_s % 60:02d}"
+        self.lbl_time.setText(f"{cur_str} / {tot_str}")
+
+    def _on_seek_pressed(self):
+        self.is_user_scrubbing = True
+
+    def _on_seek_released(self):
+        self.is_user_scrubbing = False
+        ratio = self.seek_slider.value() / 1000.0
+        target_pos = int(ratio * self.player.duration())
+        self.player.setPosition(target_pos)
+
+    def _on_speed_changed(self):
+        txt = self.cmb_speed.currentText().replace("x", "")
+        rate = float(txt) if txt else 1.0
+        self.player.setPlaybackRate(rate)
+
+    def _toggle_fullscreen(self):
+        if self.isFullScreen():
+            self.showNormal()
+            self.btn_fs.setText("Fullscreen (F)")
+        else:
+            self.showFullScreen()
+            self.btn_fs.setText("Exit Fullscreen (F)")
+
+    def _snap_frame(self):
+        pix = self.video_widget.grab()
+        if not pix.isNull():
+            save_path, _ = QFileDialog.getSaveFileName(self, "Save Video Frame", "snapshot.png", "PNG Image (*.png)")
+            if save_path:
+                pix.save(save_path)
+                QMessageBox.information(self, "Snapshot Saved", f"Frame snapshot saved to:\n{save_path}")
+
+    def closeEvent(self, event):
+        self.player.stop()
+        super().closeEvent(event)
+
+
+# ==================== Main ZeroExplorer Module ====================
 
 class ZeroExplorerModule(BaseModule):
     """ZeroExplorer: Unified Media Gallery & Storage Manager for Phone."""
@@ -141,12 +641,14 @@ class ZeroExplorerModule(BaseModule):
         self.parent_folder_path = ""
         self.raw_files_list: List[Dict] = []
         self.gallery_items: List[Dict] = []
+        self.active_media_filter = "all"  # all, photos, videos
+        self.active_album_filter: Optional[str] = None
         self.selected_file_path = ""
-        self.selected_photo_id: Optional[int] = None
+        self.selected_item_data: Optional[Dict] = None
 
         # Workers
         self._storage_worker: Optional[StorageWorker] = None
-        self._gallery_worker: Optional[GalleryWorker] = None
+        self._media_worker: Optional[MediaWorker] = None
         self._files_worker: Optional[FilesWorker] = None
         self._thumb_queue_worker: Optional[ThumbQueueWorker] = None
 
@@ -181,7 +683,6 @@ class ZeroExplorerModule(BaseModule):
     def get_widget(self) -> QWidget:
         if self._widget is None:
             self._widget = self._create_ui()
-            # Initial auto-connect
             QTimer.singleShot(1000, self.connect_and_sync)
         return self._widget
 
@@ -223,14 +724,14 @@ class ZeroExplorerModule(BaseModule):
         title_row.addStretch()
         title_col.addLayout(title_row)
 
-        desc_lbl = QLabel("Phone Gallery, Storage Explorer & Live File Manager (Port 8896)")
+        desc_lbl = QLabel("Phone Gallery, 4K Video Player, Storage Explorer & File Manager")
         desc_lbl.setFont(QFont("Segoe UI", 9))
         desc_lbl.setStyleSheet("color: #6B7280;")
         title_col.addWidget(desc_lbl)
 
         header_row.addLayout(title_col, 1)
 
-        # Gateway IP row
+        # Host IP & Mode
         self.et_host_ip = QLineEdit("127.0.0.1")
         self.et_host_ip.setFixedWidth(130)
         self.et_host_ip.setFont(QFont("Segoe UI", 9))
@@ -375,9 +876,9 @@ class ZeroExplorerModule(BaseModule):
             }
         """)
 
-        # Tab 1: Photo Gallery
+        # Tab 1: Media Gallery (Photos & Videos)
         self.tab_gallery = self._build_gallery_tab()
-        self.tabs.addTab(self.tab_gallery, "Photo Gallery")
+        self.tabs.addTab(self.tab_gallery, "Media Gallery (Photos & Videos)")
 
         # Tab 2: Storage & Files
         self.tab_files = self._build_files_tab()
@@ -394,16 +895,22 @@ class ZeroExplorerModule(BaseModule):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(12)
 
-        # Filter and Actions Row
+        # Filters Row
         filter_row = QHBoxLayout()
         filter_row.setSpacing(8)
 
-        self.btn_alb_all = QPushButton("All Media")
+        self.btn_type_all = QPushButton("All Media")
+        self.btn_type_photos = QPushButton("Photos")
+        self.btn_type_videos = QPushButton("Videos")
+
         self.btn_alb_cam = QPushButton("Camera")
         self.btn_alb_shot = QPushButton("Screenshots")
         self.btn_alb_down = QPushButton("Downloads")
 
-        for btn in [self.btn_alb_all, self.btn_alb_cam, self.btn_alb_shot, self.btn_alb_down]:
+        media_btns = [self.btn_type_all, self.btn_type_photos, self.btn_type_videos,
+                      self.btn_alb_cam, self.btn_alb_shot, self.btn_alb_down]
+
+        for btn in media_btns:
             btn.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
             btn.setCursor(Qt.CursorShape.PointingHandCursor)
             btn.setStyleSheet("""
@@ -421,10 +928,12 @@ class ZeroExplorerModule(BaseModule):
             """)
             filter_row.addWidget(btn)
 
-        self.btn_alb_all.clicked.connect(lambda: self.fetch_gallery(None))
-        self.btn_alb_cam.clicked.connect(lambda: self.fetch_gallery("Camera"))
-        self.btn_alb_shot.clicked.connect(lambda: self.fetch_gallery("Screenshots"))
-        self.btn_alb_down.clicked.connect(lambda: self.fetch_gallery("Download"))
+        self.btn_type_all.clicked.connect(lambda: self._set_media_filter("all", None))
+        self.btn_type_photos.clicked.connect(lambda: self._set_media_filter("photos", None))
+        self.btn_type_videos.clicked.connect(lambda: self._set_media_filter("videos", None))
+        self.btn_alb_cam.clicked.connect(lambda: self._set_media_filter("all", "Camera"))
+        self.btn_alb_shot.clicked.connect(lambda: self._set_media_filter("all", "Screenshots"))
+        self.btn_alb_down.clicked.connect(lambda: self._set_media_filter("all", "Download"))
 
         filter_row.addStretch()
 
@@ -448,11 +957,11 @@ class ZeroExplorerModule(BaseModule):
 
         layout.addLayout(filter_row)
 
-        # Gallery Grid
+        # Gallery Grid View
         self.gallery_list = QListWidget()
         self.gallery_list.setViewMode(QListWidget.ViewMode.IconMode)
         self.gallery_list.setIconSize(QSize(130, 130))
-        self.gallery_list.setGridSize(QSize(145, 160))
+        self.gallery_list.setGridSize(QSize(145, 165))
         self.gallery_list.setSpacing(10)
         self.gallery_list.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.gallery_list.setStyleSheet("""
@@ -491,7 +1000,7 @@ class ZeroExplorerModule(BaseModule):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(10)
 
-        # Top Path & Navigation Bar
+        # Top Bar: Navigation, Path, Filter, Sort
         top_bar = QHBoxLayout()
         top_bar.setSpacing(8)
 
@@ -531,6 +1040,23 @@ class ZeroExplorerModule(BaseModule):
         self.txt_breadcrumb.returnPressed.connect(lambda: self.fetch_files(self.txt_breadcrumb.text()))
         top_bar.addWidget(self.txt_breadcrumb, 1)
 
+        # Real-time Search Box
+        self.txt_search_filter = QLineEdit()
+        self.txt_search_filter.setPlaceholderText("Filter files...")
+        self.txt_search_filter.setFixedWidth(160)
+        self.txt_search_filter.setFont(QFont("Segoe UI", 9))
+        self.txt_search_filter.setStyleSheet("""
+            QLineEdit {
+                background-color: #FFFFFF;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 6px 10px;
+                color: #111827;
+            }
+        """)
+        self.txt_search_filter.textChanged.connect(self._apply_sorting_and_filter)
+        top_bar.addWidget(self.txt_search_filter)
+
         lbl_sort = QLabel("Sort:")
         lbl_sort.setFont(QFont("Segoe UI", 9))
         lbl_sort.setStyleSheet("color: #4B5563;")
@@ -544,7 +1070,7 @@ class ZeroExplorerModule(BaseModule):
             "Date (Newest ➔ Oldest)",
             "Date (Oldest ➔ Newest)",
             "Name (A ➔ Z)",
-            "Type"
+            "Category"
         ])
         self.cmb_sort.setStyleSheet("""
             QComboBox {
@@ -555,7 +1081,7 @@ class ZeroExplorerModule(BaseModule):
                 color: #111827;
             }
         """)
-        self.cmb_sort.currentIndexChanged.connect(self._apply_sorting)
+        self.cmb_sort.currentIndexChanged.connect(self._apply_sorting_and_filter)
         top_bar.addWidget(self.cmb_sort)
 
         layout.addLayout(top_bar)
@@ -608,6 +1134,7 @@ class ZeroExplorerModule(BaseModule):
             ("Camera", "/storage/emulated/0/DCIM/Camera"),
             ("Screenshots", "/storage/emulated/0/Pictures/Screenshots"),
             ("Documents", "/storage/emulated/0/Documents"),
+            ("Movies & Video", "/storage/emulated/0/Movies"),
             ("Storage Root", "/storage/emulated/0")
         ]
         for name, path in fav_items:
@@ -619,35 +1146,36 @@ class ZeroExplorerModule(BaseModule):
 
         splitter.addWidget(sidebar)
 
-        # 2. File Table
+        # 2. Spacious, Clean File Table
         self.table_files = QTableWidget()
         self.table_files.setColumnCount(4)
-        self.table_files.setHorizontalHeaderLabels(["Name", "Date Modified", "Type", "Size"])
+        self.table_files.setHorizontalHeaderLabels(["Name", "Type / Category", "Date Modified", "Size"])
         self.table_files.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table_files.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.table_files.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
         self.table_files.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         self.table_files.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table_files.setAlternatingRowColors(True)
+        self.table_files.setShowGrid(False)
         self.table_files.setStyleSheet("""
             QTableWidget {
                 background-color: #FFFFFF;
                 border: 1px solid #E5E7EB;
                 border-radius: 8px;
-                gridline-color: #F3F4F6;
+                selection-background-color: #F3F4F6;
+                selection-color: #111827;
             }
             QHeaderView::section {
                 background-color: #F9FAFB;
-                color: #374151;
-                font-weight: 600;
+                color: #4B5563;
+                font-weight: 700;
                 font-size: 11px;
                 border: none;
                 border-bottom: 1px solid #E5E7EB;
-                padding: 6px 8px;
+                padding: 8px 10px;
             }
-            QTableWidget::item:selected {
-                background-color: #F3F4F6;
-                color: #111827;
+            QTableWidget::item {
+                padding: 6px 10px;
+                border-bottom: 1px solid #F9FAFB;
             }
         """)
         self.table_files.itemClicked.connect(self._on_table_item_clicked)
@@ -679,7 +1207,7 @@ class ZeroExplorerModule(BaseModule):
         self.lbl_preview_name.setWordWrap(True)
         p_layout.addWidget(self.lbl_preview_name)
 
-        self.lbl_preview_meta = QLabel("Select a file or photo to inspect details.")
+        self.lbl_preview_meta = QLabel("Select a file or media to inspect details.")
         self.lbl_preview_meta.setFont(QFont("Segoe UI", 8))
         self.lbl_preview_meta.setStyleSheet("color: #6B7280; border: none;")
         self.lbl_preview_meta.setWordWrap(True)
@@ -687,8 +1215,25 @@ class ZeroExplorerModule(BaseModule):
 
         p_layout.addStretch()
 
+        self.btn_open_preview = QPushButton("Open / Stream")
+        self.btn_open_preview.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_open_preview.setStyleSheet("""
+            QPushButton {
+                background-color: #111827;
+                color: #FFFFFF;
+                border: none;
+                border-radius: 6px;
+                padding: 7px 14px;
+            }
+            QPushButton:hover {
+                background-color: #1F2937;
+            }
+        """)
+        self.btn_open_preview.clicked.connect(self._on_open_current_selection)
+        p_layout.addWidget(self.btn_open_preview)
+
         self.btn_download_file = QPushButton("Download to PC")
-        self.btn_download_file.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.btn_download_file.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold))
         self.btn_download_file.setStyleSheet("""
             QPushButton {
                 background-color: #FFFFFF;
@@ -709,13 +1254,15 @@ class ZeroExplorerModule(BaseModule):
 
         layout.addWidget(splitter, 1)
 
+        # Spacebar shortcut to Quick Look
+        QShortcut(QKeySequence(Qt.Key.Key_Space), self.table_files, self._on_open_current_selection)
+
         return tab
 
     # ==================== Actions & Data Sync ====================
 
     def _on_usb_mode_clicked(self):
         self.et_host_ip.setText("127.0.0.1")
-        # Run adb forward
         success, msg = self.adb_manager.forward_port(self.port)
         if success:
             self.status_badge.setText("● USB TUNNEL ACTIVE")
@@ -729,7 +1276,7 @@ class ZeroExplorerModule(BaseModule):
         self.status_badge.setText("● SYNCING...")
 
         self.fetch_storage()
-        self.fetch_gallery(None)
+        self.fetch_media(self.active_media_filter, self.active_album_filter)
         self.fetch_files(self.current_folder_path)
 
     def fetch_storage(self):
@@ -753,39 +1300,48 @@ class ZeroExplorerModule(BaseModule):
         self.storage_progress.setValue(used_pct)
         self.status_badge.setText("● CONNECTED")
 
-    def fetch_gallery(self, album: Optional[str]):
-        if self._gallery_worker and self._gallery_worker.isRunning():
-            self._gallery_worker.terminate()
-        self.gallery_list.clear()
-        self._gallery_worker = GalleryWorker(self.phone_host, self.port, album)
-        self._gallery_worker.result_ready.connect(self._on_gallery_received)
-        self._gallery_worker.error_occurred.connect(self._on_error)
-        self._gallery_worker.start()
+    def _set_media_filter(self, media_type: str, album: Optional[str]):
+        self.active_media_filter = media_type
+        self.active_album_filter = album
+        self.fetch_media(media_type, album)
 
-    def _on_gallery_received(self, items: list):
-        self.gallery_items = items
-        self.gallery_list.clear()
-
+    def fetch_media(self, media_type: str, album: Optional[str]):
+        if self._media_worker and self._media_worker.isRunning():
+            self._media_worker.terminate()
         if self._thumb_queue_worker and self._thumb_queue_worker.isRunning():
             self._thumb_queue_worker.cancel()
             self._thumb_queue_worker.wait(300)
 
-        photo_ids = []
+        self.gallery_list.clear()
+        self._media_worker = MediaWorker(self.phone_host, self.port, media_type, album)
+        self._media_worker.result_ready.connect(self._on_media_received)
+        self._media_worker.error_occurred.connect(self._on_error)
+        self._media_worker.start()
+
+    def _on_media_received(self, items: list):
+        self.gallery_items = items
+        self.gallery_list.clear()
+
         for itm in items:
-            p_id = itm.get("id")
-            name = itm.get("name", "Photo")
-            album = itm.get("album", "")
+            name = itm.get("name", "Media")
+            is_video = itm.get("type") == "video"
+            dur_ms = itm.get("duration", 0)
             size_mb = itm.get("size", 0) / (1024 * 1024)
 
-            list_item = QListWidgetItem(f"{name}\n{size_mb:.1f} MB")
+            if is_video and dur_ms > 0:
+                s = dur_ms // 1000
+                dur_str = f"▶ {s // 60:02d}:{s % 60:02d}"
+                text = f"{name}\n{dur_str} • {size_mb:.1f}MB"
+            else:
+                text = f"{name}\n{size_mb:.1f} MB"
+
+            list_item = QListWidgetItem(text)
             list_item.setData(Qt.ItemDataRole.UserRole, itm)
             list_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.gallery_list.addItem(list_item)
-            if p_id:
-                photo_ids.append(p_id)
 
-        if photo_ids:
-            self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port, photo_ids)
+        if items:
+            self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port, items)
             self._thumb_queue_worker.thumb_ready.connect(self._on_thumb_ready)
             self._thumb_queue_worker.start()
 
@@ -811,11 +1367,13 @@ class ZeroExplorerModule(BaseModule):
         self.txt_breadcrumb.setText(self.current_folder_path)
 
         self.raw_files_list = data.get("files", [])
-        self._apply_sorting()
+        self._apply_sorting_and_filter()
 
-    def _apply_sorting(self):
+    def _apply_sorting_and_filter(self):
+        query = self.txt_search_filter.text().strip().lower()
         sort_mode = self.cmb_sort.currentText()
-        files = list(self.raw_files_list)
+
+        files = [f for f in self.raw_files_list if query in f.get("name", "").lower()]
 
         if "Size (Largest ➔ Smallest)" in sort_mode:
             files.sort(key=lambda x: (not x.get("isDir", False), x.get("size", 0)), reverse=True)
@@ -827,26 +1385,43 @@ class ZeroExplorerModule(BaseModule):
             files.sort(key=lambda x: x.get("date", 0))
         elif "Name (A ➔ Z)" in sort_mode:
             files.sort(key=lambda x: (not x.get("isDir", False), x.get("name", "").lower()))
-        elif "Type" in sort_mode:
-            files.sort(key=lambda x: (not x.get("isDir", False), os.path.splitext(x.get("name", ""))[1].lower()))
+        elif "Category" in sort_mode:
+            files.sort(key=lambda x: (not x.get("isDir", False), x.get("category", "")))
 
         self.table_files.setRowCount(len(files))
         for row, f in enumerate(files):
             name = f.get("name", "")
             is_dir = f.get("isDir", False)
+            cat = f.get("category", "file").upper()
             size_b = f.get("size", 0)
             date_ms = f.get("date", 0)
 
-            display_name = f"📁 {name}" if is_dir else f"📄 {name}"
+            display_name = f"  {name}"
             date_str = datetime.fromtimestamp(date_ms / 1000).strftime("%Y-%m-%d %H:%M") if date_ms > 0 else ""
-            type_str = "Folder" if is_dir else os.path.splitext(name)[1].upper() or "File"
-            size_str = "" if is_dir else (f"{size_b / (1024*1024):.1f} MB" if size_b > 1024*1024 else f"{size_b / 1024:.1f} KB")
+
+            if is_dir:
+                type_str = "FOLDER"
+                size_str = "--"
+            else:
+                type_str = cat
+                if size_b >= 1024 ** 3:
+                    size_str = f"{size_b / (1024 ** 3):.2f} GB"
+                elif size_b >= 1024 ** 2:
+                    size_str = f"{size_b / (1024 ** 2):.1f} MB"
+                else:
+                    size_str = f"{size_b / 1024:.0f} KB"
 
             item_name = QTableWidgetItem(display_name)
             item_name.setData(Qt.ItemDataRole.UserRole, f)
+            item_name.setFont(QFont("Segoe UI", 9, QFont.Weight.DemiBold if is_dir else QFont.Weight.Normal))
+
+            item_type = QTableWidgetItem(type_str)
+            item_type.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+            item_type.setForeground(QColor("#6B7280" if is_dir else "#111827"))
+
             self.table_files.setItem(row, 0, item_name)
-            self.table_files.setItem(row, 1, QTableWidgetItem(date_str))
-            self.table_files.setItem(row, 2, QTableWidgetItem(type_str))
+            self.table_files.setItem(row, 1, item_type)
+            self.table_files.setItem(row, 2, QTableWidgetItem(date_str))
             self.table_files.setItem(row, 3, QTableWidgetItem(size_str))
 
     def _on_navigate_up(self):
@@ -856,63 +1431,109 @@ class ZeroExplorerModule(BaseModule):
     def _on_table_item_clicked(self, item: QTableWidgetItem):
         f = self.table_files.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
         if f:
+            self.selected_item_data = f
             self.selected_file_path = f.get("path", "")
             name = f.get("name", "")
             is_dir = f.get("isDir", False)
+            cat = f.get("category", "file").upper()
             size_b = f.get("size", 0)
             self.lbl_preview_name.setText(name)
             if is_dir:
                 self.lbl_preview_meta.setText(f"Folder\nPath: {self.selected_file_path}")
+                self.btn_open_preview.setText("Open Folder")
             else:
-                self.lbl_preview_meta.setText(f"File Size: {size_b / (1024*1024):.2f} MB\nPath: {self.selected_file_path}")
+                self.lbl_preview_meta.setText(f"Category: {cat}\nSize: {size_b / (1024*1024):.2f} MB\nPath: {self.selected_file_path}")
+                if cat in ["VIDEO", "IMAGE"]:
+                    self.btn_open_preview.setText("Play / Stream" if cat == "VIDEO" else "View Image")
+                else:
+                    self.btn_open_preview.setText("Inspect File")
 
     def _on_table_item_double_clicked(self, item: QTableWidgetItem):
         f = self.table_files.item(item.row(), 0).data(Qt.ItemDataRole.UserRole)
-        if f and f.get("isDir", False):
-            self.fetch_files(f.get("path", ""))
+        if f:
+            if f.get("isDir", False):
+                self.fetch_files(f.get("path", ""))
+            else:
+                self._open_file_item(f)
 
     def _on_gallery_item_clicked(self, item: QListWidgetItem):
         data = item.data(Qt.ItemDataRole.UserRole)
         if data:
-            self.selected_photo_id = data.get("id")
+            self.selected_item_data = data
             name = data.get("name", "")
+            is_video = data.get("type") == "video"
             album = data.get("album", "")
             size_mb = data.get("size", 0) / (1024 * 1024)
             self.lbl_preview_name.setText(name)
-            self.lbl_preview_meta.setText(f"Album: {album}\nSize: {size_mb:.2f} MB")
+            if is_video:
+                dur_s = data.get("duration", 0) // 1000
+                self.lbl_preview_meta.setText(f"Video ({dur_s//60:02d}:{dur_s%60:02d})\nAlbum: {album}\nSize: {size_mb:.2f} MB")
+                self.btn_open_preview.setText("Play Video ▶")
+            else:
+                self.lbl_preview_meta.setText(f"Photo\nAlbum: {album}\nSize: {size_mb:.2f} MB")
+                self.btn_open_preview.setText("View Image")
 
     def _on_gallery_item_double_clicked(self, item: QListWidgetItem):
         data = item.data(Qt.ItemDataRole.UserRole)
         if data:
-            self._preview_full_image(data.get("id"), data.get("name", "Image"))
+            self._open_media_item(data)
 
-    def _preview_full_image(self, photo_id: int, title: str):
-        url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={photo_id}"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                raw_bytes = resp.read()
-                img = QImage.fromData(raw_bytes)
-                if not img.isNull():
-                    dlg = QDialog(self._widget)
-                    dlg.setWindowTitle(f"ZeroExplorer - {title}")
-                    dlg.resize(800, 600)
-                    d_layout = QVBoxLayout(dlg)
-                    lbl = QLabel()
-                    lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    pix = QPixmap.fromImage(img).scaled(780, 560, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
-                    lbl.setPixmap(pix)
-                    d_layout.addWidget(lbl)
-                    dlg.exec()
-        except Exception as e:
-            QMessageBox.warning(self._widget, "Preview Error", f"Could not load image: {e}")
+    def _on_open_current_selection(self):
+        if not self.selected_item_data:
+            return
+        if self.selected_item_data.get("isDir", False):
+            self.fetch_files(self.selected_item_data.get("path", ""))
+        elif "duration" in self.selected_item_data:
+            self._open_media_item(self.selected_item_data)
+        else:
+            self._open_file_item(self.selected_item_data)
+
+    def _open_media_item(self, item_data: Dict):
+        is_video = item_data.get("type") == "video"
+        p_id = item_data.get("id")
+        name = item_data.get("name", "Media")
+
+        if is_video:
+            stream_url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=video"
+            dur_ms = item_data.get("duration", 0)
+            dlg = ProVideoPlayerDialog(stream_url, name, dur_ms, parent=self._widget)
+            dlg.exec()
+        else:
+            # Find index in current gallery photo list
+            photos_only = [m for m in self.gallery_items if m.get("type") == "image"]
+            idx = 0
+            for i, p in enumerate(photos_only):
+                if p.get("id") == p_id:
+                    idx = i
+                    break
+            dlg = ProImageViewerDialog(self.phone_host, self.port, photos_only, idx, parent=self._widget)
+            dlg.exec()
+
+    def _open_file_item(self, file_data: Dict):
+        cat = file_data.get("category", "")
+        path = file_data.get("path", "")
+        name = file_data.get("name", "")
+
+        if cat == "video":
+            encoded = urllib.parse.quote(path)
+            stream_url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
+            dlg = ProVideoPlayerDialog(stream_url, name, parent=self._widget)
+            dlg.exec()
+        elif cat == "image":
+            encoded = urllib.parse.quote(path)
+            # Create temporary single-item list
+            img_list = [{"id": 0, "name": name, "type": "image"}]
+            # Open direct viewer
+            dlg = ProImageViewerDialog(self.phone_host, self.port, img_list, 0, parent=self._widget)
+            dlg.exec()
 
     def _on_copy_selected_image(self):
-        if not self.selected_photo_id:
-            QMessageBox.information(self._widget, "Copy Image", "Please click on an image in the gallery first.")
+        if not self.selected_item_data or self.selected_item_data.get("type") != "image":
+            QMessageBox.information(self._widget, "Copy Image", "Please select a photo in the gallery first.")
             return
 
-        url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={self.selected_photo_id}"
+        p_id = self.selected_item_data.get("id")
+        url = f"http://{self.phone_host}:{self.port}/api/media/raw?id={p_id}&type=image"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
             with urllib.request.urlopen(req, timeout=8) as resp:
@@ -921,7 +1542,7 @@ class ZeroExplorerModule(BaseModule):
                 if not img.isNull():
                     pix = QPixmap.fromImage(img)
                     QApplication.clipboard().setPixmap(pix)
-                    QMessageBox.information(self._widget, "Copied!", "Image copied to Windows Clipboard!\nYou can now press Ctrl + V in any application.")
+                    QMessageBox.information(self._widget, "Copied!", "Photo copied to Windows Clipboard!\nYou can now press Ctrl + V in any application.")
         except Exception as e:
             QMessageBox.warning(self._widget, "Copy Error", f"Failed to copy image: {e}")
 
@@ -939,7 +1560,7 @@ class ZeroExplorerModule(BaseModule):
         url = f"http://{self.phone_host}:{self.port}/api/files/download?path={encoded}"
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=15) as resp, open(save_path, "wb") as f_out:
+            with urllib.request.urlopen(req, timeout=30) as resp, open(save_path, "wb") as f_out:
                 while True:
                     chunk = resp.read(65536)
                     if not chunk:
