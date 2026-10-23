@@ -3,6 +3,7 @@ Decodes video/hevc NAL units with zero-latency baseline mode and fast C-level RG
 Runs in total isolation from H.264 decoder.
 """
 
+import os
 from typing import List
 import numpy as np
 from PyQt6.QtGui import QImage
@@ -22,17 +23,18 @@ class HevcDecoder:
     def _init_decoder(self):
         if not HAS_AV:
             return
+        # Multi-threaded slice low-delay decode
         try:
             codec = av.CodecContext.create('hevc', 'r')
             codec.flags |= av.codec.context.Flags.low_delay
-            codec.options = {'tune': 'zerolatency'}
             codec.thread_type = 'SLICE'
-            codec.thread_count = 1
+            codec.thread_count = min(4, os.cpu_count() or 4)
             codec.open()
             self.codec = codec
         except Exception:
             try:
                 codec = av.CodecContext.create('hevc', 'r')
+                codec.flags |= av.codec.context.Flags.low_delay
                 codec.open()
                 self.codec = codec
             except Exception:

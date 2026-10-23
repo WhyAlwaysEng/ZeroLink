@@ -77,7 +77,29 @@ class ScreenCaptureHevcManager(
                 setInteger("max-fps", targetFps)
                 setInteger("frame-rate", targetFps)
 
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1) // Keyframe every 1s
+                // Ultra Low-Latency Tuning: Strictly disable B-Frames (0 lookahead delay)
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    try {
+                        setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+                    } catch (_: Exception) {}
+                }
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    try {
+                        setInteger(MediaFormat.KEY_LATENCY, 0) // 0 = lowest possible encoder latency
+                    } catch (_: Exception) {}
+                }
+                try {
+                    setInteger(MediaFormat.KEY_PRIORITY, 0) // 0 = Realtime Priority
+                } catch (_: Exception) {}
+
+                // Vendor-specific extensions to suppress B-frame lookahead queues
+                try {
+                    setInteger("vendor.qcom-ext-enc-b-frame.enable", 0)
+                    setInteger("vendor.rtc-ext-enc-low-latency.enable", 1)
+                    setInteger("vendor.mediatek.ext-enc-low-latency", 1)
+                } catch (_: Exception) {}
+
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2) // Keyframe every 2s to smooth out bandwidth spikes
                 try {
                     setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
                 } catch (_: Exception) {}
@@ -175,7 +197,13 @@ class ScreenCaptureHevcManager(
                             vpsSpsPpsBuffer = nalu
                         }
 
-                        val payload = if (isKeyframe && vpsSpsPpsBuffer != null && !isConfig) {
+                        val alreadyHasVps = if (nalu.size >= 5) {
+                            val off = if (nalu[2] == 1.toByte()) 3 else 4
+                            val nType = (nalu[off].toInt() and 0x7E) shr 1
+                            nType == 32
+                        } else false
+
+                        val payload = if (isKeyframe && vpsSpsPpsBuffer != null && !isConfig && !alreadyHasVps) {
                             vpsSpsPpsBuffer!! + nalu
                         } else {
                             nalu

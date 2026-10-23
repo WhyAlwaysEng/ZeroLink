@@ -22,20 +22,16 @@ class Av1Decoder:
     def _init_decoder(self):
         if not HAS_AV:
             return
-        try:
-            codec = av.CodecContext.create('av1', 'r')
-            codec.flags |= av.codec.context.Flags.low_delay
-            codec.thread_type = 'SLICE'
-            codec.thread_count = 1
-            codec.open()
-            self.codec = codec
-        except Exception:
+        # Prefer libdav1d (VideoLAN ultra-fast SIMD AV1 decoder) with zero-latency
+        for codec_name in ('libdav1d', 'av1_cuvid', 'av1'):
             try:
-                codec = av.CodecContext.create('av1', 'r')
+                codec = av.CodecContext.create(codec_name, 'r')
+                codec.flags |= av.codec.context.Flags.low_delay
                 codec.open()
                 self.codec = codec
+                break
             except Exception:
-                self.codec = None
+                continue
 
     def is_available(self) -> bool:
         return self.codec is not None
