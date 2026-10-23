@@ -72,5 +72,12 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, ZeroPadActivity::class.java)
             startActivity(intent)
         }
+
+        // Module 8: ZeroExplorer (Phone Gallery & Storage Explorer)
+        binding.cardModuleZeroExplorer.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val intent = Intent(this, ZeroExplorerActivity::class.java)
+            startActivity(intent)
+        }
     }
 }

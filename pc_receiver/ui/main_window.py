@@ -23,6 +23,7 @@ from modules.zeromix.mix_module import ZeroMixModule
 from modules.zerodisplay.display_module import ZeroDisplayModule
 from modules.zerocam.cam_module import ZeroCamModule
 from modules.zeropad.pad_module import ZeroPadModule
+from modules.zeroexplorer.explorer_module import ZeroExplorerModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.theme import GLOBAL_APP_STYLESHEET
@@ -156,6 +157,11 @@ class MainWindow(QMainWindow):
         self.module_manager.register_module(self.mod_zeropad)
         self.mod_zeropad.start_service()
 
+        # ZeroExplorer Module (Phone Gallery & Storage Manager)
+        self.mod_zeroexplorer = ZeroExplorerModule(port=8896, local_ip=self.local_ip, parent=self)
+        self.module_manager.register_module(self.mod_zeroexplorer)
+        self.mod_zeroexplorer.start_service()
+
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
         self.mod_zerocast.use_external_mixer = False
@@ -266,8 +272,13 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_pad)
         side_layout.addWidget(self.btn_nav_pad)
 
+        self.btn_nav_explorer = NavButton("ZeroExplorer", "📁")
+        self.btn_nav_explorer.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
+        self.nav_group.addButton(self.btn_nav_explorer)
+        side_layout.addWidget(self.btn_nav_explorer)
+
         self.btn_nav_connections = NavButton("Connections", "◈")
-        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(8))
+        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(9))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
@@ -342,7 +353,11 @@ class MainWindow(QMainWindow):
         self.pad_widget = self.mod_zeropad.get_widget()
         self.stacked.addWidget(self.pad_widget)
 
-        # Page 8: Connections / Device Bridge
+        # Page 8: ZeroExplorer Viewport
+        self.explorer_widget = self.mod_zeroexplorer.get_widget()
+        self.stacked.addWidget(self.explorer_widget)
+
+        # Page 9: Connections / Device Bridge
         self.connections_view = ConnectionsView(
             self.mod_zerocast,
             self.mod_zerodrop,
@@ -351,6 +366,7 @@ class MainWindow(QMainWindow):
             mod_zerodisplay=self.mod_zerodisplay,
             mod_zerocam=self.mod_zerocam,
             mod_zeropad=self.mod_zeropad,
+            mod_zeroexplorer=self.mod_zeroexplorer,
             parent=self
         )
         self.stacked.addWidget(self.connections_view)
@@ -410,8 +426,11 @@ class MainWindow(QMainWindow):
         elif module_id == "zeropad":
             self.stacked.setCurrentIndex(7)
             self.btn_nav_pad.setChecked(True)
-        elif module_id == "connections":
+        elif module_id == "zeroexplorer":
             self.stacked.setCurrentIndex(8)
+            self.btn_nav_explorer.setChecked(True)
+        elif module_id == "connections":
+            self.stacked.setCurrentIndex(9)
             self.btn_nav_connections.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)

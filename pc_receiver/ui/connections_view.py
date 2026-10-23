@@ -345,6 +345,7 @@ class ConnectionsView(QWidget):
                  mod_zerodisplay=None,
                  mod_zerocam=None,
                  mod_zeropad=None,
+                 mod_zeroexplorer=None,
                  parent=None):
         super().__init__(parent)
         self.mod_zerocast = mod_zerocast
@@ -354,6 +355,7 @@ class ConnectionsView(QWidget):
         self.mod_zerodisplay = mod_zerodisplay
         self.mod_zerocam = mod_zerocam
         self.mod_zeropad = mod_zeropad
+        self.mod_zeroexplorer = mod_zeroexplorer
 
         self.cards: List[ModuleConnectionsCard] = []
 
