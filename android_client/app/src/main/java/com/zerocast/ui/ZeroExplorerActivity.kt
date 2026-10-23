@@ -110,10 +110,6 @@ class ZeroExplorerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        val host = ZeroLinkConfig.getServerIp(this)
-        if (host.isNotEmpty()) {
-            NetworkDiscovery.sleepModule(host, "zeroexplorer")
-        }
         stopServer()
     }
 

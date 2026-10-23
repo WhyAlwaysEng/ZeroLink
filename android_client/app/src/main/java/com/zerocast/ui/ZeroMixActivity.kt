@@ -106,7 +106,6 @@ class ZeroMixActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             if (mixManager?.isConnected == true) {
                 mixManager?.stop()
-                notifySleep()
             } else {
                 startConnect()
             }
@@ -288,16 +287,7 @@ class ZeroMixActivity : AppCompatActivity() {
         }
         startService(intent)
         updateAudioCastUI()
-        notifySleep()
         Toast.makeText(this, "Audio cast stopped", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun notifySleep() {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isNotEmpty()) {
-            NetworkDiscovery.sleepModule(host, "zeromix")
-            NetworkDiscovery.sleepModule(host, "zerocast")
-        }
     }
 
     private fun updateAudioCastUI() {
@@ -443,7 +433,6 @@ class ZeroMixActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         StreamForegroundService.stateListener = null
-        notifySleep()
         mixManager?.stop()
     }
 }

@@ -63,7 +63,7 @@ class ZeroPadActivity : AppCompatActivity() {
 
         binding.btnPadConnect.setOnClickListener {
             if (isConnected) {
-                disconnect(notifySleep = true)
+                disconnect()
             } else {
                 val ip = binding.etPadHostIp.text.toString().trim()
                 if (ip.isEmpty()) {
@@ -138,7 +138,7 @@ class ZeroPadActivity : AppCompatActivity() {
     }
 
     private fun connect(host: String, port: Int) {
-        disconnect(notifySleep = false)
+        disconnect()
         NetworkDiscovery.wakeModule(host, "zeropad")
         binding.btnPadConnect.text = "Connecting..."
         binding.tvPadStatus.text = "● Connecting..."
@@ -178,20 +178,13 @@ class ZeroPadActivity : AppCompatActivity() {
                 Log.e(TAG, "Connection failed: ${e.message}")
             } finally {
                 withContext(Dispatchers.Main) {
-                    disconnect(notifySleep = false)
+                    disconnect()
                 }
             }
         }
     }
 
-    private fun disconnect(notifySleep: Boolean = false) {
-        if (notifySleep) {
-            val host = binding.etPadHostIp.text.toString().trim()
-            if (host.isNotEmpty()) {
-                NetworkDiscovery.sleepModule(host, "zeropad")
-            }
-        }
-
+    private fun disconnect() {
         isConnected = false
         connectionJob?.cancel()
         connectionJob = null
@@ -613,7 +606,7 @@ class ZeroPadActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         dragRunnable?.let { dragHandler.removeCallbacks(it) }
-        disconnect(notifySleep = true)
+        disconnect()
         discovery?.stopDiscovery()
     }
 }

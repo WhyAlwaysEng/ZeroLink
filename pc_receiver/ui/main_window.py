@@ -205,9 +205,6 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._bind_events()
 
-        # Graceful Auto-Lifecycle timers (prevents connection race conditions)
-        self._module_sleep_timers = {}
-
         # System Tray
         self._is_quitting = False
         self._tray_notified = False
@@ -460,35 +457,25 @@ class MainWindow(QMainWindow):
         return page
 
     def _bind_events(self):
-        # Auto-Lifecycle: When a mobile device connects, auto-start and focus that module.
-        # When all mobile clients disconnect, auto-stop that module and return to Dashboard!
+        # Auto-Focus on Connect: When mobile connects to a tool, auto-activate and focus that module.
+        # All modules support simultaneous multi-tasking in the background.
         if hasattr(self.mod_zerocast, "server"):
             self.mod_zerocast.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocast"))
-            self.mod_zerocast.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocast"))
 
         if hasattr(self.mod_zerocam, "server"):
             self.mod_zerocam.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocam"))
-            self.mod_zerocam.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocam"))
 
         if hasattr(self.mod_zerodisplay, "server"):
             self.mod_zerodisplay.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerodisplay"))
-            self.mod_zerodisplay.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerodisplay"))
 
         if hasattr(self.mod_zeropad, "server"):
             self.mod_zeropad.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeropad"))
-            self.mod_zeropad.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeropad"))
 
         if hasattr(self.mod_zeromix, "service"):
             self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeromix"))
-            self.mod_zeromix.service.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeromix"))
 
     def _on_client_connected_lifecycle(self, module_id: str):
-        # Cancel any pending sleep timer for this module
-        if module_id in self._module_sleep_timers:
-            self._module_sleep_timers[module_id].stop()
-            del self._module_sleep_timers[module_id]
-
-        print(f"[AutoLifecycle] Mobile client linked to '{module_id}' -> activating & switching view.")
+        print(f"[MultiTask] Mobile client linked to '{module_id}' -> activating & switching view.")
         mod = self.module_manager.get_module(module_id)
         if mod and not mod.is_active:
             self.module_manager.toggle_module(module_id, True)
@@ -497,61 +484,6 @@ class MainWindow(QMainWindow):
             if cast_mod and not cast_mod.is_active:
                 self.module_manager.toggle_module("zerocast", True)
         self._on_navigate_to_module(module_id)
-
-    def _on_client_disconnected_lifecycle(self, module_id: str, delay_ms: int = 2000):
-        # Debounce: wait for grace period before stopping module (prevents accidental teardown on quick reconnect)
-        if module_id in self._module_sleep_timers:
-            self._module_sleep_timers[module_id].stop()
-
-        timer = QTimer(self)
-        timer.setSingleShot(True)
-        timer.timeout.connect(lambda: self._execute_module_sleep(module_id))
-        self._module_sleep_timers[module_id] = timer
-        timer.start(delay_ms)
-
-    def _execute_module_sleep(self, module_id: str):
-        if module_id in self._module_sleep_timers:
-            del self._module_sleep_timers[module_id]
-
-        mod = self.module_manager.get_module(module_id)
-        if not mod or not mod.is_active:
-            return
-
-        has_clients = False
-        if hasattr(mod, "server") and hasattr(mod.server, "get_connected_clients"):
-            has_clients = len(mod.server.get_connected_clients()) > 0
-        elif hasattr(mod, "service") and hasattr(mod.service, "get_connected_clients"):
-            has_clients = len(mod.service.get_connected_clients()) > 0
-
-        if not has_clients:
-            print(f"[AutoLifecycle] No clients remaining on '{module_id}' -> stopping service & returning to Dashboard.")
-            if mod.is_active:
-                self.module_manager.toggle_module(module_id, False)
-
-            if module_id == "zeromix":
-                cast_mod = self.module_manager.get_module("zerocast")
-                if cast_mod and cast_mod.is_active:
-                    cast_clients = cast_mod.server.get_connected_clients() if hasattr(cast_mod, "server") else []
-                    if len(cast_clients) == 0:
-                        self.module_manager.toggle_module("zerocast", False)
-
-            # Return PC view to Dashboard if currently showing this module
-            current_idx = self.stacked.currentIndex()
-            page_idx_map = {
-                "zerocast": 1,
-                "zerodrop": 2,
-                "zeroclip": 3,
-                "zeromix": 4,
-                "zerodisplay": 5,
-                "zerocam": 6,
-                "zeropad": 7,
-                "zeroexplorer": 8,
-                "zerodev": 9
-            }
-            if page_idx_map.get(module_id) == current_idx:
-                self._on_navigate_to_module("dashboard")
-        else:
-            print(f"[AutoLifecycle] Client is active on '{module_id}' -> keeping module active.")
 
     def _on_navigate_to_module(self, module_id: str):
         # On-Demand: Activate module service when navigated to
@@ -783,10 +715,6 @@ class MainWindow(QMainWindow):
             self.tray_icon.showMessage(f"📱 {app_name}", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
 
     def _on_remote_wake_module(self, module_id: str):
-        if module_id in self._module_sleep_timers:
-            self._module_sleep_timers[module_id].stop()
-            del self._module_sleep_timers[module_id]
-
         mod = self.module_manager.get_module(module_id)
         if mod and not mod.is_active:
             self.module_manager.toggle_module(module_id, True)
@@ -799,8 +727,8 @@ class MainWindow(QMainWindow):
         self._on_navigate_to_module(module_id)
 
     def _on_remote_sleep_module(self, module_id: str):
-        print(f"[ZeroSleep] Remote sleep signal received for: {module_id}")
-        self._on_client_disconnected_lifecycle(module_id, delay_ms=1200)
+        # Multi-tasking enabled: leaving a menu does not force-stop background services
+        pass
 
     def closeEvent(self, event):
         if getattr(self, "_is_quitting", False):

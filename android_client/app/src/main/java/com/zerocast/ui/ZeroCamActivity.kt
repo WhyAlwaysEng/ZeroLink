@@ -488,10 +488,6 @@ class ZeroCamActivity : AppCompatActivity() {
     }
 
     private fun stopStream() {
-        val host = binding.etCamHostIp.text.toString().trim()
-        if (host.isNotEmpty()) {
-            NetworkDiscovery.sleepModule(host, "zerocam")
-        }
         isStreaming = false
         h264Encoder?.stop()
         h264Encoder = null

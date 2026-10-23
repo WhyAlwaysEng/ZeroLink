@@ -464,11 +464,6 @@ class ZeroCastActivity : AppCompatActivity() {
     }
 
     private fun stopStreamService() {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isNotEmpty()) {
-            NetworkDiscovery.sleepModule(host, "zerocast")
-        }
-
         val serviceIntent = Intent(this, StreamForegroundService::class.java).apply {
             action = StreamForegroundService.ACTION_STOP
         }
