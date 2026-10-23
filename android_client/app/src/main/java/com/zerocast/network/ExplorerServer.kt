@@ -91,36 +91,36 @@ class ExplorerServer(
             when {
                 path == "/api/storage" -> {
                     handleStorage(output)
-                    onLogEntry?.invoke(AuditLogEntry("STORAGE", "Internal Storage Stat", 0L, clientIp))
                 }
                 path == "/api/gallery/photos" -> {
                     val album = uri.getQueryParameter("album")
                     handleGalleryPhotos(output, album)
-                    onLogEntry?.invoke(AuditLogEntry("BROWSE", "Photo Gallery", 0L, clientIp))
                 }
                 path == "/api/media/thumb" -> {
                     val idStr = uri.getQueryParameter("id") ?: "0"
                     val id = idStr.toLongOrNull() ?: 0L
                     handleThumbnail(output, id)
-                    onLogEntry?.invoke(AuditLogEntry("VIEW", "Thumbnail #$id", 0L, clientIp))
                 }
                 path == "/api/media/raw" -> {
                     val idStr = uri.getQueryParameter("id") ?: "0"
                     val id = idStr.toLongOrNull() ?: 0L
                     val bytesSent = handleRawMedia(output, id)
-                    onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", "Media #$id", bytesSent, clientIp))
+                    if (bytesSent > 0) {
+                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", "Photo #$id", bytesSent, clientIp))
+                    }
                 }
                 path == "/api/files/list" -> {
                     val folderParam = uri.getQueryParameter("path")
                     val decodedPath = if (!folderParam.isNullOrEmpty()) URLDecoder.decode(folderParam, "UTF-8") else Environment.getExternalStorageDirectory().path
                     handleFileList(output, decodedPath)
-                    onLogEntry?.invoke(AuditLogEntry("BROWSE", decodedPath, 0L, clientIp))
                 }
                 path == "/api/files/download" -> {
                     val fileParam = uri.getQueryParameter("path")
                     val decodedPath = if (!fileParam.isNullOrEmpty()) URLDecoder.decode(fileParam, "UTF-8") else ""
                     val bytesSent = handleFileDownload(output, decodedPath)
-                    onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
+                    if (bytesSent > 0) {
+                        onLogEntry?.invoke(AuditLogEntry("DOWNLOAD", decodedPath, bytesSent, clientIp))
+                    }
                 }
                 else -> {
                     sendJsonResponse(output, 404, JSONObject().put("error", "Not found").toString())

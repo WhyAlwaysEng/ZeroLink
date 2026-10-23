@@ -93,26 +93,34 @@ class FilesWorker(QThread):
             self.error_occurred.emit(str(e))
 
 
-class ThumbWorker(QThread):
+class ThumbQueueWorker(QThread):
     thumb_ready = pyqtSignal(int, QPixmap)
 
-    def __init__(self, host: str, port: int, photo_id: int):
+    def __init__(self, host: str, port: int, photo_ids: List[int]):
         super().__init__()
         self.host = host
         self.port = port
-        self.photo_id = photo_id
+        self.photo_ids = photo_ids
+        self._is_cancelled = False
+
+    def cancel(self):
+        self._is_cancelled = True
 
     def run(self):
-        url = f"http://{self.host}:{self.port}/api/media/thumb?id={self.photo_id}"
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                raw_bytes = resp.read()
-                img = QImage.fromData(raw_bytes)
-                if not img.isNull():
-                    pix = QPixmap.fromImage(img)
-                    self.thumb_ready.emit(self.photo_id, pix)
-        except Exception:
+        for pid in self.photo_ids:
+            if self._is_cancelled:
+                break
+            url = f"http://{self.host}:{self.port}/api/media/thumb?id={pid}"
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "ZeroLink-PC"})
+                with urllib.request.urlopen(req, timeout=4) as resp:
+                    raw_bytes = resp.read()
+                    img = QImage.fromData(raw_bytes)
+                    if not img.isNull():
+                        pix = QPixmap.fromImage(img)
+                        self.thumb_ready.emit(pid, pix)
+            except Exception:
+                pass
             pass
 
 
@@ -140,7 +148,7 @@ class ZeroExplorerModule(BaseModule):
         self._storage_worker: Optional[StorageWorker] = None
         self._gallery_worker: Optional[GalleryWorker] = None
         self._files_worker: Optional[FilesWorker] = None
-        self._active_thumb_workers: List[ThumbWorker] = []
+        self._thumb_queue_worker: Optional[ThumbQueueWorker] = None
 
     @property
     def module_id(self) -> str:
@@ -758,7 +766,11 @@ class ZeroExplorerModule(BaseModule):
         self.gallery_items = items
         self.gallery_list.clear()
 
-        # Create placeholder items and start async thumb workers
+        if self._thumb_queue_worker and self._thumb_queue_worker.isRunning():
+            self._thumb_queue_worker.cancel()
+            self._thumb_queue_worker.wait(300)
+
+        photo_ids = []
         for itm in items:
             p_id = itm.get("id")
             name = itm.get("name", "Photo")
@@ -769,12 +781,13 @@ class ZeroExplorerModule(BaseModule):
             list_item.setData(Qt.ItemDataRole.UserRole, itm)
             list_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
             self.gallery_list.addItem(list_item)
+            if p_id:
+                photo_ids.append(p_id)
 
-            # Spawn thumb worker
-            tw = ThumbWorker(self.phone_host, self.port, p_id)
-            tw.thumb_ready.connect(self._on_thumb_ready)
-            self._active_thumb_workers.append(tw)
-            tw.start()
+        if photo_ids:
+            self._thumb_queue_worker = ThumbQueueWorker(self.phone_host, self.port, photo_ids)
+            self._thumb_queue_worker.thumb_ready.connect(self._on_thumb_ready)
+            self._thumb_queue_worker.start()
 
     def _on_thumb_ready(self, photo_id: int, pixmap: QPixmap):
         for i in range(self.gallery_list.count()):

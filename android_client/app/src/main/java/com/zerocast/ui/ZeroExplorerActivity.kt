@@ -81,12 +81,14 @@ class ZeroExplorerActivity : AppCompatActivity() {
         if (explorerServer == null) {
             explorerServer = ExplorerServer(this, 8896) { entry ->
                 runOnUiThread {
-                    logList.add(0, entry)
-                    if (logList.size > 200) logList.removeAt(logList.lastIndex)
-                    logAdapter.notifyItemInserted(0)
-                    binding.rvExplorerLogs.scrollToPosition(0)
-                    binding.tvLogEmpty.visibility = View.GONE
-                    binding.rvExplorerLogs.visibility = View.VISIBLE
+                    if (!isFinishing && !isDestroyed) {
+                        logList.add(0, entry)
+                        if (logList.size > 200) logList.removeAt(logList.lastIndex)
+                        logAdapter.notifyItemInserted(0)
+                        binding.rvExplorerLogs.scrollToPosition(0)
+                        binding.tvLogEmpty.visibility = View.GONE
+                        binding.rvExplorerLogs.visibility = View.VISIBLE
+                    }
                 }
             }
             explorerServer?.start()
