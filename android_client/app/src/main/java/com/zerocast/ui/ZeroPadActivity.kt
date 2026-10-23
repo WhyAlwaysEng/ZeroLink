@@ -184,6 +184,11 @@ class ZeroPadActivity : AppCompatActivity() {
     }
 
     private fun disconnect() {
+        val host = binding.etPadHostIp.text.toString().trim()
+        if (host.isNotEmpty()) {
+            NetworkDiscovery.sleepModule(host, "zeropad")
+        }
+
         isConnected = false
         connectionJob?.cancel()
         connectionJob = null

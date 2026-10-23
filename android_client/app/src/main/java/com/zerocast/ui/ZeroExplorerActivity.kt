@@ -20,6 +20,8 @@ import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroExplorerBinding
 import com.zerocast.network.AuditLogEntry
 import com.zerocast.network.ExplorerServer
+import com.zerocast.network.NetworkDiscovery
+import com.zerocast.util.ZeroLinkConfig
 import java.io.File
 import java.text.DecimalFormat
 import java.text.SimpleDateFormat
@@ -108,6 +110,10 @@ class ZeroExplorerActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        val host = ZeroLinkConfig.getServerIp(this)
+        if (host.isNotEmpty()) {
+            NetworkDiscovery.sleepModule(host, "zeroexplorer")
+        }
         stopServer()
     }
 

@@ -291,6 +291,11 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
     }
 
     private fun disconnectStream() {
+        val host = binding.etDisplayHostIp.text.toString().trim()
+        if (host.isNotEmpty()) {
+            NetworkDiscovery.sleepModule(host, "zerodisplay")
+        }
+
         clientJob?.cancel()
         clientJob = null
         try {

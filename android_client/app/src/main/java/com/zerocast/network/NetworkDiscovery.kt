@@ -56,6 +56,42 @@ class NetworkDiscovery(
                 }
             }
         }
+
+        /**
+         * Sends a remote sleep request to the PC Master Gateway to stop a specific module when user leaves.
+         */
+        fun sleepModule(host: String, moduleId: String, callback: ((Boolean) -> Unit)? = null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                var success = false
+                try {
+                    val socket = Socket()
+                    socket.soTimeout = 2000
+                    socket.connect(InetSocketAddress(host, GATEWAY_PORT), 1500)
+
+                    val writer = OutputStreamWriter(socket.getOutputStream(), Charsets.UTF_8)
+                    val reader = BufferedReader(InputStreamReader(socket.getInputStream(), Charsets.UTF_8))
+
+                    val req = JSONObject().apply {
+                        put("action", "SLEEP")
+                        put("module", moduleId)
+                    }.toString() + "\n"
+
+                    writer.write(req)
+                    writer.flush()
+
+                    val resp = reader.readLine()
+                    if (resp != null && resp.contains("STOPPED")) {
+                        success = true
+                    }
+                    socket.close()
+                } catch (e: Exception) {
+                    Log.d(TAG, "Sleep module '$moduleId' attempt: ${e.message}")
+                }
+                withContext(Dispatchers.Main) {
+                    callback?.invoke(success)
+                }
+            }
+        }
     }
 
     private val isScanning = AtomicBoolean(false)

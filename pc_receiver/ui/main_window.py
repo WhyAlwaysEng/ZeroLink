@@ -214,6 +214,7 @@ class MainWindow(QMainWindow):
         self.discovery_service = LanDiscoveryService(tcp_port=self.port, local_ip=self.local_ip, parent=self)
         self.discovery_service.notification_received.connect(self._on_phone_notification)
         self.discovery_service.module_wake_requested.connect(self._on_remote_wake_module)
+        self.discovery_service.module_sleep_requested.connect(self._on_remote_sleep_module)
         self.discovery_service.start()
 
         # Update Checker
@@ -456,11 +457,76 @@ class MainWindow(QMainWindow):
         return page
 
     def _bind_events(self):
-        # Auto-switch to active viewport when a mobile client connects
-        self.mod_zerocast.server.client_connected.connect(lambda _: self._on_navigate_to_module("zerocast"))
-        self.mod_zerocam.server.client_connected.connect(lambda _, __: self._on_navigate_to_module("zerocam"))
-        self.mod_zerodisplay.server.client_connected.connect(lambda _: self._on_navigate_to_module("zerodisplay"))
-        self.mod_zeropad.server.client_connected.connect(lambda _: self._on_navigate_to_module("zeropad"))
+        # Auto-Lifecycle: When a mobile device connects, auto-start and focus that module.
+        # When all mobile clients disconnect, auto-stop that module and return to Dashboard!
+        self.mod_zerocast.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocast"))
+        self.mod_zerocast.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocast"))
+
+        self.mod_zerocam.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocam"))
+        self.mod_zerocam.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerocam"))
+
+        self.mod_zerodisplay.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerodisplay"))
+        self.mod_zerodisplay.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zerodisplay"))
+
+        self.mod_zeropad.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeropad"))
+        self.mod_zeropad.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeropad"))
+
+        self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeromix"))
+        self.mod_zeromix.service.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeromix"))
+
+        self.mod_zeroexplorer.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeroexplorer"))
+        self.mod_zeroexplorer.server.client_disconnected.connect(lambda *_: self._on_client_disconnected_lifecycle("zeroexplorer"))
+
+    def _on_client_connected_lifecycle(self, module_id: str):
+        print(f"[AutoLifecycle] Mobile client linked to '{module_id}' -> activating & switching view.")
+        mod = self.module_manager.get_module(module_id)
+        if mod and not mod.is_active:
+            self.module_manager.toggle_module(module_id, True)
+        if module_id == "zeromix":
+            cast_mod = self.module_manager.get_module("zerocast")
+            if cast_mod and not cast_mod.is_active:
+                self.module_manager.toggle_module("zerocast", True)
+        self._on_navigate_to_module(module_id)
+
+    def _on_client_disconnected_lifecycle(self, module_id: str, force: bool = False):
+        mod = self.module_manager.get_module(module_id)
+        if not mod:
+            return
+
+        has_clients = False
+        if not force:
+            if hasattr(mod, "server") and hasattr(mod.server, "get_connected_clients"):
+                has_clients = len(mod.server.get_connected_clients()) > 0
+            elif hasattr(mod, "service") and hasattr(mod.service, "get_connected_clients"):
+                has_clients = len(mod.service.get_connected_clients()) > 0
+
+        if not has_clients:
+            print(f"[AutoLifecycle] No clients remaining on '{module_id}' -> stopping service & returning to Dashboard.")
+            if mod.is_active:
+                self.module_manager.toggle_module(module_id, False)
+
+            if module_id == "zeromix":
+                cast_mod = self.module_manager.get_module("zerocast")
+                if cast_mod and cast_mod.is_active:
+                    cast_clients = cast_mod.server.get_connected_clients() if hasattr(cast_mod, "server") else []
+                    if len(cast_clients) == 0:
+                        self.module_manager.toggle_module("zerocast", False)
+
+            # Return PC view to Dashboard if currently showing this module
+            current_idx = self.stacked.currentIndex()
+            page_idx_map = {
+                "zerocast": 1,
+                "zerodrop": 2,
+                "zeroclip": 3,
+                "zeromix": 4,
+                "zerodisplay": 5,
+                "zerocam": 6,
+                "zeropad": 7,
+                "zeroexplorer": 8,
+                "zerodev": 9
+            }
+            if page_idx_map.get(module_id) == current_idx:
+                self._on_navigate_to_module("dashboard")
 
     def _on_navigate_to_module(self, module_id: str):
         # On-Demand: Activate module service when navigated to
@@ -701,6 +767,11 @@ class MainWindow(QMainWindow):
             if cast_mod and not cast_mod.is_active:
                 self.module_manager.toggle_module("zerocast", True)
                 print(f"[ZeroWake] Synced activation: zerocast activated with zeromix")
+        self._on_navigate_to_module(module_id)
+
+    def _on_remote_sleep_module(self, module_id: str):
+        print(f"[ZeroSleep] Remotely deactivating module: {module_id}")
+        self._on_client_disconnected_lifecycle(module_id, force=True)
 
     def closeEvent(self, event):
         if getattr(self, "_is_quitting", False):

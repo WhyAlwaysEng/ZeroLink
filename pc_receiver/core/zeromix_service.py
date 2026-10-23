@@ -15,6 +15,8 @@ from core.audio_mixer import AudioMixerEngine
 
 
 class ZeroMixService(QObject):
+    client_connected = pyqtSignal(str)     # ip
+    client_disconnected = pyqtSignal(str)  # ip
     client_count_changed = pyqtSignal(int)
     clients_updated = pyqtSignal()
 
@@ -100,6 +102,7 @@ class ZeroMixService(QObject):
                             }
                         self.client_count_changed.emit(len(self._clients))
                         self.clients_updated.emit()
+                        self.client_connected.emit(addr[0])
                         # Send initial state immediately
                         self._send_to_client(client_sock, self._get_full_state_payload())
                     else:
@@ -242,10 +245,12 @@ class ZeroMixService(QObject):
             self._remove_client(sock)
 
     def _remove_client(self, sock: socket.socket):
+        client_ip = ""
         with self._lock:
             if sock in self._clients:
                 self._clients.remove(sock)
             if sock in self._client_info:
+                client_ip = self._client_info[sock].get("ip", "")
                 del self._client_info[sock]
             try:
                 sock.close()
@@ -253,6 +258,8 @@ class ZeroMixService(QObject):
                 pass
         self.client_count_changed.emit(len(self._clients))
         self.clients_updated.emit()
+        if client_ip:
+            self.client_disconnected.emit(client_ip)
 
     def get_connected_clients(self) -> List[Dict]:
         """Returns list of currently connected ZeroMix remote clients."""

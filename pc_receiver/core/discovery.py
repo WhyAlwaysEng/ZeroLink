@@ -19,6 +19,7 @@ class LanDiscoveryService(QObject):
 
     notification_received = pyqtSignal(str, str, str)  # app_name, title, text
     module_wake_requested = pyqtSignal(str)            # module_id
+    module_sleep_requested = pyqtSignal(str)           # module_id
 
     def __init__(self, tcp_port: int = 8888, local_ip: str = "127.0.0.1", parent=None):
         super().__init__(parent)
@@ -178,6 +179,23 @@ class LanDiscoveryService(QObject):
                             self.module_wake_requested.emit("zerocast")
                         response_dict = {
                             "status": "READY",
+                            "module": mod_id,
+                            "name": f"ZeroLink PC ({self.hostname})"
+                        }
+                except Exception:
+                    pass
+
+            # 2b. Remote Module Sleep / Deactivate (On Mobile Disconnect)
+            elif "SLEEP" in text.upper() or "CLOSE" in text.upper():
+                try:
+                    payload = json.loads(text)
+                    mod_id = payload.get("module", "").lower()
+                    if mod_id:
+                        self.module_sleep_requested.emit(mod_id)
+                        if mod_id == "zeromix":
+                            self.module_sleep_requested.emit("zerocast")
+                        response_dict = {
+                            "status": "STOPPED",
                             "module": mod_id,
                             "name": f"ZeroLink PC ({self.hostname})"
                         }
