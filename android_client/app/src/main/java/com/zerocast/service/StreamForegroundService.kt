@@ -317,6 +317,12 @@ class StreamForegroundService : LifecycleService() {
                     screenCaptureHevcManager?.updateBitrate(streamBitrateKbps)
                 }
             }
+
+            override fun onFrameDropped() {
+                Log.w(TAG, "Socket buffer overflow dropped frame -> Instant sync keyframe requested")
+                screenCaptureH264Manager?.requestKeyFrame()
+                screenCaptureHevcManager?.requestKeyFrame()
+            }
         })
         streamSender?.start()
 

@@ -948,37 +948,49 @@ class ZeroCastModule(BaseModule):
             images = self.h264_decoder.decode(payload)
             if images:
                 bytes_per_img = len(payload) // len(images)
-                for img in images:
+                for img in images[:-1]:
                     if self.virtual_cam.is_active:
                         self.virtual_cam.push_frame(img)
-                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
-                    pixmap = QPixmap.fromImage(img)
-                    if self.canvas:
-                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+                    self.telemetry.update(bytes_per_img, timestamp_us)
+                latest = images[-1]
+                if self.virtual_cam.is_active:
+                    self.virtual_cam.push_frame(latest)
+                stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                pixmap = QPixmap.fromImage(latest)
+                if self.canvas:
+                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
         elif frame_type == TYPE_VIDEO_HEVC or frame_type == 0x06:
             self.current_codec_name = "H.265 / HEVC"
             images = self.hevc_decoder.decode(payload)
             if images:
                 bytes_per_img = len(payload) // len(images)
-                for img in images:
+                for img in images[:-1]:
                     if self.virtual_cam.is_active:
                         self.virtual_cam.push_frame(img)
-                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
-                    pixmap = QPixmap.fromImage(img)
-                    if self.canvas:
-                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+                    self.telemetry.update(bytes_per_img, timestamp_us)
+                latest = images[-1]
+                if self.virtual_cam.is_active:
+                    self.virtual_cam.push_frame(latest)
+                stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                pixmap = QPixmap.fromImage(latest)
+                if self.canvas:
+                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
         elif frame_type == TYPE_VIDEO_AV1 or frame_type == 0x07:
             self.current_codec_name = "AV1"
             images = self.av1_decoder.decode(payload)
             if images:
                 bytes_per_img = len(payload) // len(images)
-                for img in images:
+                for img in images[:-1]:
                     if self.virtual_cam.is_active:
                         self.virtual_cam.push_frame(img)
-                    stats = self.telemetry.update(bytes_per_img, timestamp_us)
-                    pixmap = QPixmap.fromImage(img)
-                    if self.canvas:
-                        self.canvas.update_frame(pixmap, stats, self.current_codec_name)
+                    self.telemetry.update(bytes_per_img, timestamp_us)
+                latest = images[-1]
+                if self.virtual_cam.is_active:
+                    self.virtual_cam.push_frame(latest)
+                stats = self.telemetry.update(bytes_per_img, timestamp_us)
+                pixmap = QPixmap.fromImage(latest)
+                if self.canvas:
+                    self.canvas.update_frame(pixmap, stats, self.current_codec_name)
         else:  # TYPE_VIDEO_MJPEG
             self.current_codec_name = "MJPEG"
             pixmap = QPixmap()

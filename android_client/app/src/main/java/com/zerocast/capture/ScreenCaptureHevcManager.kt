@@ -92,14 +92,32 @@ class ScreenCaptureHevcManager(
                     setInteger(MediaFormat.KEY_PRIORITY, 0) // 0 = Realtime Priority
                 } catch (_: Exception) {}
 
-                // Vendor-specific extensions to suppress B-frame lookahead queues
+                // Motion Estimation & Speed optimization (CRITICAL FOR HIGH MOTION)
+                // Complexity 0 instructs hardware encoder to use fastest motion estimation
+                try {
+                    setInteger(MediaFormat.KEY_COMPLEXITY, 0)
+                } catch (_: Exception) {}
+
+                // Bitrate ceiling to prevent 4x-5x burst explosion during rapid motion
+                try {
+                    val maxBitrate = (bitrateKbps * 1.25).toInt() * 1000
+                    setInteger("max-bitrate", maxBitrate)
+                } catch (_: Exception) {}
+
+                // Vendor-specific extensions to suppress heavy filters and lookahead queues
                 try {
                     setInteger("vendor.qcom-ext-enc-b-frame.enable", 0)
                     setInteger("vendor.rtc-ext-enc-low-latency.enable", 1)
                     setInteger("vendor.mediatek.ext-enc-low-latency", 1)
+                    // Disable heavy SAO (Sample Adaptive Offset) filter which chokes mobile GPU on fast scenes
+                    setInteger("vendor.qcom-ext-enc-caps.sao.enable", 0)
+                    setInteger("vendor.qcom-ext-enc-sao.enable", 0)
+                    setInteger("vendor.qcom-ext-enc-caps.preprocess.enable", 0)
+                    // MediaTek speed preset: 1 = speed priority over compression
+                    setInteger("vendor.mediatek.ext-enc-speed-preset", 1)
                 } catch (_: Exception) {}
 
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2) // Keyframe every 2s to smooth out bandwidth spikes
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1) // Keyframe every 1s for fast recovery and smooth motion
                 try {
                     setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
                 } catch (_: Exception) {}

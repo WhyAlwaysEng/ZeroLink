@@ -27,10 +27,11 @@ class StreamSender(
         fun onControlPacketReceived(payload: ByteArray)
         fun onError(error: Throwable)
         fun onCongestionChanged(isCongested: Boolean) {}
+        fun onFrameDropped() {}
     }
 
-    // Queue capacity of 120 allows high-bitrate streaming without dropping frames during I-frame bursts
-    private val frameQueue = ArrayBlockingQueue<FramePacket>(120)
+    // Queue capacity of 40 limits buffer bloat to < 600ms even under extreme stalls
+    private val frameQueue = ArrayBlockingQueue<FramePacket>(40)
     private val isRunning = AtomicBoolean(false)
     private var socket: Socket? = null
     private var outputStream: DataOutputStream? = null
@@ -79,16 +80,17 @@ class StreamSender(
         if (!isRunning.get()) return
         val packet = FramePacket(type, flags, System.nanoTime() / 1000, payload)
 
-        // Dynamic Adaptive Bitrate (ABR) socket buffer detector
-        if (frameQueue.remainingCapacity() <= 6) {
+        // Dynamic Adaptive Bitrate (ABR) socket buffer detector:
+        // Trigger congestion early when >= 8 frames queue up (133ms at 60fps)
+        if (frameQueue.size >= 8) {
             calmFrameCount = 0
             if (!isCongestedState) {
                 isCongestedState = true
                 listener?.onCongestionChanged(true)
             }
-        } else if (frameQueue.size <= 4) {
+        } else if (frameQueue.size <= 3) {
             calmFrameCount++
-            if (calmFrameCount > 35 && isCongestedState) {
+            if (calmFrameCount > 25 && isCongestedState) {
                 isCongestedState = false
                 listener?.onCongestionChanged(false)
             }
@@ -96,6 +98,7 @@ class StreamSender(
 
         if (!frameQueue.offer(packet)) {
             frameQueue.poll() // Drop oldest packet to prevent backpressure blocking
+            listener?.onFrameDropped()
             frameQueue.offer(packet)
         }
     }
