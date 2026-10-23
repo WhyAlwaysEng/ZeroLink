@@ -23,12 +23,16 @@ class HevcDecoder:
     def _init_decoder(self):
         if not HAS_AV:
             return
-        # Multi-threaded slice low-delay decode
+        # Multi-threaded slice low-delay decode with fast arithmetic
         try:
             codec = av.CodecContext.create('hevc', 'r')
             codec.flags |= av.codec.context.Flags.low_delay
+            try:
+                codec.flags2 |= av.codec.context.Flags2.fast
+            except Exception:
+                pass
             codec.thread_type = 'SLICE'
-            codec.thread_count = min(4, os.cpu_count() or 4)
+            codec.thread_count = min(2, os.cpu_count() or 2)
             codec.open()
             self.codec = codec
         except Exception:

@@ -308,13 +308,15 @@ class StreamForegroundService : LifecycleService() {
             override fun onCongestionChanged(isCongested: Boolean) {
                 if (isCongested) {
                     val fallbackKbps = maxOf(4500, streamBitrateKbps / 2)
-                    Log.w(TAG, "Network congestion detected -> Scaling bitrate down to ${fallbackKbps} Kbps")
+                    val hevcFallback = maxOf(3000, (fallbackKbps * 0.70).toInt())
+                    Log.w(TAG, "Network congestion detected -> Scaling bitrate down to ${fallbackKbps} Kbps (HEVC: ${hevcFallback})")
                     screenCaptureH264Manager?.updateBitrate(fallbackKbps)
-                    screenCaptureHevcManager?.updateBitrate(fallbackKbps)
+                    screenCaptureHevcManager?.updateBitrate(hevcFallback)
                 } else {
-                    Log.d(TAG, "Network recovered -> Restoring bitrate to ${streamBitrateKbps} Kbps")
+                    val hevcRestored = maxOf(3500, (streamBitrateKbps * 0.70).toInt())
+                    Log.d(TAG, "Network recovered -> Restoring bitrate to ${streamBitrateKbps} Kbps (HEVC: ${hevcRestored})")
                     screenCaptureH264Manager?.updateBitrate(streamBitrateKbps)
-                    screenCaptureHevcManager?.updateBitrate(streamBitrateKbps)
+                    screenCaptureHevcManager?.updateBitrate(hevcRestored)
                 }
             }
 
@@ -361,6 +363,9 @@ class StreamForegroundService : LifecycleService() {
         if (isH264Mode) {
             val bitrateKbps = if (streamBitrateKbps > 0) streamBitrateKbps else (if (w >= 1080 || h >= 1080) 12000 else 6000)
             if (selectedCodec == "HEVC") {
+                // HEVC delivers higher fidelity at ~30% lower bit consumption.
+                // Scaling target bitrate avoids oversized I-frames and network packet bursts.
+                val hevcBitrateKbps = maxOf(3500, (bitrateKbps * 0.70).toInt())
                 try {
                     screenCaptureHevcManager = ScreenCaptureHevcManager(
                         mediaProjection = proj,
@@ -368,7 +373,7 @@ class StreamForegroundService : LifecycleService() {
                         height = h,
                         dpi = streamDpi,
                         targetFps = streamFps,
-                        bitrateKbps = bitrateKbps,
+                        bitrateKbps = hevcBitrateKbps,
                         streamSender = sender,
                         useCbrCap = useCbrCap
                     )

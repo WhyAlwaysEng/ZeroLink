@@ -98,9 +98,14 @@ class ScreenCaptureHevcManager(
                     setInteger(MediaFormat.KEY_COMPLEXITY, 0)
                 } catch (_: Exception) {}
 
-                // Bitrate ceiling to prevent 4x-5x burst explosion during rapid motion
+                // Periodic Intra Refresh (spreads keyframe workload across frames to avoid 400KB I-frame spikes)
                 try {
-                    val maxBitrate = (bitrateKbps * 1.25).toInt() * 1000
+                    setInteger(MediaFormat.KEY_INTRA_REFRESH_PERIOD, targetFps * 2)
+                } catch (_: Exception) {}
+
+                // Bitrate ceiling to prevent burst explosion during rapid motion
+                try {
+                    val maxBitrate = (bitrateKbps * 1.15).toInt() * 1000
                     setInteger("max-bitrate", maxBitrate)
                 } catch (_: Exception) {}
 
@@ -115,9 +120,14 @@ class ScreenCaptureHevcManager(
                     setInteger("vendor.qcom-ext-enc-caps.preprocess.enable", 0)
                     // MediaTek speed preset: 1 = speed priority over compression
                     setInteger("vendor.mediatek.ext-enc-speed-preset", 1)
+                    // Clamp QP range to prevent micro-fluctuations in frame size
+                    setInteger("vendor.qcom-ext-enc-qp-range.min-qp", 18)
+                    setInteger("vendor.qcom-ext-enc-qp-range.max-qp", 36)
+                    setInteger("vendor.mediatek.ext-enc-qp-range.min-qp", 18)
+                    setInteger("vendor.mediatek.ext-enc-qp-range.max-qp", 36)
                 } catch (_: Exception) {}
 
-                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1) // Keyframe every 1s for fast recovery and smooth motion
+                setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2) // Keyframe every 2s for balanced bitrate smoothing
                 try {
                     setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.HEVCProfileMain)
                 } catch (_: Exception) {}
@@ -241,6 +251,17 @@ class ScreenCaptureHevcManager(
                         streamSender.enqueueFrame(PacketHeader.TYPE_VIDEO_HEVC, flags, payload)
                     }
                     codec.releaseOutputBuffer(outputIndex, false)
+                } else if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                    try {
+                        val newFormat = codec.outputFormat
+                        val csd0 = newFormat.getByteBuffer("csd-0")
+                        if (csd0 != null && vpsSpsPpsBuffer == null) {
+                            val csdBytes = ByteArray(csd0.remaining())
+                            csd0.get(csdBytes)
+                            vpsSpsPpsBuffer = csdBytes
+                            Log.d(TAG, "Captured HEVC CSD-0 from output format (${csdBytes.size} bytes)")
+                        }
+                    } catch (_: Exception) {}
                 }
             } catch (e: Exception) {
                 if (isRunning.get()) {
