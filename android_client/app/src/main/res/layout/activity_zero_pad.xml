@@ -157,6 +157,113 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Section 1: Precision Trackpad / Touchpad -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:fontFamily="sans-serif-black"
+            android:text="PRECISION TRACKPAD"
+            android:textColor="@color/text_tertiary"
+            android:textSize="10sp"
+            android:letterSpacing="0.08" />
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            app:cardBackgroundColor="@color/surface"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="2dp"
+            app:strokeColor="@color/surface_stroke"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <!-- Touchpad Gesture Surface -->
+                <FrameLayout
+                    android:id="@+id/touchpadSurface"
+                    android:layout_width="match_parent"
+                    android:layout_height="220dp"
+                    android:background="@drawable/bg_trackpad_surface"
+                    android:clickable="true"
+                    android:focusable="true">
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center"
+                        android:gravity="center"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="◈"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="22sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Slide finger to move mouse"
+                            android:textColor="@color/text_secondary"
+                            android:textSize="12sp"
+                            android:fontFamily="sans-serif-medium" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="2dp"
+                            android:text="Tap to Left Click • 2 Fingers to Scroll"
+                            android:textColor="@color/text_tertiary"
+                            android:textSize="10sp" />
+                    </LinearLayout>
+                </FrameLayout>
+
+                <!-- Mouse Left & Right Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMouseLeft"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="6dp"
+                        android:text="◖ Left Click"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-bold"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/surface_stroke" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnMouseRight"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="6dp"
+                        android:text="Right Click ◗"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        android:fontFamily="sans-serif-bold"
+                        app:cornerRadius="10dp"
+                        app:strokeColor="@color/surface_stroke" />
+                </LinearLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
         <!-- Section 1: Media Deck -->
         <TextView
             android:layout_width="wrap_content"
@@ -355,80 +462,6 @@
                 android:text="⏻ Lock PC\n(Win+L)"
                 android:textColor="@color/text_secondary"
                 android:textSize="11sp"
-                app:backgroundTint="@color/surface"
-                app:strokeColor="@color/surface_stroke"
-                app:strokeWidth="1dp"
-                app:cornerRadius="12dp" />
-        </GridLayout>
-
-        <!-- Section 3: App Launchers -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="20dp"
-            android:fontFamily="sans-serif-black"
-            android:text="PC APP LAUNCHERS"
-            android:textColor="@color/text_tertiary"
-            android:textSize="10sp"
-            android:letterSpacing="0.08" />
-
-        <GridLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:columnCount="4">
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLaunchChrome"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="◎\nChrome"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                app:backgroundTint="@color/surface"
-                app:strokeColor="@color/surface_stroke"
-                app:strokeWidth="1dp"
-                app:cornerRadius="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLaunchDiscord"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="◈\nDiscord"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                app:backgroundTint="@color/surface"
-                app:strokeColor="@color/surface_stroke"
-                app:strokeWidth="1dp"
-                app:cornerRadius="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLaunchExplorer"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="⧉\nExplorer"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
-                app:backgroundTint="@color/surface"
-                app:strokeColor="@color/surface_stroke"
-                app:strokeWidth="1dp"
-                app:cornerRadius="12dp" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnLaunchCalc"
-                android:layout_width="0dp"
-                android:layout_height="60dp"
-                android:layout_columnWeight="1"
-                android:layout_margin="4dp"
-                android:text="▦\nCalc"
-                android:textColor="@color/text_primary"
-                android:textSize="10sp"
                 app:backgroundTint="@color/surface"
                 app:strokeColor="@color/surface_stroke"
                 app:strokeWidth="1dp"

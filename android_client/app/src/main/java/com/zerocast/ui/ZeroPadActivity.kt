@@ -127,23 +127,8 @@ class ZeroPadActivity : AppCompatActivity() {
             sendMacro("LOCK_PC")
         }
 
-        // Section 3: App Launchers
-        binding.btnLaunchChrome.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            sendLaunch("chrome")
-        }
-        binding.btnLaunchDiscord.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            sendLaunch("discord")
-        }
-        binding.btnLaunchExplorer.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            sendLaunch("explorer")
-        }
-        binding.btnLaunchCalc.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
-            sendLaunch("calc")
-        }
+        // Section 3: Precision Trackpad Setup
+        setupTouchpad()
     }
 
     private fun connect(host: String, port: Int) {
@@ -246,10 +231,132 @@ class ZeroPadActivity : AppCompatActivity() {
         sendJson(json)
     }
 
-    private fun sendLaunch(target: String) {
+    private var lastTouchX = 0f
+    private var lastTouchY = 0f
+    private var startTouchX = 0f
+    private var startTouchY = 0f
+    private var touchDownTime = 0L
+    private var isTapCandidate = false
+    private val moveSensitivity = 1.6f
+    private val scrollSensitivity = 1.2f
+
+    @android.annotation.SuppressLint("ClickableViewAccessibility")
+    private fun setupTouchpad() {
+        binding.touchpadSurface.setOnTouchListener { view, event ->
+            when (event.actionMasked) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    view.parent.requestDisallowInterceptTouchEvent(true)
+                    startTouchX = event.x
+                    startTouchY = event.y
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    touchDownTime = System.currentTimeMillis()
+                    isTapCandidate = true
+                    true
+                }
+                android.view.MotionEvent.ACTION_POINTER_DOWN -> {
+                    isTapCandidate = false
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                    true
+                }
+                android.view.MotionEvent.ACTION_MOVE -> {
+                    if (event.pointerCount == 1) {
+                        val dx = (event.x - lastTouchX) * moveSensitivity
+                        val dy = (event.y - lastTouchY) * moveSensitivity
+                        if (Math.abs(event.x - startTouchX) > 12f || Math.abs(event.y - startTouchY) > 12f) {
+                            isTapCandidate = false
+                        }
+                        if (dx.toInt() != 0 || dy.toInt() != 0) {
+                            sendMouseMove(dx.toInt(), dy.toInt())
+                        }
+                        lastTouchX = event.x
+                        lastTouchY = event.y
+                    } else if (event.pointerCount >= 2) {
+                        isTapCandidate = false
+                        val dy = (event.y - lastTouchY) * scrollSensitivity
+                        if (dy.toInt() != 0) {
+                            sendMouseScroll((dy * 15).toInt())
+                        }
+                        lastTouchY = event.y
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP -> {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                    val elapsed = System.currentTimeMillis() - touchDownTime
+                    if (isTapCandidate && elapsed < 220) {
+                        view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP)
+                        sendMouseClick("left")
+                    }
+                    true
+                }
+                android.view.MotionEvent.ACTION_CANCEL -> {
+                    view.parent.requestDisallowInterceptTouchEvent(false)
+                    true
+                }
+                else -> false
+            }
+        }
+
+        binding.btnMouseLeft.setOnTouchListener { v, event ->
+            when (event.action) {
+                android.view.MotionEvent.ACTION_DOWN -> {
+                    v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    sendMouseDown("left")
+                    true
+                }
+                android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                    sendMouseUp("left")
+                    true
+                }
+                else -> false
+            }
+        }
+
+        binding.btnMouseRight.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            sendMouseClick("right")
+        }
+    }
+
+    private fun sendMouseMove(dx: Int, dy: Int) {
         val json = JSONObject().apply {
-            put("action", "LAUNCH")
-            put("target", target)
+            put("action", "MOUSE_MOVE")
+            put("dx", dx)
+            put("dy", dy)
+        }
+        sendJson(json)
+    }
+
+    private fun sendMouseClick(button: String) {
+        val json = JSONObject().apply {
+            put("action", "MOUSE_CLICK")
+            put("button", button)
+        }
+        sendJson(json)
+    }
+
+    private fun sendMouseDown(button: String) {
+        val json = JSONObject().apply {
+            put("action", "MOUSE_DOWN")
+            put("button", button)
+        }
+        sendJson(json)
+    }
+
+    private fun sendMouseUp(button: String) {
+        val json = JSONObject().apply {
+            put("action", "MOUSE_UP")
+            put("button", button)
+        }
+        sendJson(json)
+    }
+
+    private fun sendMouseScroll(dy: Int) {
+        val json = JSONObject().apply {
+            put("action", "MOUSE_SCROLL")
+            put("dy", dy)
         }
         sendJson(json)
     }

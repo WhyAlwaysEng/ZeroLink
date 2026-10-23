@@ -30,6 +30,16 @@ VK_MEDIA_PLAY_PAUSE = 0xB3
 
 KEYEVENTF_KEYUP = 0x0002
 
+# Windows Mouse Event Flags
+MOUSEEVENTF_MOVE = 0x0001
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+MOUSEEVENTF_RIGHTDOWN = 0x0008
+MOUSEEVENTF_RIGHTUP = 0x0010
+MOUSEEVENTF_MIDDLEDOWN = 0x0020
+MOUSEEVENTF_MIDDLEUP = 0x0040
+MOUSEEVENTF_WHEEL = 0x0800
+
 
 def _press_and_release(vk_code: int):
     """Presses and releases a single virtual key."""
@@ -164,6 +174,48 @@ class PadServer(QObject):
                     if client_ip in self._clients:
                         self._clients[client_ip]["model"] = model
                 self.clients_updated.emit()
+                return
+
+            if action == "MOUSE_MOVE":
+                dx = int(msg.get("dx", 0))
+                dy = int(msg.get("dy", 0))
+                if os.name == 'nt' and (dx != 0 or dy != 0):
+                    ctypes.windll.user32.mouse_event(MOUSEEVENTF_MOVE, dx, dy, 0, 0)
+                return
+
+            elif action == "MOUSE_CLICK":
+                btn = msg.get("button", "left").lower()
+                if os.name == 'nt':
+                    if btn == "left":
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+                    elif btn == "right":
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
+                    elif btn == "middle":
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_MIDDLEDOWN, 0, 0, 0, 0)
+                        ctypes.windll.user32.mouse_event(MOUSEEVENTF_MIDDLEUP, 0, 0, 0, 0)
+                self.command_executed.emit("Click", btn)
+                return
+
+            elif action == "MOUSE_DOWN":
+                btn = msg.get("button", "left").lower()
+                if os.name == 'nt':
+                    flag = MOUSEEVENTF_LEFTDOWN if btn == "left" else MOUSEEVENTF_RIGHTDOWN
+                    ctypes.windll.user32.mouse_event(flag, 0, 0, 0, 0)
+                return
+
+            elif action == "MOUSE_UP":
+                btn = msg.get("button", "left").lower()
+                if os.name == 'nt':
+                    flag = MOUSEEVENTF_LEFTUP if btn == "left" else MOUSEEVENTF_RIGHTUP
+                    ctypes.windll.user32.mouse_event(flag, 0, 0, 0, 0)
+                return
+
+            elif action == "MOUSE_SCROLL":
+                dy = int(msg.get("dy", 0))
+                if os.name == 'nt' and dy != 0:
+                    ctypes.windll.user32.mouse_event(MOUSEEVENTF_WHEEL, 0, 0, dy, 0)
                 return
 
             if action == "MEDIA_KEY":
