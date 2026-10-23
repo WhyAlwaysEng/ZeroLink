@@ -119,9 +119,9 @@ class TransferItemCard(QFrame):
         layout.setContentsMargins(14, 10, 14, 10)
         layout.setSpacing(12)
 
-        icon_text = "📥" if direction == "RECEIVED" else "📤"
+        icon_text = "⤓" if direction == "RECEIVED" else "⤒"
         icon_lbl = QLabel(icon_text)
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 16))
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 16))
         layout.addWidget(icon_lbl)
 
         info_col = QVBoxLayout()
@@ -138,7 +138,7 @@ class TransferItemCard(QFrame):
         info_col.addWidget(meta_lbl)
         layout.addLayout(info_col, 1)
 
-        btn_open = QPushButton("Open File")
+        btn_open = QPushButton("↗ Open File")
         btn_open.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6;
@@ -157,7 +157,7 @@ class TransferItemCard(QFrame):
         btn_open.clicked.connect(self._open_file)
         layout.addWidget(btn_open)
 
-        btn_dir = QPushButton("Show in Folder")
+        btn_dir = QPushButton("⧉ Show in Folder")
         btn_dir.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6;
@@ -236,7 +236,7 @@ class ZeroDropModule(BaseModule):
                 self.status_pill.setText("● READY")
                 self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
             if self.btn_power:
-                self.btn_power.setText("Disable Module")
+                self.btn_power.setText("⏻ Disable")
             self.status_changed.emit(self.module_id, "ZeroDrop service running")
         return ok
 
@@ -250,7 +250,7 @@ class ZeroDropModule(BaseModule):
                 self.status_pill.setText("○ INACTIVE")
                 self.status_pill.setStyleSheet("color: #6B7280; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
             if self.btn_power:
-                self.btn_power.setText("Enable Module")
+                self.btn_power.setText("⏻ Enable")
             self.status_changed.emit(self.module_id, "ZeroDrop service stopped")
         return ok
 
@@ -273,7 +273,7 @@ class ZeroDropModule(BaseModule):
         bar_layout.setContentsMargins(18, 10, 18, 10)
         bar_layout.setSpacing(10)
 
-        self.btn_power = QPushButton("Disable Module" if self.is_active else "Enable Module")
+        self.btn_power = QPushButton("⏻ Disable" if self.is_active else "⏻ Enable")
         self.btn_power.clicked.connect(self._toggle_power)
         bar_layout.addWidget(self.btn_power)
 
@@ -281,17 +281,17 @@ class ZeroDropModule(BaseModule):
         self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
-        self.client_pill = QLabel("📱 Mobile: 0 Connected")
-        self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+        self.client_pill = QLabel("⇄ Mobile: 0 Connected")
+        self.client_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.client_pill)
 
         port_pill = QLabel(f"Port: {self.port}")
-        port_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
+        port_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
         bar_layout.addWidget(port_pill)
 
         bar_layout.addStretch()
 
-        btn_open_folder = QPushButton("📂 Open ZeroDrop Folder")
+        btn_open_folder = QPushButton("⧉ Open ZeroDrop Folder")
         btn_open_folder.setStyleSheet("""
             QPushButton {
                 background-color: #F3F4F6;

@@ -151,7 +151,7 @@ class ChannelStrip(QFrame):
     def _toggle_mute(self):
         self.is_muted = not self.is_muted
         self.btn_mute.setStyleSheet(self._mute_style(self.is_muted))
-        self.btn_mute.setText("MUTED" if self.is_muted else "MUTE")
+        self.btn_mute.setText("◖ MUTED" if self.is_muted else "◗ MUTE")
         self.mute_toggled.emit(self.is_muted)
 
     def _on_slider_changed(self, val: int):
@@ -287,7 +287,7 @@ class ZeroMixModule(BaseModule):
         bar_layout.setContentsMargins(18, 10, 18, 10)
         bar_layout.setSpacing(10)
 
-        self.btn_power = QPushButton("Disable Mixer" if self.is_active else "Enable Mixer")
+        self.btn_power = QPushButton("⏻ Disable Mixer" if self.is_active else "⏻ Enable Mixer")
         self.btn_power.clicked.connect(self._toggle_power)
         bar_layout.addWidget(self.btn_power)
 
@@ -295,12 +295,12 @@ class ZeroMixModule(BaseModule):
         self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
-        self.client_pill = QLabel("📱 Mobile: 0 Connected")
-        self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+        self.client_pill = QLabel("⧉ Mobile: 0 Connected")
+        self.client_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.client_pill)
 
         port_pill = QLabel(f"Port: {self.port}")
-        port_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
+        port_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
         bar_layout.addWidget(port_pill)
 
         bar_layout.addStretch()

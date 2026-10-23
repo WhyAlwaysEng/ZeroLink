@@ -32,6 +32,7 @@ from core.virtual_cam import VirtualCameraManager
 from core.protocol import TYPE_VIDEO_MJPEG
 from core.speedtest_server import SpeedTestServer, SPEEDTEST_PORT
 from ui.speedtest_dialog import SpeedTestDialog
+from ui.flow_layout import FlowLayout
 from modules.zerocast.manifest import (
     MODULE_ID, MODULE_NAME, MODULE_ICON, MODULE_DESCRIPTION, DEFAULT_PORT
 )
@@ -394,14 +395,16 @@ class ZeroCastPopoutWindow(QMainWindow):
             ph = pm.width() if is_swapped else pm.height()
             if pw > 0 and ph > 0:
                 aspect = pw / ph
-                bar_h = 0 if getattr(self.cast_module, "is_screen_only", False) else 82
+                top_h = self.cast_module.top_bar.height() if (self.cast_module.top_bar and self.cast_module.top_bar.isVisible()) else 0
+                bot_h = self.cast_module.bottom_bar.height() if (self.cast_module.bottom_bar and self.cast_module.bottom_bar.isVisible()) else 0
+                bar_h = 0 if getattr(self.cast_module, "is_screen_only", False) else (top_h + bot_h)
                 if aspect >= 1.0: # Landscape orientation
                     target_w = 900
                     target_h = int(target_w / aspect) + bar_h
                 else: # Portrait orientation
-                    target_h = 760
+                    target_h = 780
                     target_w = int((target_h - bar_h) * aspect)
-                self.resize(max(340, target_w), max(380, target_h))
+                self.resize(max(380, target_w), max(480, target_h))
 
     def _toggle_fullscreen(self):
         if not self.is_fullscreen:
@@ -504,14 +507,14 @@ class ZeroCastModule(BaseModule):
         self._is_active = True
         if self._widget:
             self.canvas.is_module_active = True
-            self.btn_power.setText("Disable Module")
+            self.btn_power.setText("⏻ Disable")
             self.btn_power.setStyleSheet("""
                 QPushButton {
                     background-color: #141414;
                     color: #888888;
                     border: 1px solid #282828;
                     border-radius: 6px;
-                    padding: 6px 12px;
+                    padding: 4px 10px;
                     font-size: 11px;
                     font-weight: 600;
                 }
@@ -537,19 +540,19 @@ class ZeroCastModule(BaseModule):
         if self._widget:
             self.canvas.is_module_active = False
             self.canvas.current_pixmap = QPixmap()
-            self.btn_power.setText("Enable Module")
+            self.btn_power.setText("⏻ Enable")
             self.btn_power.setStyleSheet("""
                 QPushButton {
-                    background-color: #FFFFFF;
-                    color: #000000;
+                    background-color: #111827;
+                    color: #FFFFFF;
                     border: none;
                     border-radius: 6px;
-                    padding: 6px 12px;
+                    padding: 4px 10px;
                     font-size: 11px;
                     font-weight: 700;
                 }
                 QPushButton:hover {
-                    background-color: #E2E2E2;
+                    background-color: #374151;
                 }
             """)
             self.status_pill.setText("○ INACTIVE")
@@ -582,8 +585,8 @@ class ZeroCastModule(BaseModule):
         if not self._widget:
             return
         if not self.adb_manager.is_available():
-            self.usb_pill.setText("USB: No ADB")
-            self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+            self.usb_pill.setText("⌁ USB: No ADB")
+            self.usb_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
             return
 
         conn_type = self.adb_manager.get_connection_type()
@@ -591,17 +594,17 @@ class ZeroCastModule(BaseModule):
         if devs:
             dev_id = devs[0][0]
             if conn_type == "WIRELESS_ADB":
-                self.usb_pill.setText("⚡ ADB: Wireless Wi-Fi (No Cable)")
+                self.usb_pill.setText("⌁ ADB: Wireless LAN")
                 self.usb_pill.setToolTip("Connected via Wireless Debugging over Wi-Fi. Real USB cable is not plugged in.")
-                self.usb_pill.setStyleSheet("color: #F59E0B; background: #2A1A05; border: 1px solid #D97706; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+                self.usb_pill.setStyleSheet("color: #D97706; background: #FEF3C7; border: 1px solid #F59E0B; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
             else:
                 short_id = dev_id if len(dev_id) <= 12 else (dev_id[:10] + "..")
-                self.usb_pill.setText(f"⚡ USB Cable: {short_id}")
+                self.usb_pill.setText(f"⌁ USB Cable: {short_id}")
                 self.usb_pill.setToolTip("Connected via physical USB cable (High-Speed ADB).")
-                self.usb_pill.setStyleSheet("color: #38BDF8; background: #0C2340; border: 1px solid #0284C7; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
+                self.usb_pill.setStyleSheet("color: #111827; background: #E5E7EB; border: 1px solid #9CA3AF; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         else:
-            self.usb_pill.setText("USB: Unplugged")
-            self.usb_pill.setStyleSheet("color: #555555; background: #0E0E0E; border: 1px solid #1C1C1C; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+            self.usb_pill.setText("⌁ USB: Unplugged")
+            self.usb_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
 
     def _setup_ui(self):
         self._stacked_container = QStackedWidget()
@@ -622,13 +625,29 @@ class ZeroCastModule(BaseModule):
 
         # Header Bar
         top_bar = QFrame()
-        top_bar.setStyleSheet("background-color: #FFFFFF; border-bottom: 1px solid #E5E7EB;")
+        top_bar.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-bottom: 1px solid #E5E7EB;
+            }
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+        """)
         self.top_bar = top_bar
-        bar_layout = QHBoxLayout(top_bar)
-        bar_layout.setContentsMargins(14, 8, 14, 8)
-        bar_layout.setSpacing(8)
+        bar_layout = FlowLayout(top_bar, margin=8, spacing=6)
 
-        self.btn_power = QPushButton("Disable Module" if self.is_active else "Enable Module")
+        self.btn_power = QPushButton("⏻ Disable" if self.is_active else "⏻ Enable")
         self.btn_power.clicked.connect(self._toggle_power)
         bar_layout.addWidget(self.btn_power)
 
@@ -636,38 +655,47 @@ class ZeroCastModule(BaseModule):
         self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
-        self.usb_pill = QLabel("USB: Checking...")
+        self.usb_pill = QLabel("⌁ USB: Checking...")
         self.usb_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.usb_pill)
 
-        self.wifi_pill = QLabel(f"Wi-Fi: {self.local_ip}:{self.port}")
+        self.wifi_pill = QLabel(f"◫ Wi-Fi: {self.local_ip}:{self.port}")
         self.wifi_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-family: Consolas;")
         bar_layout.addWidget(self.wifi_pill)
 
-        bar_layout.addStretch()
-
         # Pin Button (Pop-out mode only)
-        self.btn_pin = QPushButton("📌 Pin")
+        self.btn_pin = QPushButton("⚲ Pin")
         self.btn_pin.setToolTip("Always on Top (Keep floating above other windows)")
-        self.btn_pin.setStyleSheet("""
-            QPushButton {
-                background-color: #F3F4F6;
-                color: #374151;
-                font-weight: 600;
-                border: 1px solid #D1D5DB;
-                border-radius: 4px;
-                padding: 4px 8px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #E5E7EB;
-            }
-        """)
         self.btn_pin.clicked.connect(lambda: self.popout_window.toggle_pin() if self.popout_window else None)
         self.btn_pin.setVisible(False)
         bar_layout.addWidget(self.btn_pin)
 
-        self.btn_vcam = QPushButton("V-Cam: OFF")
+        # Fit Aspect Ratio Button
+        self.btn_fit = QPushButton("⇲ Fit Aspect")
+        self.btn_fit.setToolTip("Dynamically fit window to the phone's exact aspect ratio")
+        self.btn_fit.clicked.connect(self._fit_to_stream_aspect)
+        bar_layout.addWidget(self.btn_fit)
+
+        # Screen Only Button (Pop-out mode only)
+        self.btn_screen_only = QPushButton("□ Screen Only")
+        self.btn_screen_only.setToolTip("Hide toolbars and show pure screen only (Press Esc or click 'Show Controls' to restore)")
+        self.btn_screen_only.clicked.connect(lambda: self.set_screen_only(True))
+        self.btn_screen_only.setVisible(False)
+        bar_layout.addWidget(self.btn_screen_only)
+
+        # Screen Dim Button
+        self.btn_dim_screen = QPushButton("◒ Dim Screen")
+        self.btn_dim_screen.setToolTip("Dim phone display to 0% brightness to save battery & prevent heating while casting")
+        self.btn_dim_screen.clicked.connect(self._toggle_dim_screen)
+        bar_layout.addWidget(self.btn_dim_screen)
+
+        # Manual Pop-out Button
+        self.btn_popout = QPushButton("↗ Pop-out")
+        self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
+        self.btn_popout.clicked.connect(self._toggle_popout)
+        bar_layout.addWidget(self.btn_popout)
+
+        self.btn_vcam = QPushButton("◉ V-Cam: OFF")
         self.btn_vcam.clicked.connect(self._toggle_virtual_cam)
         bar_layout.addWidget(self.btn_vcam)
 
@@ -687,94 +715,11 @@ class ZeroCastModule(BaseModule):
         self.chk_auto_popout.setToolTip("Automatically open in a floating window when phone connects")
         bar_layout.addWidget(self.chk_auto_popout)
 
-        # Screen Dim Button
-        self.btn_dim_screen = QPushButton("◒ Dim")
-        self.btn_dim_screen.setToolTip("Dim phone display to 0% brightness to save battery & prevent heating while casting")
-        self.btn_dim_screen.setStyleSheet("""
-            QPushButton {
-                background-color: #F3F4F6;
-                color: #111827;
-                border: 1px solid #D1D5DB;
-                font-weight: 600;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #E5E7EB;
-            }
-        """)
-        self.btn_dim_screen.clicked.connect(self._toggle_dim_screen)
-        bar_layout.addWidget(self.btn_dim_screen)
-
-        # Screen Only Button (Pop-out mode only)
-        self.btn_screen_only = QPushButton("□ Screen Only")
-        self.btn_screen_only.setToolTip("Hide toolbars and show pure screen only (Press Esc or click 'Show Controls' to restore)")
-        self.btn_screen_only.setStyleSheet("""
-            QPushButton {
-                background-color: #F3F4F6;
-                color: #111827;
-                border: 1px solid #D1D5DB;
-                font-weight: 600;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #E5E7EB;
-                border-color: #9CA3AF;
-            }
-        """)
-        self.btn_screen_only.clicked.connect(lambda: self.set_screen_only(True))
-        self.btn_screen_only.setVisible(False)
-        bar_layout.addWidget(self.btn_screen_only)
-
-        # Manual Pop-out Button
-        self.btn_popout = QPushButton("↗ Pop-out")
-        self.btn_popout.setToolTip("Detach ZeroCast into an independent floating window")
-        self.btn_popout.setStyleSheet("""
-            QPushButton {
-                background-color: #F3F4F6;
-                color: #111827;
-                border: 1px solid #D1D5DB;
-                font-weight: 600;
-                padding: 4px 10px;
-                border-radius: 6px;
-            }
-            QPushButton:hover {
-                background-color: #E5E7EB;
-                border-color: #9CA3AF;
-            }
-        """)
-        self.btn_popout.clicked.connect(self._toggle_popout)
-        bar_layout.addWidget(self.btn_popout)
-
-        # Fit Aspect Ratio Button
-        self.btn_fit = QPushButton("⇲ Fit Aspect")
-        self.btn_fit.setToolTip("Dynamically fit window to the phone's exact aspect ratio")
-        self.btn_fit.setStyleSheet("""
-            QPushButton {
-                background-color: #F3F4F6;
-                color: #111827;
-                border: 1px solid #D1D5DB;
-                font-weight: 600;
-                padding: 4px 8px;
-                border-radius: 6px;
-                font-size: 11px;
-            }
-            QPushButton:hover {
-                background-color: #E5E7EB;
-                border-color: #9CA3AF;
-            }
-        """)
-        self.btn_fit.clicked.connect(self._fit_to_stream_aspect)
-        bar_layout.addWidget(self.btn_fit)
-
         self.btn_snapshot = QPushButton("⧇ Snapshot")
         self.btn_snapshot.clicked.connect(self._take_snapshot)
         bar_layout.addWidget(self.btn_snapshot)
 
-        self.btn_qr = QPushButton("QR Code")
+        self.btn_qr = QPushButton("▦ QR Code")
         self.btn_qr.clicked.connect(self._show_qr_dialog)
         bar_layout.addWidget(self.btn_qr)
 
@@ -797,17 +742,31 @@ class ZeroCastModule(BaseModule):
 
         # Bottom Bar Dock
         bottom_bar = QFrame()
-        bottom_bar.setStyleSheet("background-color: #FFFFFF; border-top: 1px solid #E5E7EB;")
+        bottom_bar.setStyleSheet("""
+            QFrame {
+                background-color: #FFFFFF;
+                border-top: 1px solid #E5E7EB;
+            }
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                font-weight: 600;
+                padding: 4px 8px;
+                border-radius: 6px;
+                font-size: 11px;
+            }
+            QPushButton:hover {
+                background-color: #E5E7EB;
+                border-color: #9CA3AF;
+            }
+        """)
         self.bottom_bar = bottom_bar
-        bot_layout = QHBoxLayout(bottom_bar)
-        bot_layout.setContentsMargins(14, 6, 14, 6)
-        bot_layout.setSpacing(8)
+        bot_layout = FlowLayout(bottom_bar, margin=6, spacing=6)
 
         self.log_label = QLabel("ZeroCast Ready")
         self.log_label.setStyleSheet("color: #1F2937; font-size: 11px; font-weight: 500;")
         bot_layout.addWidget(self.log_label)
-
-        bot_layout.addStretch()
 
         btn_back = QPushButton("← Back")
         btn_back.clicked.connect(lambda: self.input_controller.send_key_event(4))
@@ -822,23 +781,18 @@ class ZeroCastModule(BaseModule):
         btn_recent.clicked.connect(self.input_controller.send_recent_apps)
         bot_layout.addWidget(btn_recent)
 
-        btn_notify = QPushButton("▤")
-        btn_notify.setFixedWidth(30)
+        btn_notify = QPushButton("▤ Notifications")
         btn_notify.setToolTip("Notification Shade (F3)")
         btn_notify.clicked.connect(self.input_controller.send_notifications)
         bot_layout.addWidget(btn_notify)
 
-        btn_power = QPushButton("⏻")
-        btn_power.setFixedWidth(30)
+        btn_power = QPushButton("⏻ Power Lock")
         btn_power.setToolTip("Screen Lock / Power (F4)")
         btn_power.clicked.connect(self.input_controller.send_power_key)
         bot_layout.addWidget(btn_power)
 
-        bot_layout.addSpacing(4)
-
         # Volume Controls
-        self.btn_audio = QPushButton("◗")
-        self.btn_audio.setFixedWidth(32)
+        self.btn_audio = QPushButton("◗ Audio")
         self.btn_audio.setToolTip("Click to Mute / Unmute")
         self.btn_audio.clicked.connect(self._toggle_audio)
         bot_layout.addWidget(self.btn_audio)
@@ -883,7 +837,7 @@ class ZeroCastModule(BaseModule):
         self.combo_audio_dev.currentIndexChanged.connect(self._on_audio_device_changed)
         bot_layout.addWidget(self.combo_audio_dev)
 
-        self.btn_hud = QPushButton("HUD")
+        self.btn_hud = QPushButton("◈ HUD")
         self.btn_hud.setCheckable(True)
         self.btn_hud.setChecked(True)
         self.btn_hud.clicked.connect(self._toggle_hud)
@@ -1059,11 +1013,11 @@ class ZeroCastModule(BaseModule):
             self.slider_volume.setToolTip(f"Volume: {val}%")
         if self.btn_audio:
             if val == 0:
-                self.btn_audio.setText("🔇")
-            elif val < 50:
-                self.btn_audio.setText("🔉")
+                self.btn_audio.setText("◖ Muted")
+                self.btn_audio.setStyleSheet("background-color: #EF4444; color: #FFFFFF; font-weight: 700; border-radius: 6px; padding: 4px 8px; font-size: 11px;")
             else:
-                self.btn_audio.setText("🔊")
+                self.btn_audio.setText("◗ Audio")
+                self.btn_audio.setStyleSheet("background-color: #F3F4F6; color: #111827; border: 1px solid #D1D5DB; font-weight: 600; padding: 4px 8px; border-radius: 6px; font-size: 11px;")
 
     def _toggle_audio(self):
         if not self.slider_volume:
@@ -1107,12 +1061,12 @@ class ZeroCastModule(BaseModule):
             return
         if self.virtual_cam.is_active:
             self.virtual_cam.stop()
-            self.btn_vcam.setText("V-Cam: OFF")
+            self.btn_vcam.setText("◉ V-Cam: OFF")
             self.btn_vcam.setStyleSheet("")
         else:
             if self.virtual_cam.start():
-                self.btn_vcam.setText("V-Cam: ON")
-                self.btn_vcam.setStyleSheet("background-color: #FFFFFF; color: #000000; font-weight: 700; border: none;")
+                self.btn_vcam.setText("◉ V-Cam: ON")
+                self.btn_vcam.setStyleSheet("background-color: #111827; color: #FFFFFF; font-weight: 700; border: none;")
 
     def _take_snapshot(self):
         if self.canvas.current_pixmap.isNull():
@@ -1175,8 +1129,9 @@ class ZeroCastModule(BaseModule):
         card_layout.setSpacing(12)
         card_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        icon_lbl = QLabel("📺")
-        icon_lbl.setFont(QFont("Segoe UI Emoji", 32))
+        icon_lbl = QLabel("⊡")
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 36))
+        icon_lbl.setStyleSheet("color: #111827; border: none;")
         icon_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         card_layout.addWidget(icon_lbl)
 
@@ -1194,7 +1149,7 @@ class ZeroCastModule(BaseModule):
 
         card_layout.addSpacing(8)
 
-        btn_dock = QPushButton("↙ Dock Back to Hub")
+        btn_dock = QPushButton("↘ Dock Back to Hub")
         btn_dock.setFixedSize(180, 38)
         btn_dock.setStyleSheet("""
             QPushButton {
@@ -1316,21 +1271,21 @@ class ZeroCastModule(BaseModule):
 
         if self.is_popped_out:
             if self.is_screen_only:
-                act_screen = menu.addAction("⛶ Show Controls")
+                act_screen = menu.addAction("□ Show Controls")
                 act_screen.triggered.connect(lambda: self.set_screen_only(False))
             else:
-                act_screen = menu.addAction("🖥️ Screen Only")
+                act_screen = menu.addAction("□ Screen Only")
                 act_screen.triggered.connect(lambda: self.set_screen_only(True))
 
             is_pinned = self.popout_window.is_pinned if self.popout_window else False
-            act_pin = menu.addAction("📌 Always on Top" if not is_pinned else "📌 Unpin Window")
+            act_pin = menu.addAction("⚲ Always on Top" if not is_pinned else "⚲ Unpin Window")
             act_pin.triggered.connect(lambda: self.popout_window.toggle_pin() if self.popout_window else None)
 
-            act_dock = menu.addAction("↙ Dock Back to Hub")
+            act_dock = menu.addAction("↘ Dock Back to Hub")
             act_dock.triggered.connect(self.dock_back)
             menu.addSeparator()
 
-        act_snap = menu.addAction("📸 Take Snapshot")
+        act_snap = menu.addAction("⧇ Take Snapshot")
         act_snap.triggered.connect(self._take_snapshot)
 
         menu.exec(pos)
@@ -1345,7 +1300,7 @@ class ZeroCastModule(BaseModule):
 
         self._set_compact_mode(True)
         if self.btn_popout:
-            self.btn_popout.setText("↙ Dock")
+            self.btn_popout.setText("↘ Dock")
             self.btn_popout.setToolTip("Dock ZeroCast back into the main Hub window")
 
         self._content_widget.setParent(None)

@@ -81,7 +81,7 @@ class ZeroCamModule(BaseModule):
                 self.status_pill.setText("● WEBCAM SERVER ACTIVE")
                 self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
             if self.btn_power:
-                self.btn_power.setText("Disable Cam Server")
+                self.btn_power.setText("⏻ Disable Cam Server")
             self.status_changed.emit(self.module_id, "ZeroCam server running")
             return True
         return False
@@ -95,7 +95,7 @@ class ZeroCamModule(BaseModule):
             self.status_pill.setText("○ INACTIVE")
             self.status_pill.setStyleSheet("color: #6B7280; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         if self.btn_power:
-            self.btn_power.setText("Enable Cam Server")
+            self.btn_power.setText("⏻ Enable Cam Server")
         self.status_changed.emit(self.module_id, "ZeroCam server stopped")
         return True
 
@@ -118,7 +118,7 @@ class ZeroCamModule(BaseModule):
         bar_layout.setContentsMargins(18, 10, 18, 10)
         bar_layout.setSpacing(10)
 
-        self.btn_power = QPushButton("Disable Cam Server" if self.is_active else "Enable Cam Server")
+        self.btn_power = QPushButton("⏻ Disable Cam Server" if self.is_active else "⏻ Enable Cam Server")
         self.btn_power.clicked.connect(self._toggle_power)
         bar_layout.addWidget(self.btn_power)
 
@@ -126,14 +126,14 @@ class ZeroCamModule(BaseModule):
         self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
-        self.client_pill = QLabel("📱 Camera: Offline")
-        self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+        self.client_pill = QLabel("◉ Camera: Offline")
+        self.client_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.client_pill)
 
         bar_layout.addStretch()
 
         port_info = QLabel(f"Port: {self.port} • IP: {self.local_ip}")
-        port_info.setStyleSheet("color: #6B7280; font-size: 11px;")
+        port_info.setStyleSheet("color: #4B5563; font-size: 11px;")
         bar_layout.addWidget(port_info)
 
         root_layout.addWidget(top_bar)
@@ -158,7 +158,7 @@ class ZeroCamModule(BaseModule):
         p_layout = QVBoxLayout(preview_card)
         p_layout.setContentsMargins(0, 0, 0, 0)
 
-        self.preview_lbl = QLabel("📷 Waiting for Camera Stream...")
+        self.preview_lbl = QLabel("◉ Waiting for Camera Stream...")
         self.preview_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.preview_lbl.setStyleSheet("color: #94A3B8; font-size: 14px; font-weight: bold;")
         self.preview_lbl.setMinimumSize(640, 380)
@@ -167,7 +167,7 @@ class ZeroCamModule(BaseModule):
 
         # Snapshot & Quick actions below preview
         snap_row = QHBoxLayout()
-        btn_snapshot = QPushButton("📸 Take Photo Snapshot")
+        btn_snapshot = QPushButton("⧇ Photo Snapshot")
         btn_snapshot.setStyleSheet("padding: 8px 16px; font-weight: bold; background: #FFFFFF; border: 1px solid #D1D5DB; border-radius: 6px;")
         btn_snapshot.clicked.connect(self._take_snapshot)
         snap_row.addWidget(btn_snapshot)
@@ -190,7 +190,7 @@ class ZeroCamModule(BaseModule):
         vc_layout = QVBoxLayout(vcam_card)
         vc_layout.setSpacing(12)
 
-        vc_title = QLabel("🎥 Virtual Webcam (Discord / OBS / Zoom)")
+        vc_title = QLabel("◉ Virtual Webcam (Discord / OBS / Zoom)")
         vc_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         vc_title.setStyleSheet("color: #111827;")
         vc_layout.addWidget(vc_title)

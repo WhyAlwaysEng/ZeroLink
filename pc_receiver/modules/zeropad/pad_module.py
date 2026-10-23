@@ -109,7 +109,7 @@ class ZeroPadModule(BaseModule):
         bar_layout.setContentsMargins(18, 10, 18, 10)
         bar_layout.setSpacing(10)
 
-        self.btn_power = QPushButton("Disable Pad Server" if self.is_active else "Enable Pad Server")
+        self.btn_power = QPushButton("⏻ Disable Server" if self.is_active else "⏻ Enable Server")
         self.btn_power.clicked.connect(self._toggle_power)
         bar_layout.addWidget(self.btn_power)
 
@@ -117,14 +117,14 @@ class ZeroPadModule(BaseModule):
         self.status_pill.setStyleSheet("color: #111827; background-color: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px; font-weight: 600;")
         bar_layout.addWidget(self.status_pill)
 
-        self.client_pill = QLabel("📱 Mobile: Offline")
-        self.client_pill.setStyleSheet("color: #6B7280; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
+        self.client_pill = QLabel("⌖ Mobile: Offline")
+        self.client_pill.setStyleSheet("color: #4B5563; background: #F3F4F6; border: 1px solid #E5E7EB; padding: 4px 8px; border-radius: 4px; font-size: 10px;")
         bar_layout.addWidget(self.client_pill)
 
         bar_layout.addStretch()
 
         port_info = QLabel(f"Port: {self.port} • IP: {self.local_ip}")
-        port_info.setStyleSheet("color: #6B7280; font-size: 11px;")
+        port_info.setStyleSheet("color: #4B5563; font-size: 11px;")
         bar_layout.addWidget(port_info)
         root_layout.addWidget(top_bar)
 
@@ -149,7 +149,7 @@ class ZeroPadModule(BaseModule):
         d_layout = QVBoxLayout(desc_card)
         d_layout.setSpacing(10)
 
-        d_title = QLabel("🎮 Mobile Stream Deck & Macro Controller")
+        d_title = QLabel("⌖ Mobile Stream Deck & Macro Controller")
         d_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
         d_title.setStyleSheet("color: #111827;")
         d_layout.addWidget(d_title)
