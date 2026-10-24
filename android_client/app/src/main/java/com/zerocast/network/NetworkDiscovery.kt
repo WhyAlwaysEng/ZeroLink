@@ -117,6 +117,13 @@ class NetworkDiscovery(
             }
         }
 
+        // 2b. High-Priority USB Tethering Interface Probe (rndis, usb, ncm)
+        currentScope.launch {
+            if (isScanning.get()) {
+                scanTetheringInterfaces()
+            }
+        }
+
         // 3. Direct Hotspot Link Priority Probes (< 100ms discovery, zero router needed)
         currentScope.launch {
             if (isScanning.get()) {
@@ -184,9 +191,66 @@ class NetworkDiscovery(
     private fun sendDiscoveryBroadcast() {
         try {
             val msg = "ZEROLINK_DISCOVER".toByteArray()
-            val broadcastAddr = InetAddress.getByName("255.255.255.255")
-            val pingPacket = DatagramPacket(msg, msg.size, broadcastAddr, DISCOVERY_PORT)
-            socket?.send(pingPacket)
+            // 1. Generic broadcast
+            try {
+                val broadcastAddr = InetAddress.getByName("255.255.255.255")
+                val pingPacket = DatagramPacket(msg, msg.size, broadcastAddr, DISCOVERY_PORT)
+                socket?.send(pingPacket)
+            } catch (_: Exception) {}
+
+            // 2. Specific broadcast on all active network interfaces (including USB Tethering rndis0, usb0, etc.)
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                for (ifAddr in iface.interfaceAddresses) {
+                    val bcast = ifAddr.broadcast
+                    if (bcast != null) {
+                        try {
+                            val packet = DatagramPacket(msg, msg.size, bcast, DISCOVERY_PORT)
+                            socket?.send(packet)
+                        } catch (_: Exception) {}
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
+    private suspend fun scanTetheringInterfaces() {
+        try {
+            val interfaces = NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val name = iface.name.lowercase()
+                // USB Tethering interfaces typically contain "rndis", "usb", "ncm", or "eth"
+                if (name.contains("rndis") || name.contains("usb") || name.contains("ncm")) {
+                    for (ifAddr in iface.interfaceAddresses) {
+                        val addr = ifAddr.address
+                        if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                            val hostAddress = addr.hostAddress ?: continue
+                            val parts = hostAddress.split(".")
+                            if (parts.size == 4) {
+                                val prefix = "${parts[0]}.${parts[1]}.${parts[2]}."
+                                coroutineScope {
+                                    val fastScan = (1..254).toList()
+                                    fastScan.chunked(32).forEach { chunk ->
+                                        if (!isScanning.get()) return@coroutineScope
+                                        chunk.map { h ->
+                                            async(Dispatchers.IO) {
+                                                val target = "$prefix$h"
+                                                if (target != hostAddress && isScanning.get()) {
+                                                    probeTcpGateway(target)
+                                                }
+                                            }
+                                        }.awaitAll()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         } catch (_: Exception) {}
     }
 
@@ -208,7 +272,10 @@ class NetworkDiscovery(
 
                 if (line != null && line.contains("PONG")) {
                     val json = JSONObject(line)
-                    val resolvedIp = if (ip == "127.0.0.1") "127.0.0.1" else json.optString("ip", ip)
+                    val returnedIp = json.optString("ip", "")
+                    val resolvedIp = if (ip == "127.0.0.1") "127.0.0.1"
+                                     else if (returnedIp.isNotEmpty() && returnedIp != "127.0.0.1") returnedIp
+                                     else ip
                     val port = json.optInt("port", 8888)
                     val name = json.optString("name", "ZeroLink PC")
 

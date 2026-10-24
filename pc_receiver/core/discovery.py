@@ -8,8 +8,14 @@ import json
 import socket
 import threading
 import time
-from typing import Optional, List
+import ipaddress
+from typing import Optional, List, Tuple
 from PyQt6.QtCore import QObject, pyqtSignal
+
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 
 class LanDiscoveryService(QObject):
@@ -62,10 +68,50 @@ class LanDiscoveryService(QObject):
                 pass
             self._tcp_sock = None
 
-    def _get_beacon_payload(self) -> bytes:
+    def _get_best_local_ip_for(self, target_ip: str) -> str:
+        """Determines which local IPv4 address routes to the target IP (e.g. USB Tethering vs Wi-Fi)."""
+        if not target_ip or target_ip.startswith("127."):
+            return "127.0.0.1"
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect((target_ip, 80))
+            return s.getsockname()[0]
+        except Exception:
+            return self.local_ip
+        finally:
+            s.close()
+
+    def _get_broadcast_targets(self) -> List[Tuple[str, str]]:
+        """Returns a list of (broadcast_ip, interface_ip) for all active adapters (Wi-Fi, USB Tether, Hotspot)."""
+        targets = [("255.255.255.255", self.local_ip)]
+        if not psutil:
+            return targets
+
+        try:
+            stats = psutil.net_if_stats()
+            for iface_name, addrs in psutil.net_if_addrs().items():
+                if_stat = stats.get(iface_name)
+                if if_stat and not if_stat.isup:
+                    continue
+
+                for addr in addrs:
+                    if addr.family == socket.AF_INET and not addr.address.startswith("127."):
+                        try:
+                            net = ipaddress.IPv4Network(f"{addr.address}/{addr.netmask}", strict=False)
+                            bcast = str(net.broadcast_address)
+                            if bcast and bcast != "255.255.255.255":
+                                targets.append((bcast, addr.address))
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+        return targets
+
+    def _get_beacon_payload(self, override_ip: Optional[str] = None) -> bytes:
+        ip_to_use = override_ip or self.local_ip
         return json.dumps({
             "type": "ZEROLINK_BEACON",
-            "ip": self.local_ip,
+            "ip": ip_to_use,
             "port": self.tcp_port,
             "gateway_port": self.GATEWAY_PORT,
             "name": f"ZeroLink PC ({self.hostname})"
@@ -95,7 +141,9 @@ class LanDiscoveryService(QObject):
                 msg = data.decode("utf-8", errors="ignore").strip()
 
                 if "ZEROLINK_DISCOVER" in msg or "ZEROCAST_DISCOVERY_REQ" in msg:
-                    payload = self._get_beacon_payload()
+                    client_ip = addr[0] if addr else ""
+                    best_ip = self._get_best_local_ip_for(client_ip)
+                    payload = self._get_beacon_payload(override_ip=best_ip)
                     self._udp_sock.sendto(payload, addr)
 
                 elif "ZEROLINK_NOTIFY" in msg:
@@ -119,11 +167,13 @@ class LanDiscoveryService(QObject):
     def _broadcast_beacon(self):
         if not self._udp_sock:
             return
-        try:
-            payload = self._get_beacon_payload()
-            self._udp_sock.sendto(payload, ("255.255.255.255", self.DISCOVERY_PORT))
-        except Exception:
-            pass
+        targets = self._get_broadcast_targets()
+        for bcast_ip, iface_ip in targets:
+            try:
+                payload = self._get_beacon_payload(override_ip=iface_ip)
+                self._udp_sock.sendto(payload, (bcast_ip, self.DISCOVERY_PORT))
+            except Exception:
+                pass
 
     def _run_tcp_gateway(self):
         """Persistent TCP Master Gateway on port 8886 for reliable USB/Wi-Fi discovery & ZeroWake."""
@@ -163,11 +213,15 @@ class LanDiscoveryService(QObject):
 
             # 1. PING / Discovery Handshake
             if "PING" in text.upper():
+                connected_ip = sock.getsockname()[0]
+                if not connected_ip or connected_ip == "0.0.0.0":
+                    connected_ip = self._get_best_local_ip_for(addr[0] if addr else "")
+
                 response_dict = {
                     "status": "PONG",
                     "type": "ZEROLINK_GATEWAY",
                     "name": f"ZeroLink PC ({self.hostname})",
-                    "ip": self.local_ip,
+                    "ip": connected_ip,
                     "port": self.tcp_port
                 }
 

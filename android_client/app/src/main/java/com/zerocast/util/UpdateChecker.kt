@@ -16,7 +16,7 @@ import java.net.URL
 
 object UpdateChecker {
 
-    private const val GITHUB_REPO = "WhyAlwaysEng/ZeroCast"
+    private const val GITHUB_REPO = "WhyAlwaysEng/ZeroLink"
     private const val RELEASES_API = "https://api.github.com/repos/$GITHUB_REPO/releases/latest"
     private const val FALLBACK_VERSION = "1.0.0"
 

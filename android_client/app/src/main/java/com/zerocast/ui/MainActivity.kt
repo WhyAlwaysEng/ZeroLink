@@ -55,8 +55,13 @@ class MainActivity : AppCompatActivity() {
         networkDiscovery?.stopListening()
         networkDiscovery = NetworkDiscovery { ip, _, name ->
             ZeroLinkConfig.setServerIp(this, ip)
+            val linkType = when {
+                ip == "127.0.0.1" -> "USB ADB"
+                ip.startsWith("10.") || ip.startsWith("192.168.42.") || ip.startsWith("192.168.43.") -> "USB Tether"
+                else -> "Wi-Fi LAN"
+            }
             binding.tvDiscoveryTitle.text = name
-            binding.tvDiscoverySubtitle.text = "Linked: $ip • Auto-Connected"
+            binding.tvDiscoverySubtitle.text = "Linked ($linkType): $ip"
             binding.tvDiscoveryBadge.text = "● CONNECTED"
             binding.tvHubStatus.text = "● LINKED"
         }
@@ -73,7 +78,7 @@ class MainActivity : AppCompatActivity() {
     private fun showManualIpDialog() {
         val currentIp = ZeroLinkConfig.getServerIp(this)
         val input = EditText(this).apply {
-            hint = "e.g. 192.168.1.100"
+            hint = "e.g. 192.168.1.100 or 10.242.214.162"
             setText(if (currentIp != "127.0.0.1") currentIp else "")
             setSingleLine()
             setPadding(50, 40, 50, 40)
@@ -81,7 +86,7 @@ class MainActivity : AppCompatActivity() {
 
         MaterialAlertDialogBuilder(this)
             .setTitle("PC Link & Auto-Discovery")
-            .setMessage("ZeroLink automatically detects your PC over Wi-Fi. You can also specify the IP address manually:")
+            .setMessage("ZeroLink automatically detects your PC over Wi-Fi & USB Tethering. You can also specify the IP address manually:")
             .setView(input)
             .setPositiveButton("Save & Rescan") { _, _ ->
                 val ip = input.text.toString().trim()
@@ -92,9 +97,12 @@ class MainActivity : AppCompatActivity() {
                 }
                 startDiscovery()
             }
-            .setNeutralButton("Rescan LAN") { _, _ ->
+            .setNeutralButton("USB ADB (127.0.0.1)") { _, _ ->
+                ZeroLinkConfig.setServerIp(this, "127.0.0.1")
+                binding.tvDiscoverySubtitle.text = "Target: 127.0.0.1 (USB ADB)"
+                binding.tvDiscoveryBadge.text = "● USB"
                 startDiscovery()
-                Toast.makeText(this, "Scanning for ZeroLink PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Set to USB ADB mode (127.0.0.1)", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("Cancel", null)
             .show()

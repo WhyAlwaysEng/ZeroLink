@@ -9,7 +9,7 @@
 *Next-Gen Video Codecs (H.264 • H.265/HEVC • AV1) • Studio Internal Audio • Virtual Camera • Multi-Module Pluggable Suite*
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-v1.1.0-000000?style=for-the-badge&logo=github&logoColor=white" alt="Version 1.1.0" />
+  <img src="https://img.shields.io/badge/Version-v1.1.1-000000?style=for-the-badge&logo=github&logoColor=white" alt="Version 1.1.1" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Android-111827?style=for-the-badge&logo=android&logoColor=white" alt="Platform" />
   <img src="https://img.shields.io/badge/Design-Minimal%20Monochrome-F9FAFB?style=for-the-badge&labelColor=111827&color=E5E7EB" alt="Minimal Monochrome" />
   <img src="https://img.shields.io/badge/License-MIT-000000?style=for-the-badge" alt="License" />
@@ -554,7 +554,13 @@ The `ModuleManager` handles registration, on-demand activation, and lifecycle co
 
 ## 📝 Changelog
 
-### v1.1.0 (Latest)
+### v1.1.1 (Latest)
+- ⚡ **USB Tethering Auto-Discovery Engine** — Automatically detects and routes USB Tethering (RNDIS / NCM) network adapters without requiring USB Debugging or manual IP entry.
+- 📡 **Multi-Interface Broadcast Beacon** — PC broadcasts discovery beacons across all active network adapters (Wi-Fi, USB Tether, Mobile Hotspot) with interface-matched IP payloads.
+- 📱 **Mobile Multi-Interface Discovery** — Android client sends discovery broadcasts out all network interfaces (`rndis0`, `usb0`, `wlan0`) and performs fast parallel tethering gateway probes.
+- 🔄 **Quick-Switch USB ADB Button** — 1-Tap shortcut in the manual IP dialog to switch between USB ADB (`127.0.0.1`) and LAN/Tethering.
+
+### v1.1.0
 - ✅ **Multi-module concurrency** — modules no longer auto-kill when navigating away
 - ✅ **ZeroExplorer** — full phone gallery, storage browser, video player, and download manager
 - ✅ **ZeroDev** — developer console with port scanner and module scaffolder
