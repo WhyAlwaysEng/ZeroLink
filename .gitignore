@@ -48,6 +48,7 @@ local.properties
 Captures/
 output.json
 *.apk
+*.zip
 *.aab
 *.ap_
 *.dex

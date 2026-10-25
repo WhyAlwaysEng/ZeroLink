@@ -488,40 +488,71 @@ class MainWindow(QMainWindow):
         # Auto-Focus and Realtime Dashboard Sync on Connect:
         # All modules support simultaneous multi-tasking in the background.
         if hasattr(self.mod_zerocast, "server"):
-            self.mod_zerocast.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerocast", ip, model))
-            self.mod_zerocast.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerocast", ip))
+            self.mod_zerocast.server.client_connected.connect(lambda *args: self._on_module_client_connected("zerocast", *args))
+            self.mod_zerocast.server.client_disconnected.connect(lambda *args: self._on_module_client_disconnected("zerocast", *args))
+            self.mod_zerocast.server.config_received.connect(self._on_zerocast_config_received)
 
         if hasattr(self.mod_zerocam, "server"):
-            self.mod_zerocam.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerocam", ip, model))
-            self.mod_zerocam.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerocam", ip))
+            self.mod_zerocam.server.client_connected.connect(lambda *args: self._on_module_client_connected("zerocam", *args))
+            self.mod_zerocam.server.client_disconnected.connect(lambda *args: self._on_module_client_disconnected("zerocam", *args))
 
         if hasattr(self.mod_zerodisplay, "server"):
-            self.mod_zerodisplay.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerodisplay", ip, model))
-            self.mod_zerodisplay.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerodisplay", ip))
+            self.mod_zerodisplay.server.client_connected.connect(lambda *args: self._on_module_client_connected("zerodisplay", *args))
+            self.mod_zerodisplay.server.client_disconnected.connect(lambda *args: self._on_module_client_disconnected("zerodisplay", *args))
 
         if hasattr(self.mod_zeropad, "server"):
-            self.mod_zeropad.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zeropad", ip, model))
-            self.mod_zeropad.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zeropad", ip))
+            self.mod_zeropad.server.client_connected.connect(lambda *args: self._on_module_client_connected("zeropad", *args))
+            self.mod_zeropad.server.client_disconnected.connect(lambda *args: self._on_module_client_disconnected("zeropad", *args))
 
         if hasattr(self.mod_zeromix, "service"):
-            self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_module_client_connected("zeromix", "127.0.0.1", "ZeroMix Client"))
+            self.mod_zeromix.service.client_connected.connect(lambda *args: self._on_module_client_connected("zeromix", *args))
+            self.mod_zeromix.service.client_disconnected.connect(lambda *args: self._on_module_client_disconnected("zeromix", *args))
 
-    def _on_module_client_connected(self, module_id: str, ip: str = "", model: str = ""):
-        print(f"[MultiTask] Mobile client linked to '{module_id}' from {ip} ({model})")
-        self.dashboard_view.set_module_streaming(module_id, True)
-        if ip:
-            link_mode = "USB (ADB)" if ip.startswith("127.") else ("USB Tethering" if ip.startswith("10.") or ip.startswith("192.168.42.") or ip.startswith("192.168.43.") else "Wi-Fi LAN")
-            self.dashboard_view.update_client_connection({
-                "client_ip": ip,
-                "model": model or "Android Device",
-                "mode": link_mode,
-                "status": "CONNECTED"
-            })
-        self._on_client_connected_lifecycle(module_id)
+    def _on_module_client_connected(self, module_id: str, *args):
+        try:
+            ip = str(args[0]) if len(args) > 0 and args[0] is not None else ""
+            model = str(args[1]) if len(args) > 1 and args[1] is not None else ""
+            print(f"[MultiTask] Mobile client linked to '{module_id}' from {ip} ({model})")
+            self.dashboard_view.set_module_streaming(module_id, True)
+            if ip:
+                clean_ip = ip.split(":")[0] if ":" in ip else ip
+                link_mode = "USB (ADB)" if clean_ip.startswith("127.") else ("USB Tethering" if clean_ip.startswith("10.") or clean_ip.startswith("192.168.42.") or clean_ip.startswith("192.168.43.") else "Wi-Fi LAN")
+                self.dashboard_view.update_client_connection({
+                    "client_ip": clean_ip,
+                    "model": model or "Android Device",
+                    "mode": link_mode,
+                    "status": "CONNECTED"
+                })
+            self._on_client_connected_lifecycle(module_id)
+        except Exception as e:
+            print(f"[MultiTask] Error in _on_module_client_connected: {e}")
 
-    def _on_module_client_disconnected(self, module_id: str, ip: str = ""):
-        print(f"[MultiTask] Mobile client disconnected from '{module_id}'")
-        self.dashboard_view.set_module_streaming(module_id, False)
+    def _on_module_client_disconnected(self, module_id: str, *args):
+        try:
+            print(f"[MultiTask] Mobile client disconnected from '{module_id}'")
+            self.dashboard_view.set_module_streaming(module_id, False)
+        except Exception as e:
+            print(f"[MultiTask] Error in _on_module_client_disconnected: {e}")
+
+    def _on_zerocast_config_received(self, config_str: str):
+        try:
+            import json
+            cfg = json.loads(config_str)
+            model = cfg.get("device_model", "")
+            if model and hasattr(self, "dashboard_view"):
+                current_ip = ""
+                if hasattr(self.mod_zerocast, "server") and self.mod_zerocast.server.current_client_info:
+                    current_ip = self.mod_zerocast.server.current_client_info.get("ip", "")
+                clean_ip = current_ip.split(":")[0] if ":" in current_ip else current_ip
+                link_mode = "USB (ADB)" if clean_ip.startswith("127.") else ("USB Tethering" if clean_ip.startswith("10.") or clean_ip.startswith("192.168.42.") or clean_ip.startswith("192.168.43.") else "Wi-Fi LAN")
+                self.dashboard_view.update_client_connection({
+                    "client_ip": clean_ip or "Connected",
+                    "model": model,
+                    "mode": link_mode,
+                    "status": "CONNECTED"
+                })
+        except Exception as e:
+            print(f"[MultiTask] Error in _on_zerocast_config_received: {e}")
 
     def _on_client_connected_lifecycle(self, module_id: str):
         print(f"[MultiTask] Mobile client linked to '{module_id}' -> activating & switching view.")
