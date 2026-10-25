@@ -26,6 +26,7 @@ class LanDiscoveryService(QObject):
     notification_received = pyqtSignal(str, str, str)  # app_name, title, text
     module_wake_requested = pyqtSignal(str)            # module_id
     module_sleep_requested = pyqtSignal(str)           # module_id
+    gateway_client_updated = pyqtSignal(dict)          # client_info dict
 
     def __init__(self, tcp_port: int = 8888, local_ip: str = "127.0.0.1", parent=None):
         super().__init__(parent)
@@ -219,9 +220,28 @@ class LanDiscoveryService(QObject):
 
             text = data.decode("utf-8", errors="ignore").strip()
             response_dict = None
+            payload = {}
+            if text.startswith("{") and text.endswith("}"):
+                try:
+                    payload = json.loads(text)
+                except Exception:
+                    payload = {}
 
-            # 1. PING / Discovery Handshake
-            if "PING" in text.upper():
+            # Determine link mode & client metadata
+            client_ip = addr[0] if addr else "127.0.0.1"
+            device_model = payload.get("model") or payload.get("device_model", "Android Device")
+            session_id = payload.get("session_id", "")
+            if client_ip.startswith("127."):
+                link_mode = "USB (ADB)"
+            elif client_ip.startswith("10.") or client_ip.startswith("192.168.42.") or client_ip.startswith("192.168.43."):
+                link_mode = "USB Tethering"
+            else:
+                link_mode = "Wi-Fi LAN"
+
+            action = payload.get("action", "").upper() if payload else ("PING" if "PING" in text.upper() else "")
+
+            # 1. PING / Discovery Handshake / Keepalive
+            if "PING" in text.upper() or action == "PING" or action == "CONNECT":
                 connected_ip = sock.getsockname()[0]
                 if not connected_ip or connected_ip == "0.0.0.0":
                     connected_ip = self._get_best_local_ip_for(addr[0] if addr else "")
@@ -230,9 +250,19 @@ class LanDiscoveryService(QObject):
                     "status": "PONG",
                     "type": "ZEROLINK_GATEWAY",
                     "name": f"ZeroLink PC ({self.hostname})",
+                    "session_id": session_id,
                     "ip": connected_ip,
                     "port": self.tcp_port
                 }
+
+                self.gateway_client_updated.emit({
+                    "client_ip": client_ip,
+                    "model": device_model,
+                    "mode": link_mode,
+                    "session_id": session_id,
+                    "timestamp": time.time(),
+                    "status": "CONNECTED"
+                })
 
             # 2. Remote Module Wake-up (ZeroWake)
             elif "WAKE" in text.upper():

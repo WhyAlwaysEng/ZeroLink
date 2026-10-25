@@ -5,10 +5,11 @@ Ultra-clean black & white design with hairline borders, generous spacing, and mo
 import os
 import sys
 import re
+import math
 from typing import Optional
 
-from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QUrl
-from PyQt6.QtGui import QIcon, QFont, QColor, QPixmap, QDesktopServices, QAction
+from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QUrl, QPointF
+from PyQt6.QtGui import QIcon, QFont, QColor, QPixmap, QDesktopServices, QAction, QPainter, QPainterPath
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QStackedWidget, QFrame, QMessageBox, QButtonGroup,
@@ -31,7 +32,7 @@ from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.settings_view import SettingsView
 from core.settings import AppSettings
-from ui.theme import GLOBAL_APP_STYLESHEET
+from ui.theme import GLOBAL_APP_STYLESHEET, create_gear_pixmap
 
 
 def get_local_ip() -> str:
@@ -94,7 +95,7 @@ def set_windows_autostart(enable: bool) -> bool:
 
 class NavButton(QPushButton):
     """Minimalist monochrome sidebar item with subtle active indicator."""
-    def __init__(self, text: str, glyph: str, badge: str = "", parent=None):
+    def __init__(self, text: str, glyph: str = "", icon_pixmap: Optional[QPixmap] = None, badge: str = "", parent=None):
         super().__init__(parent)
         self.setCheckable(True)
         self.setFixedHeight(42)
@@ -104,10 +105,16 @@ class NavButton(QPushButton):
         layout.setContentsMargins(14, 0, 14, 0)
         layout.setSpacing(10)
 
-        icon_lbl = QLabel(glyph)
-        icon_lbl.setFont(QFont("Segoe UI Symbol", 13))
-        icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
-        layout.addWidget(icon_lbl)
+        if icon_pixmap is not None:
+            icon_lbl = QLabel()
+            icon_lbl.setPixmap(icon_pixmap)
+            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            layout.addWidget(icon_lbl)
+        else:
+            icon_lbl = QLabel(glyph)
+            icon_lbl.setFont(QFont("Segoe UI Symbol", 13))
+            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            layout.addWidget(icon_lbl)
 
         text_lbl = QLabel(text)
         text_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.DemiBold))
@@ -173,10 +180,9 @@ class MainWindow(QMainWindow):
         # Module Manager
         self.module_manager = ModuleManager(self)
 
-        # Register Ecosystem Modules (ZeroCast active by default so port 8888 is always ready)
+        # Register Ecosystem Modules - All 10 Modules Always-Live on startup
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
-        self.module_manager.toggle_module("zerocast", True)
 
         self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, download_dir=self.app_settings.download_dir, parent=self)
         self.module_manager.register_module(self.mod_zerodrop)
@@ -202,6 +208,10 @@ class MainWindow(QMainWindow):
         self.mod_zerodev = ZeroDevModule(port=8897, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerodev)
 
+        # Boot and listen on ALL module services simultaneously
+        for mod_id in ["zerocast", "zerodrop", "zeroclip", "zeromix", "zerodisplay", "zerocam", "zeropad", "zeroexplorer", "zerodev"]:
+            self.module_manager.toggle_module(mod_id, True)
+
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
         self.mod_zerocast.audio_pcm_received.connect(self.mod_zeromix.engine.write_phone_pcm)
         self.mod_zerocast.use_external_mixer = False
@@ -220,6 +230,7 @@ class MainWindow(QMainWindow):
         self.discovery_service.notification_received.connect(self._on_phone_notification)
         self.discovery_service.module_wake_requested.connect(self._on_remote_wake_module)
         self.discovery_service.module_sleep_requested.connect(self._on_remote_sleep_module)
+        self.discovery_service.gateway_client_updated.connect(self.dashboard_view.update_client_connection)
         self.discovery_service.start()
 
         # Update Checker
@@ -345,7 +356,7 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
-        self.btn_nav_settings = NavButton("Settings", "⚙")
+        self.btn_nav_settings = NavButton("Settings", icon_pixmap=create_gear_pixmap(18, "#374151"))
         self.btn_nav_settings.clicked.connect(lambda: self.stacked.setCurrentIndex(11))
         self.nav_group.addButton(self.btn_nav_settings)
         side_layout.addWidget(self.btn_nav_settings)
@@ -389,7 +400,6 @@ class MainWindow(QMainWindow):
         # Page 0: Dashboard
         self.dashboard_view = DashboardView(self.module_manager, local_ip=self.local_ip, parent=self)
         self.dashboard_view.navigate_to_module.connect(self._on_navigate_to_module)
-        self.dashboard_view.module_toggle_requested.connect(self._on_module_toggle_requested)
         self.stacked.addWidget(self.dashboard_view)
 
         # Page 1: ZeroCast Viewport

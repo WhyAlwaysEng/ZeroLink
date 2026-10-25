@@ -66,3 +66,56 @@ QComboBox QAbstractItemView {{
     border: 1px solid {COLOR_BORDER_HAIRLINE};
 }}
 """
+
+import math
+from PyQt6.QtCore import Qt, QPointF
+from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+
+
+def create_gear_pixmap(size: int = 18, color: str = "#374151") -> QPixmap:
+    """Generates a crisp, vector mechanical gear icon without font dependency."""
+    pix = QPixmap(size, size)
+    pix.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pix)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setBrush(QColor(color))
+    p.setPen(Qt.PenStyle.NoPen)
+
+    cx, cy = size / 2.0, size / 2.0
+    r_outer = size * 0.46
+    r_inner = size * 0.33
+    r_hole = size * 0.16
+
+    path = QPainterPath()
+    teeth = 8
+    step = 2 * math.pi / teeth
+    for i in range(teeth):
+        a0 = i * step
+        a1 = a0 + step * 0.22
+        a2 = a0 + step * 0.48
+        a3 = a0 + step * 0.70
+
+        x0 = cx + r_inner * math.cos(a0)
+        y0 = cy + r_inner * math.sin(a0)
+        x1 = cx + r_outer * math.cos(a1)
+        y1 = cy + r_outer * math.sin(a1)
+        x2 = cx + r_outer * math.cos(a2)
+        y2 = cy + r_outer * math.sin(a2)
+        x3 = cx + r_inner * math.cos(a3)
+        y3 = cy + r_inner * math.sin(a3)
+
+        if i == 0:
+            path.moveTo(x0, y0)
+        else:
+            path.lineTo(x0, y0)
+        path.lineTo(x1, y1)
+        path.lineTo(x2, y2)
+        path.lineTo(x3, y3)
+
+    path.closeSubpath()
+    hole = QPainterPath()
+    hole.addEllipse(QPointF(cx, cy), r_hole, r_hole)
+    gear = path.subtracted(hole)
+    p.drawPath(gear)
+    p.end()
+    return pix

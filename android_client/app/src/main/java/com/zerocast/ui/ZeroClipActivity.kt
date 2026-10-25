@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
 import android.view.View
@@ -14,7 +15,13 @@ import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroClipBinding
 import com.zerocast.databinding.ItemClipHistoryBinding
 import com.zerocast.network.ClipboardSyncManager
-import com.zerocast.network.NetworkDiscovery
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import com.zerocast.util.ZeroLinkConfig
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -24,17 +31,18 @@ class ZeroClipActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityZeroClipBinding
     private var clipManager: ClipboardSyncManager? = null
-    private var discovery: NetworkDiscovery? = null
+
+    private lateinit var connMgr: EcosystemConnectionManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityZeroClipBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val savedIp = ZeroLinkConfig.getServerIp(this)
-        binding.etServerIp.setText(savedIp)
+        connMgr = EcosystemConnectionManager.getInstance(this)
 
         setupListeners()
+        observeConnectionState()
         updateCurrentClipboardDisplay()
 
         clipManager = ClipboardSyncManager(
@@ -43,12 +51,8 @@ class ZeroClipActivity : AppCompatActivity() {
                 binding.tvClipStatus.text = msg
                 if (isConnected) {
                     binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                    binding.btnConnect.text = "Disconnect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-                    binding.btnConnect.text = "Sync"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             },
             onClipSynced = { text, source, ts ->
@@ -56,6 +60,56 @@ class ZeroClipActivity : AppCompatActivity() {
                 addHistoryItem(text, source, ts)
             }
         )
+
+        val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+        startSync(host)
+    }
+
+    private fun observeConnectionState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connMgr.connectionState.collectLatest { state ->
+                        updateConnectionUI(state, connMgr.activeMode.value, connMgr.targetHost.value)
+                    }
+                }
+                launch {
+                    connMgr.activeMode.collectLatest { mode ->
+                        updateConnectionUI(connMgr.connectionState.value, mode, connMgr.targetHost.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateConnectionUI(state: ConnectionState, mode: String, host: String) {
+        val (icon, modeStr) = when (mode) {
+            ZeroLinkConfig.MODE_USB -> Pair("⌁", "USB ADB Cable")
+            ZeroLinkConfig.MODE_TETHER -> Pair("⚡", "USB Tethering")
+            else -> Pair("📡", "Wi-Fi LAN")
+        }
+
+        binding.tvClipLinkIcon.text = icon
+        when (state) {
+            ConnectionState.CONNECTED -> {
+                binding.tvClipLinkTitle.text = "Master Link: $modeStr"
+                binding.tvClipLinkSubtitle.text = "Endpoint: $host:8893"
+                binding.tvClipLinkBadge.text = "● READY"
+                binding.tvClipLinkBadge.setTextColor(Color.parseColor("#10B981"))
+            }
+            ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                binding.tvClipLinkTitle.text = "Connecting to Master Link..."
+                binding.tvClipLinkSubtitle.text = "Connecting to $host:8893..."
+                binding.tvClipLinkBadge.text = "○ CONNECTING"
+                binding.tvClipLinkBadge.setTextColor(Color.parseColor("#F59E0B"))
+            }
+            ConnectionState.DISCONNECTED -> {
+                binding.tvClipLinkTitle.text = "Master Link: Offline"
+                binding.tvClipLinkSubtitle.text = "Disconnected • Tap Home to connect"
+                binding.tvClipLinkBadge.text = "○ OFFLINE"
+                binding.tvClipLinkBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            }
+        }
     }
 
     private fun setupListeners() {
@@ -63,35 +117,10 @@ class ZeroClipActivity : AppCompatActivity() {
             finish()
         }
 
-        binding.btnConnect.setOnClickListener {
+        binding.cardConnectionStatus.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (clipManager?.isConnected == true || binding.btnConnect.text == "Disconnect" || binding.btnConnect.text == "Connecting...") {
-                clipManager?.stop()
-                binding.btnConnect.text = "Sync"
-                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
-                binding.tvClipStatus.text = "○ DISCONNECTED"
-                binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-            } else {
-                startSync()
-            }
-        }
-
-        binding.btnModeUsb.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.etServerIp.setText("127.0.0.1")
-            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-            startSync()
-        }
-
-        binding.btnAutoDiscover.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.tvClipStatus.text = "Searching..."
-            discovery = NetworkDiscovery { ip, _ ->
-                binding.etServerIp.setText(ip)
-                ZeroLinkConfig.setServerIp(this, ip)
-                startSync()
-            }
-            discovery?.startDiscovery()
+            val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+            startSync(host)
         }
 
         binding.btnSendClipToPc.setOnClickListener {
@@ -117,14 +146,8 @@ class ZeroClipActivity : AppCompatActivity() {
         }
     }
 
-    private fun startSync() {
-        val ip = binding.etServerIp.text.toString().trim()
-        if (ip.isEmpty()) {
-            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
-            return
-        }
-        ZeroLinkConfig.setServerIp(this, ip)
-        binding.btnConnect.text = "Connecting..."
+    private fun startSync(targetHost: String? = null) {
+        val ip = targetHost ?: connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
         clipManager?.start(ip, ZeroLinkConfig.DEFAULT_CLIP_PORT)
     }
 
@@ -161,8 +184,6 @@ class ZeroClipActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val savedIp = ZeroLinkConfig.getServerIp(this)
-        binding.etServerIp.setText(savedIp)
         updateCurrentClipboardDisplay()
     }
 

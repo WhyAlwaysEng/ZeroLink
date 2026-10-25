@@ -180,69 +180,47 @@
                     android:textSize="10sp" />
             </LinearLayout>
 
-            <!-- Row 2: Connection Mode & Compact IP field -->
+            <!-- Row 2: Master Link Status Pill -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:gravity="center_vertical"
+                android:background="@drawable/bg_badge_pill"
+                android:backgroundTint="@color/surface_variant"
+                android:paddingStart="12dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="12dp"
+                android:paddingBottom="6dp"
                 android:orientation="horizontal">
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCamUsbMode"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                <TextView
+                    android:id="@+id/tvCamLinkIcon"
                     android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="4dp"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:text="⌁ USB Cable"
-                    android:textAllCaps="false"
+                    android:layout_height="wrap_content"
+                    android:text="⌁"
                     android:textColor="@color/text_primary"
-                    android:textSize="10sp"
-                    app:cornerRadius="8dp"
-                    app:strokeColor="@color/surface_stroke" />
+                    android:textSize="13sp" />
 
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnCamAutoWifi"
-                    style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="34dp"
-                    android:layout_marginEnd="6dp"
-                    android:paddingStart="8dp"
-                    android:paddingEnd="8dp"
-                    android:text="📡 Wi-Fi"
-                    android:textAllCaps="false"
-                    android:textColor="@color/text_secondary"
-                    android:textSize="10sp"
-                    app:cornerRadius="8dp"
-                    app:strokeColor="@color/surface_stroke" />
-
-                <com.google.android.material.textfield.TextInputLayout
+                <TextView
+                    android:id="@+id/tvCamLinkInfo"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
                     android:layout_weight="1"
-                    android:textColorHint="@color/text_tertiary"
-                    app:boxBackgroundColor="@color/surface_variant"
-                    app:boxCornerRadiusBottomEnd="8dp"
-                    app:boxCornerRadiusBottomStart="8dp"
-                    app:boxCornerRadiusTopEnd="8dp"
-                    app:boxCornerRadiusTopStart="8dp"
-                    app:boxStrokeColor="@color/primary"
-                    app:boxStrokeWidth="0dp">
+                    android:text="Linked: USB ADB (127.0.0.1:8889)"
+                    android:textColor="@color/text_primary"
+                    android:textSize="11sp"
+                    android:fontFamily="sans-serif-medium" />
 
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/etCamHostIp"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="PC Host IP"
-                        android:inputType="textUri"
-                        android:paddingTop="8dp"
-                        android:paddingBottom="8dp"
-                        android:singleLine="true"
-                        android:textColor="@color/text_primary"
-                        android:textSize="11sp" />
-                </com.google.android.material.textfield.TextInputLayout>
+                <TextView
+                    android:id="@+id/tvCamLinkBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="● READY"
+                    android:textColor="#10B981"
+                    android:textSize="10sp"
+                    android:fontFamily="sans-serif-bold" />
             </LinearLayout>
 
             <!-- Row 3: Action Buttons (Stream Toggle + OLED Standby) -->

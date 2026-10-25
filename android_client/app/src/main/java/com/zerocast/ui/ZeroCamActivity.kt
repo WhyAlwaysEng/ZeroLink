@@ -16,7 +16,13 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
 import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroCamBinding
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
 import com.zerocast.network.NetworkDiscovery
+import kotlinx.coroutines.flow.collectLatest
 import com.zerocast.util.ZeroLinkConfig
 import com.zerocast.capture.CameraH264Encoder
 import kotlinx.coroutines.*
@@ -60,8 +66,6 @@ class ZeroCamActivity : AppCompatActivity() {
     private var frameChannel = kotlinx.coroutines.channels.Channel<ByteArray>(kotlinx.coroutines.channels.Channel.CONFLATED)
     private val scope = CoroutineScope(Dispatchers.IO)
 
-    private var discovery: NetworkDiscovery? = null
-
     private var frameCount = 0
     private var bytesThisSec = 0L
     private var lastStatTime = System.currentTimeMillis()
@@ -78,27 +82,17 @@ class ZeroCamActivity : AppCompatActivity() {
         }
     }
 
+    private lateinit var connMgr: EcosystemConnectionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityZeroCamBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        connMgr = EcosystemConnectionManager.getInstance(this)
         cameraExecutor = Executors.newSingleThreadExecutor()
 
-        // Pre-fill Host IP
-        val lastIp = ZeroLinkConfig.getServerIp(this)
-        if (lastIp.isNotEmpty()) {
-            binding.etCamHostIp.setText(lastIp)
-        }
-
-        discovery = NetworkDiscovery { discoveredIp, _ ->
-            runOnUiThread {
-                if (binding.etCamHostIp.text.isNullOrEmpty()) {
-                    binding.etCamHostIp.setText(discoveredIp)
-                }
-            }
-        }
-        discovery?.startDiscovery()
+        observeConnectionState()
 
         binding.btnCamBack.setOnClickListener {
             finish()
@@ -131,28 +125,6 @@ class ZeroCamActivity : AppCompatActivity() {
         }
         updateResolutionUI(targetWidth, targetHeight)
 
-        binding.btnCamUsbMode.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.etCamHostIp.setText("127.0.0.1")
-            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-            Toast.makeText(this, "⌁ USB Cable Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnCamAutoWifi.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            discovery?.stopDiscovery()
-            discovery = NetworkDiscovery { discoveredIp, _ ->
-                runOnUiThread {
-                    if (NetworkDiscovery.isWifiIp(discoveredIp)) {
-                        binding.etCamHostIp.setText(discoveredIp)
-                        ZeroLinkConfig.setServerIp(this, discoveredIp)
-                    }
-                }
-            }
-            discovery?.startDiscovery(ZeroLinkConfig.MODE_WIFI)
-            Toast.makeText(this, "◫ Searching for PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
-        }
-
         binding.btnCamTorch.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             toggleTorch()
@@ -162,12 +134,7 @@ class ZeroCamActivity : AppCompatActivity() {
             if (isStreaming) {
                 stopStream()
             } else {
-                val ip = binding.etCamHostIp.text.toString().trim()
-                if (ip.isEmpty()) {
-                    Toast.makeText(this, "Please enter PC Host IP", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
-                ZeroLinkConfig.setServerIp(this, ip)
+                val ip = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
                 startStream(ip, DEFAULT_PORT)
             }
         }
@@ -194,6 +161,50 @@ class ZeroCamActivity : AppCompatActivity() {
         }
 
         checkPermissionAndStart()
+    }
+
+    private fun observeConnectionState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connMgr.connectionState.collectLatest { state ->
+                        updateConnectionUI(state, connMgr.activeMode.value, connMgr.targetHost.value)
+                    }
+                }
+                launch {
+                    connMgr.activeMode.collectLatest { mode ->
+                        updateConnectionUI(connMgr.connectionState.value, mode, connMgr.targetHost.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateConnectionUI(state: ConnectionState, mode: String, host: String) {
+        val (icon, modeStr) = when (mode) {
+            ZeroLinkConfig.MODE_USB -> Pair("⌁", "USB ADB Cable")
+            ZeroLinkConfig.MODE_TETHER -> Pair("⚡", "USB Tethering")
+            else -> Pair("📡", "Wi-Fi LAN")
+        }
+
+        binding.tvCamLinkIcon.text = icon
+        when (state) {
+            ConnectionState.CONNECTED -> {
+                binding.tvCamLinkInfo.text = "Linked: $modeStr ($host:8889)"
+                binding.tvCamLinkBadge.text = "● LINKED"
+                binding.tvCamLinkBadge.setTextColor(android.graphics.Color.parseColor("#10B981"))
+            }
+            ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                binding.tvCamLinkInfo.text = "Connecting to $host:8889..."
+                binding.tvCamLinkBadge.text = "○ CONNECTING"
+                binding.tvCamLinkBadge.setTextColor(android.graphics.Color.parseColor("#F59E0B"))
+            }
+            ConnectionState.DISCONNECTED -> {
+                binding.tvCamLinkInfo.text = "Offline • Tap Home to connect"
+                binding.tvCamLinkBadge.text = "○ OFFLINE"
+                binding.tvCamLinkBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            }
+        }
     }
 
     private fun updateResolutionUI(w: Int, h: Int) {
@@ -247,7 +258,7 @@ class ZeroCamActivity : AppCompatActivity() {
         updateResolutionUI(w, h)
         bindCameraUseCases()
         if (isStreaming) {
-            val ip = binding.etCamHostIp.text.toString().trim()
+            val ip = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
             if (ip.isNotEmpty()) {
                 startStream(ip, DEFAULT_PORT)
             }
@@ -633,7 +644,6 @@ class ZeroCamActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         stopStream()
-        discovery?.stopDiscovery()
         cameraExecutor?.shutdown()
     }
 }

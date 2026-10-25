@@ -2,6 +2,7 @@ package com.zerocast.ui
 
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.text.format.Formatter
@@ -18,7 +19,13 @@ import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroDropBinding
 import com.zerocast.databinding.ItemReceivedFileBinding
 import com.zerocast.network.FileTransferManager
-import com.zerocast.network.NetworkDiscovery
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import com.zerocast.util.ZeroLinkConfig
 import java.io.File
 import java.text.SimpleDateFormat
@@ -29,7 +36,6 @@ class ZeroDropActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityZeroDropBinding
     private lateinit var transferManager: FileTransferManager
-    private var discovery: NetworkDiscovery? = null
 
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -39,18 +45,69 @@ class ZeroDropActivity : AppCompatActivity() {
         }
     }
 
+    private lateinit var connMgr: EcosystemConnectionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityZeroDropBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        connMgr = EcosystemConnectionManager.getInstance(this)
         transferManager = FileTransferManager(this)
 
-        val savedIp = ZeroLinkConfig.getServerIp(this)
-        binding.etServerIp.setText(savedIp)
-
         setupListeners()
+        observeConnectionState()
         loadExistingReceivedFiles()
+
+        val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+        startReceiver(host)
+    }
+
+    private fun observeConnectionState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connMgr.connectionState.collectLatest { state ->
+                        updateConnectionUI(state, connMgr.activeMode.value, connMgr.targetHost.value)
+                    }
+                }
+                launch {
+                    connMgr.activeMode.collectLatest { mode ->
+                        updateConnectionUI(connMgr.connectionState.value, mode, connMgr.targetHost.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateConnectionUI(state: ConnectionState, mode: String, host: String) {
+        val (icon, modeStr) = when (mode) {
+            ZeroLinkConfig.MODE_USB -> Pair("⌁", "USB ADB Cable")
+            ZeroLinkConfig.MODE_TETHER -> Pair("⚡", "USB Tethering")
+            else -> Pair("📡", "Wi-Fi LAN")
+        }
+
+        binding.tvDropLinkIcon.text = icon
+        when (state) {
+            ConnectionState.CONNECTED -> {
+                binding.tvDropLinkTitle.text = "Master Link: $modeStr"
+                binding.tvDropLinkSubtitle.text = "Endpoint: $host:8887"
+                binding.tvDropLinkBadge.text = "● READY"
+                binding.tvDropLinkBadge.setTextColor(Color.parseColor("#10B981"))
+            }
+            ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                binding.tvDropLinkTitle.text = "Connecting to Master Link..."
+                binding.tvDropLinkSubtitle.text = "Connecting to $host:8887..."
+                binding.tvDropLinkBadge.text = "○ CONNECTING"
+                binding.tvDropLinkBadge.setTextColor(Color.parseColor("#F59E0B"))
+            }
+            ConnectionState.DISCONNECTED -> {
+                binding.tvDropLinkTitle.text = "Master Link: Offline"
+                binding.tvDropLinkSubtitle.text = "Disconnected • Tap Home to connect"
+                binding.tvDropLinkBadge.text = "○ OFFLINE"
+                binding.tvDropLinkBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            }
+        }
     }
 
     private fun setupListeners() {
@@ -58,35 +115,10 @@ class ZeroDropActivity : AppCompatActivity() {
             finish()
         }
 
-        binding.btnConnect.setOnClickListener {
+        binding.cardConnectionStatus.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (transferManager.isReceiverRunning || transferManager.isReceiverConnected || binding.btnConnect.text == "Disconnect" || binding.btnConnect.text == "Connecting...") {
-                transferManager.stopReceiveWorker()
-                binding.btnConnect.text = "Connect"
-                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
-                binding.tvDropStatus.text = "○ DISCONNECTED"
-                binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-            } else {
-                startReceiver()
-            }
-        }
-
-        binding.btnModeUsb.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.etServerIp.setText("127.0.0.1")
-            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-            startReceiver()
-        }
-
-        binding.btnAutoDiscover.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.tvDropStatus.text = "Searching..."
-            discovery = NetworkDiscovery { ip, _ ->
-                binding.etServerIp.setText(ip)
-                ZeroLinkConfig.setServerIp(this, ip)
-                startReceiver()
-            }
-            discovery?.startDiscovery()
+            val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+            startReceiver(host)
         }
 
         binding.btnSelectFiles.setOnClickListener {
@@ -119,15 +151,8 @@ class ZeroDropActivity : AppCompatActivity() {
         }
     }
 
-    private fun startReceiver() {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isEmpty()) {
-            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
-            return
-        }
-        ZeroLinkConfig.setServerIp(this, host)
-
-        binding.btnConnect.text = "Connecting..."
+    private fun startReceiver(targetHost: String? = null) {
+        val host = targetHost ?: connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
         binding.tvDropStatus.text = "Connecting to $host:${ZeroLinkConfig.DEFAULT_DROP_PORT}..."
         binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
 
@@ -153,23 +178,15 @@ class ZeroDropActivity : AppCompatActivity() {
                 binding.tvDropStatus.text = msg
                 if (isConnected) {
                     binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                    binding.btnConnect.text = "Disconnect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvDropStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-                    binding.btnConnect.text = "Connect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             }
         )
     }
 
     private fun sendSelectedFiles(uris: List<Uri>) {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isEmpty()) {
-            Toast.makeText(this, "Please enter target PC IP or use Auto Scan / USB", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
 
         ZeroLinkConfig.setServerIp(this, host)
         binding.cardProgress.visibility = View.VISIBLE
@@ -283,8 +300,6 @@ class ZeroDropActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        val savedIp = ZeroLinkConfig.getServerIp(this)
-        binding.etServerIp.setText(savedIp)
         loadExistingReceivedFiles()
     }
 

@@ -1,28 +1,30 @@
-"""ZeroLink Hub - Dashboard View (Light Minimalist Edition)
-Crisp white cards with subtle hairline borders, soft drop shadows, and high-contrast black typography.
+"""ZeroLink Hub - Dashboard View (Unified Connection & Ecosystem Control)
+Clean, minimalist command center integrating the active Master Gateway connection panel
+with instant 1-click access to all permanently listening ecosystem modules.
 """
 
+import time
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QColor
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QGridLayout, QScrollArea, QGraphicsDropShadowEffect
+    QFrame, QGridLayout, QScrollArea, QGraphicsDropShadowEffect, QApplication
 )
 from core.module_manager import ModuleManager
+from core.adb_helper import AdbManager
 
 
 class ModuleCard(QFrame):
-    """Crisp white minimal card with subtle hairline border and soft shadow."""
-    toggle_clicked = pyqtSignal(str, bool)  # module_id, target_state
+    """Crisp white minimal card with real-time port state and instant viewport launcher."""
     open_clicked = pyqtSignal(str)          # module_id
 
     def __init__(self, module_id: str, title: str, glyph: str, desc: str,
-                 is_enabled: bool, is_available: bool = True, port_info: str = "", parent=None):
+                 port_info: str = "", is_available: bool = True, parent=None):
         super().__init__(parent)
         self.module_id = module_id
-        self.is_enabled = is_enabled
-        self.is_available = is_available
         self.port_info = port_info
+        self.is_available = is_available
+        self.is_streaming = False
 
         self.setObjectName("moduleCard")
         self.setStyleSheet("""
@@ -32,7 +34,7 @@ class ModuleCard(QFrame):
                 border-radius: 12px;
             }
             QFrame#moduleCard:hover {
-                border-color: #D1D5DB;
+                border-color: #9CA3AF;
                 background-color: #FAFAFA;
             }
         """)
@@ -40,20 +42,20 @@ class ModuleCard(QFrame):
         # Soft ambient shadow
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(16)
-        shadow.setColor(QColor(0, 0, 0, 10))
+        shadow.setColor(QColor(0, 0, 0, 8))
         shadow.setOffset(0, 4)
         self.setGraphicsEffect(shadow)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(22, 22, 22, 22)
-        layout.setSpacing(12)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(10)
 
         # Header: Glyph + Title + Status Pill
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
         icon_lbl = QLabel(glyph)
-        icon_lbl.setFont(QFont("Segoe UI Symbol", 22))
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 20))
         icon_lbl.setStyleSheet("color: #111827;")
         header_row.addWidget(icon_lbl)
 
@@ -61,22 +63,29 @@ class ModuleCard(QFrame):
         title_col.setSpacing(2)
 
         title_lbl = QLabel(title)
-        title_lbl.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        title_lbl.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         title_lbl.setStyleSheet("color: #111827; letter-spacing: -0.2px;")
         title_col.addWidget(title_lbl)
 
         if port_info:
             port_lbl = QLabel(port_info)
             port_lbl.setFont(QFont("Consolas", 10))
-            port_lbl.setStyleSheet("color: #374151;")
+            port_lbl.setStyleSheet("color: #6B7280;")
             title_col.addWidget(port_lbl)
 
         header_row.addLayout(title_col)
         header_row.addStretch()
 
-        self.status_pill = QLabel()
-        self.status_pill.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
-        self._update_pill()
+        self.status_pill = QLabel("● READY")
+        self.status_pill.setFont(QFont("Segoe UI", 8, QFont.Weight.Bold))
+        self.status_pill.setStyleSheet("""
+            background-color: #F0FDF4;
+            color: #15803D;
+            padding: 3px 8px;
+            border: 1px solid #BBF7D0;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+        """)
         header_row.addWidget(self.status_pill)
 
         layout.addLayout(header_row)
@@ -84,108 +93,22 @@ class ModuleCard(QFrame):
         # Description
         desc_lbl = QLabel(desc)
         desc_lbl.setWordWrap(True)
-        desc_lbl.setFont(QFont("Segoe UI", 11))
-        desc_lbl.setStyleSheet("color: #374151; line-height: 1.5;")
+        desc_lbl.setFont(QFont("Segoe UI", 10))
+        desc_lbl.setStyleSheet("color: #4B5563; line-height: 1.4;")
         layout.addWidget(desc_lbl)
 
         layout.addStretch()
 
-        # Action Buttons
+        # Action: Direct Viewport Switcher
         footer_row = QHBoxLayout()
         footer_row.setSpacing(10)
 
         if is_available:
-            self.toggle_btn = QPushButton()
-            self._update_toggle_btn()
-            self.toggle_btn.clicked.connect(self._on_toggle)
-            footer_row.addWidget(self.toggle_btn)
-
             self.open_btn = QPushButton("Open Viewport →")
+            self.open_btn.setCursor(Qt.CursorShape.PointingHandCursor)
             self.open_btn.setStyleSheet("""
                 QPushButton {
-                    background-color: #FFFFFF;
-                    color: #111827;
-                    border: 1px solid #D1D5DB;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #F3F4F6;
-                    border-color: #9CA3AF;
-                }
-            """)
-            self.open_btn.clicked.connect(lambda: self.open_clicked.emit(self.module_id))
-            footer_row.addWidget(self.open_btn)
-        else:
-            coming_lbl = QLabel("In Development")
-            coming_lbl.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: 600; letter-spacing: 0.5px;")
-            footer_row.addWidget(coming_lbl)
-
-        layout.addLayout(footer_row)
-
-    def _update_pill(self):
-        if not self.is_available:
-            self.status_pill.setText("UPCOMING")
-            self.status_pill.setStyleSheet("""
-                background-color: #F3F4F6;
-                color: #9CA3AF;
-                padding: 3px 8px;
-                border: 1px solid #E5E7EB;
-                border-radius: 4px;
-                font-size: 9px;
-                font-weight: bold;
-                letter-spacing: 0.5px;
-            """)
-        elif self.is_enabled:
-            self.status_pill.setText("● ACTIVE")
-            self.status_pill.setStyleSheet("""
-                background-color: #F0FDF4;
-                color: #166534;
-                padding: 3px 8px;
-                border: 1px solid #BBF7D0;
-                border-radius: 4px;
-                font-size: 9px;
-                font-weight: bold;
-                letter-spacing: 0.5px;
-            """)
-        else:
-            self.status_pill.setText("○ INACTIVE")
-            self.status_pill.setStyleSheet("""
-                background-color: #F3F4F6;
-                color: #374151;
-                padding: 3px 8px;
-                border: 1px solid #D1D5DB;
-                border-radius: 4px;
-                font-size: 9px;
-                font-weight: bold;
-                letter-spacing: 0.5px;
-            """)
-
-    def _update_toggle_btn(self):
-        if self.is_enabled:
-            self.toggle_btn.setText("Disable Module")
-            self.toggle_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #F3F4F6;
-                    color: #4B5563;
-                    border: 1px solid #D1D5DB;
-                    border-radius: 6px;
-                    padding: 8px 16px;
-                    font-size: 11px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background-color: #E5E7EB;
-                    color: #111827;
-                }
-            """)
-        else:
-            self.toggle_btn.setText("Enable Module")
-            self.toggle_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #000000;
+                    background-color: #111827;
                     color: #FFFFFF;
                     border: none;
                     border-radius: 6px;
@@ -194,34 +117,261 @@ class ModuleCard(QFrame):
                     font-weight: 700;
                 }
                 QPushButton:hover {
-                    background-color: #1F2937;
+                    background-color: #374151;
                 }
             """)
+            self.open_btn.clicked.connect(lambda: self.open_clicked.emit(self.module_id))
+            footer_row.addWidget(self.open_btn)
+        else:
+            coming_lbl = QLabel("In Development")
+            coming_lbl.setStyleSheet("color: #9CA3AF; font-size: 11px; font-weight: 600;")
+            footer_row.addWidget(coming_lbl)
 
-    def _on_toggle(self):
-        target = not self.is_enabled
-        self.toggle_clicked.emit(self.module_id, target)
+        layout.addLayout(footer_row)
 
-    def set_active_state(self, active: bool):
-        self.is_enabled = active
-        self._update_pill()
-        if self.is_available:
-            self._update_toggle_btn()
+    def set_streaming(self, is_streaming: bool):
+        self.is_streaming = is_streaming
+        if is_streaming:
+            self.status_pill.setText("⚡ LIVE STREAMING")
+            self.status_pill.setStyleSheet("""
+                background-color: #FEF2F2;
+                color: #B91C1C;
+                padding: 3px 8px;
+                border: 1px solid #FECACA;
+                border-radius: 4px;
+                letter-spacing: 0.5px;
+            """)
+        else:
+            self.status_pill.setText("● READY")
+            self.status_pill.setStyleSheet("""
+                background-color: #F0FDF4;
+                color: #15803D;
+                padding: 3px 8px;
+                border: 1px solid #BBF7D0;
+                border-radius: 4px;
+                letter-spacing: 0.5px;
+            """)
+
+
+class ConnectionHeroCard(QFrame):
+    """Central Gateway Control Panel displayed on the Dashboard."""
+
+    def __init__(self, local_ip: str, parent=None):
+        super().__init__(parent)
+        self.local_ip = local_ip
+        self.adb_manager = AdbManager()
+
+        self.setObjectName("connectionHeroCard")
+        self.setStyleSheet("""
+            QFrame#connectionHeroCard {
+                background-color: #FFFFFF;
+                border: 1px solid #E5E7EB;
+                border-radius: 14px;
+            }
+        """)
+
+        # Ambient card shadow
+        shadow = QGraphicsDropShadowEffect(self)
+        shadow.setBlurRadius(20)
+        shadow.setColor(QColor(0, 0, 0, 10))
+        shadow.setOffset(0, 4)
+        self.setGraphicsEffect(shadow)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 22)
+        layout.setSpacing(16)
+
+        # Header Row: Title & Master Status Pill
+        header_row = QHBoxLayout()
+        header_row.setSpacing(12)
+
+        icon_lbl = QLabel("⌁")
+        icon_lbl.setFont(QFont("Segoe UI Symbol", 22, QFont.Weight.Bold))
+        icon_lbl.setStyleSheet("color: #111827;")
+        header_row.addWidget(icon_lbl)
+
+        title_col = QVBoxLayout()
+        title_col.setSpacing(2)
+
+        title_lbl = QLabel("Unified Connection Gateway")
+        title_lbl.setFont(QFont("Segoe UI", 15, QFont.Weight.Bold))
+        title_lbl.setStyleSheet("color: #111827;")
+        title_col.addWidget(title_lbl)
+
+        self.subtitle_lbl = QLabel("All 10 Ecosystem Services Active & Listening • Zero Delay Handover")
+        self.subtitle_lbl.setFont(QFont("Segoe UI", 10))
+        self.subtitle_lbl.setStyleSheet("color: #6B7280;")
+        title_col.addWidget(self.subtitle_lbl)
+
+        header_row.addLayout(title_col)
+        header_row.addStretch()
+
+        self.status_badge = QLabel("● WAITING FOR MOBILE")
+        self.status_badge.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        self.status_badge.setStyleSheet("""
+            background-color: #F3F4F6;
+            color: #374151;
+            padding: 5px 12px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        """)
+        header_row.addWidget(self.status_badge)
+        layout.addLayout(header_row)
+
+        # Metrics & Connection Badges Row
+        metrics_row = QHBoxLayout()
+        metrics_row.setSpacing(14)
+
+        # Badge 1: Device
+        self.box_device = self._create_metric_box("CONNECTED DEVICE", "No Device Linked", "📱")
+        metrics_row.addWidget(self.box_device)
+
+        # Badge 2: Link Mode
+        self.box_mode = self._create_metric_box("ACTIVE LINK MODE", "Standby (USB / Wi-Fi)", "⚡")
+        metrics_row.addWidget(self.box_mode)
+
+        # Badge 3: Gateway IP & Port
+        self.box_ip = self._create_metric_box("GATEWAY ENDPOINT", f"{self.local_ip} : 8886", "🌐")
+        metrics_row.addWidget(self.box_ip)
+
+        layout.addLayout(metrics_row)
+
+        # Quick Actions Row
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(10)
+
+        self.btn_copy_ip = QPushButton("📋 Copy LAN IP")
+        self.btn_copy_ip.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_copy_ip.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 7px 14px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        self.btn_copy_ip.clicked.connect(self._copy_ip)
+        actions_row.addWidget(self.btn_copy_ip)
+
+        self.btn_reverse_adb = QPushButton("🔄 Re-Reverse ADB Ports (10/10)")
+        self.btn_reverse_adb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.btn_reverse_adb.setStyleSheet("""
+            QPushButton {
+                background-color: #F3F4F6;
+                color: #111827;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                padding: 7px 14px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #E5E7EB; }
+        """)
+        self.btn_reverse_adb.clicked.connect(self._reverse_adb_ports)
+        actions_row.addWidget(self.btn_reverse_adb)
+
+        self.lbl_action_hint = QLabel("")
+        self.lbl_action_hint.setFont(QFont("Segoe UI", 10))
+        self.lbl_action_hint.setStyleSheet("color: #15803D; font-weight: bold;")
+        actions_row.addWidget(self.lbl_action_hint)
+
+        actions_row.addStretch()
+        layout.addLayout(actions_row)
+
+    def _create_metric_box(self, label: str, value: str, icon: str) -> QFrame:
+        box = QFrame()
+        box.setStyleSheet("background-color: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px 14px;")
+        l = QVBoxLayout(box)
+        l.setContentsMargins(0, 0, 0, 0)
+        l.setSpacing(4)
+
+        top_l = QHBoxLayout()
+        top_l.setSpacing(6)
+        ic = QLabel(icon)
+        ic.setFont(QFont("Segoe UI Symbol", 10))
+        top_l.addWidget(ic)
+
+        lbl = QLabel(label)
+        lbl.setFont(QFont("Segoe UI", 9, QFont.Weight.Bold))
+        lbl.setStyleSheet("color: #6B7280; letter-spacing: 0.5px;")
+        top_l.addWidget(lbl)
+        top_l.addStretch()
+        l.addLayout(top_l)
+
+        val_lbl = QLabel(value)
+        val_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        val_lbl.setStyleSheet("color: #111827;")
+        val_lbl.setObjectName("val_lbl")
+        l.addWidget(val_lbl)
+        return box
+
+    def _copy_ip(self):
+        cb = QApplication.clipboard()
+        if cb:
+            cb.setText(self.local_ip)
+            self.lbl_action_hint.setText(f"Copied {self.local_ip} to clipboard!")
+
+    def _reverse_adb_ports(self):
+        if self.adb_manager.is_available():
+            ok = self.adb_manager.reverse_ecosystem_ports()
+            if ok:
+                self.lbl_action_hint.setText("All 10 ports mapped over USB ADB (127.0.0.1)")
+            else:
+                self.lbl_action_hint.setText("ADB ready (Connect phone via USB cable)")
+        else:
+            self.lbl_action_hint.setText("ADB not found on PC PATH")
+
+    def update_client_state(self, info: dict):
+        client_ip = info.get("client_ip", "")
+        model = info.get("model", "Android Device")
+        mode = info.get("mode", "Wi-Fi LAN")
+        status = info.get("status", "CONNECTED")
+
+        if status == "CONNECTED":
+            self.status_badge.setText(f"● LINKED ({mode.upper()})")
+            self.status_badge.setStyleSheet("""
+                background-color: #F0FDF4;
+                color: #15803D;
+                padding: 5px 12px;
+                border: 1px solid #BBF7D0;
+                border-radius: 6px;
+                letter-spacing: 0.5px;
+            """)
+            self.box_device.findChild(QLabel, "val_lbl").setText(f"{model} ({client_ip})")
+            self.box_mode.findChild(QLabel, "val_lbl").setText(mode)
+            self.subtitle_lbl.setText(f"Active Session: Linked with {model} • Ready for ZeroCast, ZeroCam & ZeroDisplay")
+        else:
+            self.status_badge.setText("● WAITING FOR MOBILE")
+            self.status_badge.setStyleSheet("""
+                background-color: #F3F4F6;
+                color: #374151;
+                padding: 5px 12px;
+                border: 1px solid #D1D5DB;
+                border-radius: 6px;
+                letter-spacing: 0.5px;
+            """)
+            self.box_device.findChild(QLabel, "val_lbl").setText("No Device Linked")
+            self.box_mode.findChild(QLabel, "val_lbl").setText("Standby (USB / Wi-Fi)")
+            self.subtitle_lbl.setText("All 10 Ecosystem Services Active & Listening • Zero Delay Handover")
 
 
 class DashboardView(QWidget):
-    """Crisp White Minimalist Dashboard."""
+    """ZeroLink Central Command Dashboard (Always-Live Modules Edition)."""
     navigate_to_module = pyqtSignal(str)
-    module_toggle_requested = pyqtSignal(str, bool)
 
     def __init__(self, module_manager: ModuleManager, local_ip: str = "127.0.0.1", parent=None):
         super().__init__(parent)
         self.module_manager = module_manager
         self.local_ip = local_ip
         self.cards = {}
+        self.hero_card: ConnectionHeroCard = None
 
         self._setup_ui()
-        self.module_manager.module_toggled.connect(self._on_module_toggled)
 
     def _setup_ui(self):
         scroll = QScrollArea(self)
@@ -231,214 +381,54 @@ class DashboardView(QWidget):
         container = QWidget()
         container.setStyleSheet("background-color: #F9FAFB;")
         layout = QVBoxLayout(container)
-        layout.setContentsMargins(40, 36, 40, 36)
-        layout.setSpacing(28)
+        layout.setContentsMargins(36, 30, 36, 36)
+        layout.setSpacing(24)
 
-        # Top Bar: Page Title & System IP Info
-        header_row = QHBoxLayout()
-        header_row.setSpacing(16)
-
-        title_col = QVBoxLayout()
-        title_col.setSpacing(4)
-        title = QLabel("Overview")
-        title.setFont(QFont("Segoe UI", 24, QFont.Weight.Bold))
-        title.setStyleSheet("color: #111827; letter-spacing: -0.5px;")
-        title_col.addWidget(title)
-
-        subtitle = QLabel("Cross-Device Bridge • Windows & Android Ecosystem")
-        subtitle.setFont(QFont("Segoe UI", 12))
-        subtitle.setStyleSheet("color: #6B7280;")
-        title_col.addWidget(subtitle)
-        header_row.addLayout(title_col)
-
-        header_row.addStretch()
-
-        ip_badge = QFrame()
-        ip_badge.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; padding: 6px 14px;")
-        ip_layout = QHBoxLayout(ip_badge)
-        ip_layout.setContentsMargins(8, 4, 8, 4)
-        ip_layout.setSpacing(8)
-
-        ip_lbl = QLabel("IP")
-        ip_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        ip_lbl.setStyleSheet("color: #9CA3AF;")
-        ip_layout.addWidget(ip_lbl)
-
-        ip_val = QLabel(self.local_ip)
-        ip_val.setFont(QFont("Consolas", 12, QFont.Weight.Bold))
-        ip_val.setStyleSheet("color: #111827;")
-        ip_layout.addWidget(ip_val)
-
-        header_row.addWidget(ip_badge)
-        layout.addLayout(header_row)
+        # 1. Master Connection Hero Card
+        self.hero_card = ConnectionHeroCard(local_ip=self.local_ip, parent=self)
+        layout.addWidget(self.hero_card)
 
         # Section Divider & Label
-        divider = QFrame()
-        divider.setFrameShape(QFrame.Shape.HLine)
-        divider.setStyleSheet("border: none; border-top: 1px solid #E5E7EB;")
-        layout.addWidget(divider)
-
-        sec_lbl = QLabel("PLUGGABLE ECOSYSTEM MODULES")
+        sec_lbl = QLabel("ALL ECOSYSTEM SERVICES (PERMANENTLY ACTIVE)")
         sec_lbl.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
-        sec_lbl.setStyleSheet("color: #9CA3AF; letter-spacing: 1.2px;")
+        sec_lbl.setStyleSheet("color: #9CA3AF; letter-spacing: 1.2px; margin-top: 4px;")
         layout.addWidget(sec_lbl)
 
-        # Modules Grid
+        # 2. Modules Grid
         grid = QGridLayout()
-        grid.setSpacing(18)
+        grid.setSpacing(16)
 
-        # ZeroCast
-        mod_cast = self.module_manager.get_module("zerocast")
-        cast_active = mod_cast.is_active if mod_cast else False
-        card_cast = ModuleCard(
-            module_id="zerocast",
-            title="ZeroCast",
-            glyph="⊡",
-            desc="Ultra-low latency GPU H.264 screen & internal audio mirroring with OBS Virtual Camera and reverse control.",
-            is_enabled=cast_active,
-            is_available=True,
-            port_info="Port 8888 (TCP)"
-        )
-        card_cast.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_cast.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zerocast"] = card_cast
-        grid.addWidget(card_cast, 0, 0)
+        modules_data = [
+            ("zerocast", "ZeroCast", "⊡", "GPU H.264 screen & internal audio mirroring with reverse touch & keyboard control.", "Port 8888 (TCP)"),
+            ("zerocam", "ZeroCam", "◎", "Wireless HD/4K mobile camera into Virtual Webcam for Discord, OBS, Zoom, and Teams.", "Port 8893 (TCP)"),
+            ("zerodisplay", "ZeroDisplay", "▣", "Wireless 2nd Monitor & Remote Touch. Turn your phone into an extended desktop.", "Port 8892 (TCP)"),
+            ("zeromix", "ZeroMix", "⧉", "Virtual Audio Mixer & Soundboard. Mix mic with music, auto-ducking, and sound triggers.", "Port 8891 (TCP)"),
+            ("zerodrop", "ZeroDrop", "⇄", "High-speed bidirectional LAN & USB file sharing between Windows PC and Android.", "Port 8890 (TCP)"),
+            ("zeroclip", "ZeroClip", "⎘", "Instant bidirectional shared clipboard between PC and Android in real-time.", "Port 8889 (TCP)"),
+            ("zeropad", "ZeroPad", "▦", "Wireless PC Media & Macro Remote Controller / Stream Deck for Windows audio and shortcuts.", "Port 8894 (TCP)"),
+            ("zeroexplorer", "ZeroExplorer", "▤", "Wireless Android file manager, gallery previewer, 4K video streamer, and APK installer.", "Port 8896 (HTTP)"),
+            ("zerodev", "ZeroDev Console", "</>", "Developer workshop, cross-platform code scaffolder, and real-time network port probe.", "Port 8897 (Probe)")
+        ]
 
-        # ZeroDrop
-        mod_drop = self.module_manager.get_module("zerodrop")
-        drop_active = mod_drop.is_active if mod_drop else False
-        card_drop = ModuleCard(
-            module_id="zerodrop",
-            title="ZeroDrop",
-            glyph="⇄",
-            desc="High-speed bidirectional LAN & USB file sharing between Windows PC and Android with drag-and-drop.",
-            is_enabled=drop_active,
-            is_available=True,
-            port_info="Port 8890 (TCP)"
-        )
-        card_drop.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_drop.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zerodrop"] = card_drop
-        grid.addWidget(card_drop, 0, 1)
-
-        # ZeroClip
-        mod_clip = self.module_manager.get_module("zeroclip")
-        clip_active = mod_clip.is_active if mod_clip else False
-        card_clip = ModuleCard(
-            module_id="zeroclip",
-            title="ZeroClip",
-            glyph="⎘",
-            desc="Instant bidirectional shared clipboard. Copy text or links on PC and paste directly on mobile, or vice versa in real-time.",
-            is_enabled=clip_active,
-            is_available=True,
-            port_info="Port 8889 (TCP)"
-        )
-        card_clip.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_clip.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zeroclip"] = card_clip
-        grid.addWidget(card_clip, 1, 0)
-
-        # ZeroMix
-        mod_mix = self.module_manager.get_module("zeromix")
-        mix_active = mod_mix.is_active if mod_mix else False
-        card_mix = ModuleCard(
-            module_id="zeromix",
-            title="ZeroMix",
-            glyph="⧉",
-            desc="Virtual audio mixer & soundboard. Mix mic with music, auto-duck background audio while speaking, and trigger meme sounds wirelessly.",
-            is_enabled=mix_active,
-            is_available=True,
-            port_info="Port 8891 (TCP)"
-        )
-        card_mix.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_mix.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zeromix"] = card_mix
-        grid.addWidget(card_mix, 1, 1)
-
-        # ZeroDisplay
-        mod_display = self.module_manager.get_module("zerodisplay")
-        display_active = mod_display.is_active if mod_display else False
-        card_display = ModuleCard(
-            module_id="zerodisplay",
-            title="ZeroDisplay",
-            glyph="▣",
-            desc="Wireless PC Screen Mirror & Remote Touch Control. Turn your Android tablet or phone into a remote display with full touch gestures.",
-            is_enabled=display_active,
-            is_available=True,
-            port_info="Port 8892 (TCP)"
-        )
-        card_display.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_display.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zerodisplay"] = card_display
-        grid.addWidget(card_display, 2, 0)
-
-        # ZeroCam
-        mod_cam = self.module_manager.get_module("zerocam")
-        cam_active = mod_cam.is_active if mod_cam else False
-        card_cam = ModuleCard(
-            module_id="zerocam",
-            title="ZeroCam",
-            glyph="◎",
-            desc="Wireless phone camera streaming into Virtual Webcam for Discord, OBS, and Zoom.",
-            is_enabled=cam_active,
-            is_available=True,
-            port_info="Port 8893 (TCP)"
-        )
-        card_cam.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_cam.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zerocam"] = card_cam
-        grid.addWidget(card_cam, 2, 1)
-
-        # ZeroPad
-        mod_pad = self.module_manager.get_module("zeropad")
-        pad_active = mod_pad.is_active if mod_pad else False
-        card_pad = ModuleCard(
-            module_id="zeropad",
-            title="ZeroPad",
-            glyph="▦",
-            desc="Wireless PC Media & Macro Remote Controller. Use your phone as a Stream Deck for Windows audio, Discord mute, and shortcuts.",
-            is_enabled=pad_active,
-            is_available=True,
-            port_info="Port 8894 (TCP)"
-        )
-        card_pad.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_pad.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zeropad"] = card_pad
-        grid.addWidget(card_pad, 3, 0)
-
-        # ZeroExplorer
-        mod_explorer = self.module_manager.get_module("zeroexplorer")
-        explorer_active = mod_explorer.is_active if mod_explorer else False
-        card_explorer = ModuleCard(
-            module_id="zeroexplorer",
-            title="ZeroExplorer",
-            glyph="▤",
-            desc="Wireless Android file manager, gallery previewer, 4K video streamer, and APK package installer.",
-            is_enabled=explorer_active,
-            is_available=True,
-            port_info="Port 8896 (HTTP)"
-        )
-        card_explorer.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_explorer.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zeroexplorer"] = card_explorer
-        grid.addWidget(card_explorer, 3, 1)
-
-        # ZeroDev
-        mod_dev = self.module_manager.get_module("zerodev")
-        dev_active = mod_dev.is_active if mod_dev else False
-        card_dev = ModuleCard(
-            module_id="zerodev",
-            title="ZeroDev Console",
-            glyph="</>",
-            desc="Developer workshop, cross-platform code scaffolder, and real-time network port probe for PC & Mobile.",
-            is_enabled=dev_active,
-            is_available=True,
-            port_info="Port 8897 (Probe)"
-        )
-        card_dev.toggle_clicked.connect(self.module_toggle_requested.emit)
-        card_dev.open_clicked.connect(self.navigate_to_module.emit)
-        self.cards["zerodev"] = card_dev
-        grid.addWidget(card_dev, 4, 0)
+        row = 0
+        col = 0
+        for mod_id, title, glyph, desc, port_str in modules_data:
+            card = ModuleCard(
+                module_id=mod_id,
+                title=title,
+                glyph=glyph,
+                desc=desc,
+                port_info=port_str,
+                is_available=True,
+                parent=self
+            )
+            card.open_clicked.connect(self.navigate_to_module.emit)
+            self.cards[mod_id] = card
+            grid.addWidget(card, row, col)
+            col += 1
+            if col > 1:
+                col = 0
+                row += 1
 
         layout.addLayout(grid)
         layout.addStretch()
@@ -448,6 +438,10 @@ class DashboardView(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
-    def _on_module_toggled(self, module_id: str, is_active: bool):
+    def update_client_connection(self, info: dict):
+        if self.hero_card:
+            self.hero_card.update_client_state(info)
+
+    def set_module_streaming(self, module_id: str, is_streaming: bool):
         if module_id in self.cards:
-            self.cards[module_id].set_active_state(is_active)
+            self.cards[module_id].set_streaming(is_streaming)

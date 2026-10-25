@@ -2,29 +2,39 @@ package com.zerocast.ui
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.os.Bundle
 import android.provider.Settings
 import android.view.HapticFeedbackConstants
-import android.widget.EditText
+import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.zerocast.BuildConfig
 import com.zerocast.R
 import com.zerocast.databinding.ActivityMainBinding
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
 import com.zerocast.network.NetworkDiscovery
 import com.zerocast.util.UpdateChecker
 import com.zerocast.util.ZeroLinkConfig
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var connMgr: EcosystemConnectionManager
     private var networkDiscovery: NetworkDiscovery? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        connMgr = EcosystemConnectionManager.getInstance(this)
 
         // Dynamic Version & GitHub Update Trigger
         val currentVer = BuildConfig.VERSION_NAME
@@ -41,9 +51,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
-        setupDiscoveryCard()
+        setupMasterGatewayPanel()
         setupNotificationMirrorCard()
         setupModuleCards()
+        observeConnectionManager()
 
         // Asynchronously check for GitHub updates in background
         UpdateChecker.checkForUpdates(this, isManualCheck = false)
@@ -52,225 +63,198 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateNotificationUiState()
-        startDiscovery()
+        // If not already connected and not explicitly disconnected, attempt connection
+        if (connMgr.connectionState.value == ConnectionState.DISCONNECTED && connMgr.targetHost.value.isNotEmpty()) {
+            connMgr.connect()
+        }
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onDestroy() {
+        super.onDestroy()
         networkDiscovery?.stopListening()
     }
 
-    private fun updateDiscoveryCardUI(mode: String, ip: String, name: String = "ZeroLink PC") {
-        binding.tvDiscoveryTitle.text = name
-        when (mode) {
+    private fun setupMasterGatewayPanel() {
+        // Mode Tabs
+        binding.btnModeUsb.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            connMgr.switchMode(ZeroLinkConfig.MODE_USB, "127.0.0.1")
+            Toast.makeText(this, "⚡ Switched to USB ADB (127.0.0.1)", Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnModeTether.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val candidate = NetworkDiscovery.getTetheringHostCandidate()
+            connMgr.switchMode(ZeroLinkConfig.MODE_TETHER, candidate)
+            val msg = if (candidate != null) "⚡ USB Tethering found: $candidate" else "⚡ Switched to USB Tethering mode"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+        }
+
+        binding.btnModeWifi.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val lastWifi = ZeroLinkConfig.getServerIp(this).takeIf { ip -> NetworkDiscovery.isWifiIp(ip) }
+            connMgr.switchMode(ZeroLinkConfig.MODE_WIFI, lastWifi)
+            Toast.makeText(this, "📡 Switched to Wi-Fi LAN mode", Toast.LENGTH_SHORT).show()
+        }
+
+        // Master Connect / Disconnect Action Button
+        binding.btnMasterConnect.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            when (connMgr.connectionState.value) {
+                ConnectionState.CONNECTED, ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                    connMgr.disconnect()
+                    Toast.makeText(this, "Disconnected from PC Gateway", Toast.LENGTH_SHORT).show()
+                }
+                ConnectionState.DISCONNECTED -> {
+                    val inputIp = binding.etGatewayIp.text.toString().trim()
+                    connMgr.connect(manualIp = inputIp.ifEmpty { null })
+                }
+            }
+        }
+
+        // Auto Discover Button
+        binding.btnAutoDiscoverGateway.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            binding.tvGatewayHint.text = "🔍 Scanning network for ZeroLink PC..."
+            networkDiscovery?.stopListening()
+            networkDiscovery = NetworkDiscovery { ip, _, name ->
+                runOnUiThread {
+                    binding.etGatewayIp.setText(ip)
+                    binding.tvDiscoveryTitle.text = name
+                    binding.tvGatewayHint.text = "✅ Discovered: $name ($ip)"
+                    connMgr.connect(manualIp = ip)
+                }
+            }
+            val currentMode = connMgr.activeMode.value
+            networkDiscovery?.startListening(currentMode)
+        }
+    }
+
+    private fun observeConnectionManager() {
+        lifecycleScope.launch {
+            connMgr.activeMode.collectLatest { mode ->
+                updateModeTabsUI(mode)
+            }
+        }
+
+        lifecycleScope.launch {
+            connMgr.targetHost.collectLatest { host ->
+                if (!binding.etGatewayIp.hasFocus()) {
+                    binding.etGatewayIp.setText(host)
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            connMgr.deviceName.collectLatest { name ->
+                binding.tvDiscoveryTitle.text = name
+            }
+        }
+
+        lifecycleScope.launch {
+            connMgr.latencyMs.collectLatest { latency ->
+                if (latency > 0) {
+                    binding.tvPingLatency.text = "${latency}ms ping"
+                    binding.tvPingLatency.setTextColor(Color.parseColor("#10B981"))
+                } else {
+                    binding.tvPingLatency.text = "-- ms"
+                    binding.tvPingLatency.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_tertiary))
+                }
+            }
+        }
+
+        lifecycleScope.launch {
+            connMgr.connectionState.collectLatest { state ->
+                when (state) {
+                    ConnectionState.CONNECTED -> {
+                        binding.tvDiscoveryBadge.text = "● LINKED"
+                        binding.tvDiscoveryBadge.setTextColor(Color.parseColor("#10B981"))
+                        binding.tvDiscoveryBadge.setBackgroundResource(R.drawable.bg_badge_pill)
+                        binding.tvHubStatus.text = "● LINKED"
+
+                        binding.btnMasterConnect.text = "✕ DISCONNECT"
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
+
+                        val modeName = when (connMgr.activeMode.value) {
+                            ZeroLinkConfig.MODE_USB -> "USB Cable ADB"
+                            ZeroLinkConfig.MODE_TETHER -> "USB Tethering"
+                            else -> "Wi-Fi LAN"
+                        }
+                        binding.tvDiscoverySubtitle.text = "Active single-pipe link via $modeName"
+                    }
+                    ConnectionState.CONNECTING -> {
+                        binding.tvDiscoveryBadge.text = "○ CONNECTING"
+                        binding.tvDiscoveryBadge.setTextColor(Color.parseColor("#F59E0B"))
+                        binding.tvHubStatus.text = "○ CONNECTING"
+
+                        binding.btnMasterConnect.text = "⏳ CONNECTING..."
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
+                        binding.tvDiscoverySubtitle.text = "Connecting to Master Gateway on Port 8886..."
+                    }
+                    ConnectionState.RECONNECTING -> {
+                        binding.tvDiscoveryBadge.text = "○ RECONNECTING"
+                        binding.tvDiscoveryBadge.setTextColor(Color.parseColor("#F59E0B"))
+                        binding.tvHubStatus.text = "○ RECONNECTING"
+
+                        binding.btnMasterConnect.text = "⏳ RECONNECTING..."
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
+                        binding.tvDiscoverySubtitle.text = "Gateway heartbeat lost. Auto-reconnecting..."
+                    }
+                    ConnectionState.DISCONNECTED -> {
+                        binding.tvDiscoveryBadge.text = "DISCONNECTED"
+                        binding.tvDiscoveryBadge.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.text_secondary))
+                        binding.tvHubStatus.text = "○ STANDBY"
+
+                        binding.btnMasterConnect.text = "⚡ CONNECT TO PC"
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#111827"))
+                        binding.tvDiscoverySubtitle.text = "Single pipe for ZeroCast, ZeroCam, ZeroDisplay & all tools"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateModeTabsUI(activeMode: String) {
+        val primaryColor = ContextCompat.getColor(this, R.color.text_primary)
+        val secondaryColor = ContextCompat.getColor(this, R.color.text_secondary)
+        val activeBg = ColorStateList.valueOf(primaryColor)
+        val inactiveBg = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.surface_variant))
+
+        when (activeMode) {
             ZeroLinkConfig.MODE_USB -> {
-                binding.tvDiscoverySubtitle.text = "Linked (USB ADB): 127.0.0.1"
-                binding.tvDiscoveryBadge.text = "● USB"
-                binding.tvHubStatus.text = "● LINKED"
+                binding.btnModeUsb.backgroundTintList = activeBg
+                binding.btnModeUsb.setTextColor(Color.WHITE)
+                binding.btnModeTether.backgroundTintList = inactiveBg
+                binding.btnModeTether.setTextColor(secondaryColor)
+                binding.btnModeWifi.backgroundTintList = inactiveBg
+                binding.btnModeWifi.setTextColor(secondaryColor)
+
+                binding.btnAutoDiscoverGateway.visibility = View.GONE
+                binding.tvGatewayHint.text = "USB ADB Cable Mode • Port 8886 Master Link (<1ms latency)"
             }
             ZeroLinkConfig.MODE_TETHER -> {
-                val isTether = NetworkDiscovery.isTetheringIp(ip)
-                val displayIp = if (isTether) ip else "Searching USB..."
-                binding.tvDiscoverySubtitle.text = "Linked (USB Tether): $displayIp"
-                binding.tvDiscoveryBadge.text = "● TETHER"
-                binding.tvHubStatus.text = if (isTether) "● LINKED" else "○ SEARCHING"
+                binding.btnModeUsb.backgroundTintList = inactiveBg
+                binding.btnModeUsb.setTextColor(secondaryColor)
+                binding.btnModeTether.backgroundTintList = activeBg
+                binding.btnModeTether.setTextColor(Color.WHITE)
+                binding.btnModeWifi.backgroundTintList = inactiveBg
+                binding.btnModeWifi.setTextColor(secondaryColor)
+
+                binding.btnAutoDiscoverGateway.visibility = View.VISIBLE
+                binding.tvGatewayHint.text = "USB Tethering Virtual LAN • Subnet 192.168.42.x / 10.x (<2ms latency)"
             }
-            ZeroLinkConfig.MODE_WIFI -> {
-                val isWifi = NetworkDiscovery.isWifiIp(ip)
-                binding.tvDiscoverySubtitle.text = if (isWifi) "Linked (Wi-Fi LAN): $ip" else "Scanning Wi-Fi LAN..."
-                binding.tvDiscoveryBadge.text = if (isWifi) "● CONNECTED" else "● SCANNING"
-                binding.tvHubStatus.text = if (isWifi) "● LINKED" else "○ STANDBY"
-            }
-            ZeroLinkConfig.MODE_MANUAL -> {
-                binding.tvDiscoverySubtitle.text = "Target IP: $ip"
-                binding.tvDiscoveryBadge.text = "● MANUAL"
-                binding.tvHubStatus.text = if (ip.isNotEmpty()) "● LINKED" else "○ STANDBY"
-            }
-            else -> {
-                when {
-                    ip == "127.0.0.1" -> {
-                        binding.tvDiscoverySubtitle.text = "Linked (USB ADB): 127.0.0.1"
-                        binding.tvDiscoveryBadge.text = "● USB"
-                        binding.tvHubStatus.text = "● LINKED"
-                    }
-                    NetworkDiscovery.isTetheringIp(ip) -> {
-                        binding.tvDiscoverySubtitle.text = "Linked (USB Tether): $ip"
-                        binding.tvDiscoveryBadge.text = "● TETHER"
-                        binding.tvHubStatus.text = "● LINKED"
-                    }
-                    else -> {
-                        val isWifi = NetworkDiscovery.isWifiIp(ip)
-                        binding.tvDiscoverySubtitle.text = if (isWifi) "Linked (Wi-Fi LAN): $ip" else "Scanning Wi-Fi LAN..."
-                        binding.tvDiscoveryBadge.text = if (isWifi) "● CONNECTED" else "● SCANNING"
-                        binding.tvHubStatus.text = if (isWifi) "● LINKED" else "○ STANDBY"
-                    }
-                }
+            else -> { // MODE_WIFI
+                binding.btnModeUsb.backgroundTintList = inactiveBg
+                binding.btnModeUsb.setTextColor(secondaryColor)
+                binding.btnModeTether.backgroundTintList = inactiveBg
+                binding.btnModeTether.setTextColor(secondaryColor)
+                binding.btnModeWifi.backgroundTintList = activeBg
+                binding.btnModeWifi.setTextColor(Color.WHITE)
+
+                binding.btnAutoDiscoverGateway.visibility = View.VISIBLE
+                binding.tvGatewayHint.text = "Wi-Fi LAN Gateway • Fast 5GHz Recommended"
             }
         }
-    }
-
-    private fun startDiscovery() {
-        val currentIp = ZeroLinkConfig.getServerIp(this)
-        val mode = ZeroLinkConfig.getConnectionMode(this)
-
-        updateDiscoveryCardUI(mode, currentIp)
-
-        // 1. If user locked to USB ADB mode:
-        if (mode == ZeroLinkConfig.MODE_USB) {
-            networkDiscovery?.stopListening()
-            networkDiscovery = NetworkDiscovery { ip, _, name ->
-                if (ip == "127.0.0.1") {
-                    updateDiscoveryCardUI(ZeroLinkConfig.MODE_USB, "127.0.0.1", name)
-                }
-            }
-            networkDiscovery?.startListening(ZeroLinkConfig.MODE_USB)
-            return
-        }
-
-        // 2. If user locked to USB Tethering mode:
-        if (mode == ZeroLinkConfig.MODE_TETHER) {
-            networkDiscovery?.stopListening()
-            networkDiscovery = NetworkDiscovery { ip, _, name ->
-                if (NetworkDiscovery.isTetheringIp(ip)) {
-                    ZeroLinkConfig.setServerIp(this, ip)
-                    updateDiscoveryCardUI(ZeroLinkConfig.MODE_TETHER, ip, name)
-                }
-            }
-            networkDiscovery?.startListening(ZeroLinkConfig.MODE_TETHER)
-            return
-        }
-
-        // 3. If user locked to Wi-Fi mode:
-        if (mode == ZeroLinkConfig.MODE_WIFI) {
-            networkDiscovery?.stopListening()
-            networkDiscovery = NetworkDiscovery { ip, _, name ->
-                if (NetworkDiscovery.isWifiIp(ip)) {
-                    ZeroLinkConfig.setServerIp(this, ip)
-                    updateDiscoveryCardUI(ZeroLinkConfig.MODE_WIFI, ip, name)
-                }
-            }
-            networkDiscovery?.startListening(ZeroLinkConfig.MODE_WIFI)
-            return
-        }
-
-        // 4. If user entered Manual IP:
-        if (mode == ZeroLinkConfig.MODE_MANUAL) {
-            networkDiscovery?.stopListening()
-            return
-        }
-
-        // 5. AUTO mode:
-        networkDiscovery?.stopListening()
-        networkDiscovery = NetworkDiscovery { ip, _, name ->
-            val linkType = when {
-                ip == "127.0.0.1" -> "USB ADB"
-                ip.startsWith("10.") || ip.startsWith("192.168.42.") || ip.startsWith("192.168.43.") -> "USB Tether"
-                else -> "Wi-Fi LAN"
-            }
-
-            // Priority Check: Wi-Fi UDP beacon MUST NOT overwrite an active USB ADB link
-            val activeIp = ZeroLinkConfig.getServerIp(this)
-            val currentIsUsb = activeIp == "127.0.0.1"
-            if (currentIsUsb && ip != "127.0.0.1") {
-                return@NetworkDiscovery
-            }
-
-            ZeroLinkConfig.setServerIp(this, ip)
-            binding.tvDiscoveryTitle.text = name
-            binding.tvDiscoverySubtitle.text = "Linked ($linkType): $ip"
-            binding.tvDiscoveryBadge.text = "● CONNECTED"
-            binding.tvHubStatus.text = "● LINKED"
-        }
-        networkDiscovery?.startListening(ZeroLinkConfig.MODE_AUTO)
-    }
-
-    private fun setupDiscoveryCard() {
-        binding.cardDiscovery.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            showManualIpDialog()
-        }
-    }
-
-    private fun showManualIpDialog() {
-        val items = arrayOf(
-            "⌁ USB ADB (127.0.0.1) • Ultra Latency <1ms",
-            "⚡ USB Tethering (Virtual LAN)",
-            "📡 Wi-Fi LAN (Auto-Discover PC)",
-            "✍️ Enter Custom IP Address..."
-        )
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Select Connection Mode")
-            .setItems(items) { _, which ->
-                when (which) {
-                    0 -> {
-                        // USB ADB
-                        ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_USB)
-                        ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-                        startDiscovery()
-                        Toast.makeText(this, "⚡ Switched to USB ADB mode (127.0.0.1)", Toast.LENGTH_SHORT).show()
-                    }
-                    1 -> {
-                        // USB Tethering
-                        ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_TETHER)
-                        val tetherCandidate = NetworkDiscovery.getTetheringHostCandidate()
-                        if (tetherCandidate != null) {
-                            ZeroLinkConfig.setServerIp(this, tetherCandidate)
-                        } else {
-                            val lastIp = ZeroLinkConfig.getServerIp(this)
-                            if (!NetworkDiscovery.isTetheringIp(lastIp)) {
-                                ZeroLinkConfig.setServerIp(this, "")
-                            }
-                        }
-                        startDiscovery()
-                        val msg = if (tetherCandidate != null) "⚡ USB Tethering mode: $tetherCandidate" else "⚡ Switched to USB Tethering mode"
-                        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
-                    }
-                    2 -> {
-                        // Wi-Fi LAN
-                        ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_WIFI)
-                        val lastIp = ZeroLinkConfig.getServerIp(this)
-                        if (lastIp == "127.0.0.1" || NetworkDiscovery.isTetheringIp(lastIp)) {
-                            ZeroLinkConfig.setServerIp(this, "")
-                        }
-                        startDiscovery()
-                        Toast.makeText(this, "📡 Switched to Wi-Fi LAN mode", Toast.LENGTH_SHORT).show()
-                    }
-                    3 -> {
-                        // Custom IP
-                        ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_MANUAL)
-                        showCustomIpInputDialog()
-                    }
-                }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-    }
-
-    private fun showCustomIpInputDialog() {
-        val currentIp = ZeroLinkConfig.getServerIp(this)
-        val input = EditText(this).apply {
-            hint = "e.g. 192.168.1.100 or 10.242.214.162"
-            setText(if (currentIp != "127.0.0.1") currentIp else "")
-            setSingleLine()
-            setPadding(50, 40, 50, 40)
-        }
-
-        MaterialAlertDialogBuilder(this)
-            .setTitle("Manual PC IP Address")
-            .setMessage("Enter your PC's IP address directly:")
-            .setView(input)
-            .setPositiveButton("Save & Connect") { _, _ ->
-                val ip = input.text.toString().trim()
-                if (ip.isNotEmpty()) {
-                    ZeroLinkConfig.setServerIp(this, ip)
-                    binding.tvDiscoverySubtitle.text = "Target: $ip"
-                    binding.tvDiscoveryBadge.text = "● SET"
-                }
-                startDiscovery()
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
     }
 
     private fun isNotificationAccessGranted(): Boolean {
@@ -322,14 +306,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openModuleWithWake(moduleId: String, activityClass: Class<*>) {
-        val serverIp = ZeroLinkConfig.getServerIp(this)
-        if (serverIp.isNotEmpty()) {
-            NetworkDiscovery.wakeModule(serverIp, moduleId)
-            if (moduleId == "zeromix") {
-                NetworkDiscovery.wakeModule(serverIp, "zerocast")
-            }
-        }
+    private fun openModule(activityClass: Class<*>) {
         val intent = Intent(this, activityClass)
         startActivity(intent)
     }
@@ -338,55 +315,55 @@ class MainActivity : AppCompatActivity() {
         // Module 1: ZeroCast (Core Mirroring)
         binding.cardModuleZeroCast.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zerocast", ZeroCastActivity::class.java)
+            openModule(ZeroCastActivity::class.java)
         }
 
         // Module 2: ZeroDrop (File Transfer)
         binding.cardModuleZeroDrop.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zerodrop", ZeroDropActivity::class.java)
+            openModule(ZeroDropActivity::class.java)
         }
 
         // Module 3: ZeroClip (Universal Clipboard)
         binding.cardModuleZeroClip.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zeroclip", ZeroClipActivity::class.java)
+            openModule(ZeroClipActivity::class.java)
         }
 
         // Module 4: ZeroMix (Virtual Audio Mixer & Sound Deck)
         binding.cardModuleZeroMix.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zeromix", ZeroMixActivity::class.java)
+            openModule(ZeroMixActivity::class.java)
         }
 
         // Module 5: ZeroDisplay (Extended 2nd Monitor)
         binding.cardModuleZeroDisplay.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zerodisplay", ZeroDisplayActivity::class.java)
+            openModule(ZeroDisplayActivity::class.java)
         }
 
         // Module 6: ZeroCam (Wireless 4K Webcam)
         binding.cardModuleZeroCam.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zerocam", ZeroCamActivity::class.java)
+            openModule(ZeroCamActivity::class.java)
         }
 
         // Module 7: ZeroPad (Stream Deck & PC Media Remote)
         binding.cardModuleZeroPad.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zeropad", ZeroPadActivity::class.java)
+            openModule(ZeroPadActivity::class.java)
         }
 
         // Module 8: ZeroExplorer (Phone Gallery & Storage Explorer)
         binding.cardModuleZeroExplorer.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zeroexplorer", ZeroExplorerActivity::class.java)
+            openModule(ZeroExplorerActivity::class.java)
         }
 
         // Module 9: ZeroDev (Module Workshop & Latency Probe)
         binding.cardModuleZeroDev.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModuleWithWake("zerodev", ZeroDevActivity::class.java)
+            openModule(ZeroDevActivity::class.java)
         }
     }
 }

@@ -951,7 +951,8 @@ class ZeroExplorerModule(BaseModule):
         self._is_active = True
         self.state_changed.emit(self.module_id, True)
         self.status_changed.emit(self.module_id, f"Client ready for port {self.port}")
-        self.connect_and_sync()
+        if hasattr(self, "et_host_ip") and self.et_host_ip:
+            self.connect_and_sync()
         return True
 
     def stop_service(self) -> bool:
@@ -1751,7 +1752,8 @@ class ZeroExplorerModule(BaseModule):
         success, msg = self.adb_manager.forward_port(self.port)
         if success:
             self.status_badge.setText("● USB TUNNEL ACTIVE")
-        self.connect_and_sync()
+        if hasattr(self, "et_host_ip") and self.et_host_ip:
+            self.connect_and_sync()
 
     def connect_and_sync(self):
         host = self.et_host_ip.text().strip()

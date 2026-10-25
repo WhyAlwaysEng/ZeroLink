@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 
 from core.settings import AppSettings
 from core.updater import CURRENT_VERSION
+from ui.theme import create_gear_pixmap
 
 
 class SettingsCard(QFrame):
@@ -64,9 +65,8 @@ class SettingsView(QWidget):
         header_row = QHBoxLayout()
         header_row.setSpacing(12)
 
-        icon_lbl = QLabel("⚙")
-        icon_lbl.setFont(QFont("Segoe UI", 20))
-        icon_lbl.setStyleSheet("color: #111827;")
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(create_gear_pixmap(24, "#111827"))
         header_row.addWidget(icon_lbl)
 
         title_col = QVBoxLayout()

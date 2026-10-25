@@ -18,7 +18,12 @@ import android.view.WindowInsetsController
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.zerocast.databinding.ActivityZeroDisplayBinding
-import com.zerocast.network.NetworkDiscovery
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
+import kotlinx.coroutines.flow.collectLatest
 import com.zerocast.util.ZeroLinkConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,7 +54,6 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
     private var inStream: DataInputStream? = null
     private var clientJob: Job? = null
 
-    private var discovery: NetworkDiscovery? = null
     private val scope = CoroutineScope(Dispatchers.IO)
 
     // Touch gesture tracking
@@ -67,37 +71,22 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
         inMutable = true
     }
 
+    private lateinit var connMgr: EcosystemConnectionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityZeroDisplayBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        connMgr = EcosystemConnectionManager.getInstance(this)
         hideSystemUI()
 
         binding.surfaceDisplay.holder.addCallback(this)
 
-        // Pre-fill IP from config or discovery
-        val lastIp = ZeroLinkConfig.getServerIp(this)
-        if (lastIp.isNotEmpty() && lastIp != "127.0.0.1") {
-            binding.etDisplayHostIp.setText(lastIp)
-        }
-
-        discovery = NetworkDiscovery { discoveredIp, _ ->
-            runOnUiThread {
-                if (binding.etDisplayHostIp.text.isNullOrEmpty()) {
-                    binding.etDisplayHostIp.setText(discoveredIp)
-                }
-            }
-        }
-        discovery?.startDiscovery()
+        observeConnectionState()
 
         binding.btnConnectDisplay.setOnClickListener {
-            val ip = binding.etDisplayHostIp.text.toString().trim()
-            if (ip.isEmpty()) {
-                Toast.makeText(this, "Please enter PC Host IP", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            ZeroLinkConfig.setServerIp(this, ip)
+            val ip = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
             startDisplayStream(ip, DEFAULT_PORT)
         }
 
@@ -114,6 +103,50 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
         }
 
         setupTouchListener()
+    }
+
+    private fun observeConnectionState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connMgr.connectionState.collectLatest { state ->
+                        updateConnectionUI(state, connMgr.activeMode.value, connMgr.targetHost.value)
+                    }
+                }
+                launch {
+                    connMgr.activeMode.collectLatest { mode ->
+                        updateConnectionUI(connMgr.connectionState.value, mode, connMgr.targetHost.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateConnectionUI(state: ConnectionState, mode: String, host: String) {
+        val (icon, modeStr) = when (mode) {
+            ZeroLinkConfig.MODE_USB -> Pair("⌁", "USB ADB Cable")
+            ZeroLinkConfig.MODE_TETHER -> Pair("⚡", "USB Tethering")
+            else -> Pair("📡", "Wi-Fi LAN")
+        }
+
+        binding.tvDisplayLinkIcon.text = icon
+        when (state) {
+            ConnectionState.CONNECTED -> {
+                binding.tvDisplayLinkInfo.text = "Master Link: $modeStr ($host:8892)"
+                binding.tvDisplayLinkBadge.text = "● READY"
+                binding.tvDisplayLinkBadge.setTextColor(Color.parseColor("#10B981"))
+            }
+            ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                binding.tvDisplayLinkInfo.text = "Connecting to $host:8892..."
+                binding.tvDisplayLinkBadge.text = "○ CONNECTING"
+                binding.tvDisplayLinkBadge.setTextColor(Color.parseColor("#F59E0B"))
+            }
+            ConnectionState.DISCONNECTED -> {
+                binding.tvDisplayLinkInfo.text = "Offline • Tap Home to connect"
+                binding.tvDisplayLinkBadge.text = "○ OFFLINE"
+                binding.tvDisplayLinkBadge.setTextColor(Color.parseColor("#9CA3AF"))
+            }
+        }
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
@@ -360,6 +393,5 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
     override fun onDestroy() {
         super.onDestroy()
         disconnectStream()
-        discovery?.stopDiscovery()
     }
 }

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
+import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.view.HapticFeedbackConstants
@@ -19,7 +20,13 @@ import androidx.core.content.ContextCompat
 import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroMixBinding
 import com.zerocast.databinding.ItemSoundboardBtnBinding
-import com.zerocast.network.NetworkDiscovery
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.lifecycleScope
+import com.zerocast.network.ConnectionState
+import com.zerocast.network.EcosystemConnectionManager
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import com.zerocast.network.SoundboardItem
 import com.zerocast.network.ZeroMixManager
 import com.zerocast.network.ZeroMixState
@@ -30,7 +37,6 @@ class ZeroMixActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityZeroMixBinding
     private var mixManager: ZeroMixManager? = null
-    private var discovery: NetworkDiscovery? = null
 
     private var isUserDragging = false
     private var isApplyingState = false
@@ -60,25 +66,17 @@ class ZeroMixActivity : AppCompatActivity() {
         }
     }
 
+    private lateinit var connMgr: EcosystemConnectionManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityZeroMixBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val mode = ZeroLinkConfig.getConnectionMode(this)
-        var savedIp = ZeroLinkConfig.getServerIp(this)
-        if (mode == ZeroLinkConfig.MODE_USB) {
-            savedIp = "127.0.0.1"
-            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-        } else if (mode == ZeroLinkConfig.MODE_TETHER && (savedIp.isEmpty() || !NetworkDiscovery.isTetheringIp(savedIp))) {
-            NetworkDiscovery.getTetheringHostCandidate()?.let {
-                savedIp = it
-                ZeroLinkConfig.setServerIp(this, it)
-            }
-        }
-        binding.etServerIp.setText(savedIp)
+        connMgr = EcosystemConnectionManager.getInstance(this)
 
         setupListeners()
+        observeConnectionState()
 
         mixManager = ZeroMixManager(
             context = this,
@@ -86,12 +84,8 @@ class ZeroMixActivity : AppCompatActivity() {
                 binding.tvMixStatus.text = msg
                 if (isConnected) {
                     binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_primary))
-                    binding.btnConnect.text = "Disconnect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, android.R.color.holo_red_dark))
                 } else {
                     binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-                    binding.btnConnect.text = "Connect"
-                    binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
                 }
             },
             onStateUpdated = { state ->
@@ -110,6 +104,57 @@ class ZeroMixActivity : AppCompatActivity() {
                 }
             }
         }
+
+        // Auto-connect if already linked
+        val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+        startConnect(host)
+    }
+
+    private fun observeConnectionState() {
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connMgr.connectionState.collectLatest { state ->
+                        updateConnectionUI(state, connMgr.activeMode.value, connMgr.targetHost.value)
+                    }
+                }
+                launch {
+                    connMgr.activeMode.collectLatest { mode ->
+                        updateConnectionUI(connMgr.connectionState.value, mode, connMgr.targetHost.value)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateConnectionUI(state: ConnectionState, mode: String, host: String) {
+        val (icon, modeStr) = when (mode) {
+            ZeroLinkConfig.MODE_USB -> Pair("⌁", "USB ADB Cable")
+            ZeroLinkConfig.MODE_TETHER -> Pair("⚡", "USB Tethering")
+            else -> Pair("📡", "Wi-Fi LAN")
+        }
+
+        binding.tvMixLinkIcon.text = icon
+        when (state) {
+            ConnectionState.CONNECTED -> {
+                binding.tvMixLinkTitle.text = "Master Link: $modeStr"
+                binding.tvMixLinkSubtitle.text = "Endpoint: $host:8891"
+                binding.tvMixLinkBadge.text = "● READY"
+                binding.tvMixLinkBadge.setTextColor(Color.parseColor("#10B981"))
+            }
+            ConnectionState.CONNECTING, ConnectionState.RECONNECTING -> {
+                binding.tvMixLinkTitle.text = "Connecting to Master Link..."
+                binding.tvMixLinkSubtitle.text = "Connecting to $host:8891..."
+                binding.tvMixLinkBadge.text = "○ CONNECTING"
+                binding.tvMixLinkBadge.setTextColor(Color.parseColor("#F59E0B"))
+            }
+            ConnectionState.DISCONNECTED -> {
+                binding.tvMixLinkTitle.text = "Master Link: Offline"
+                binding.tvMixLinkSubtitle.text = "Disconnected • Tap Home to connect"
+                binding.tvMixLinkBadge.text = "○ OFFLINE"
+                binding.tvMixLinkBadge.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
+            }
+        }
     }
 
     private fun setupListeners() {
@@ -117,39 +162,10 @@ class ZeroMixActivity : AppCompatActivity() {
             finish()
         }
 
-        binding.btnConnect.setOnClickListener {
+        binding.cardConnectionStatus.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (mixManager?.isConnected == true || binding.btnConnect.text == "Disconnect") {
-                mixManager?.stop()
-                binding.btnConnect.text = "Connect"
-                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
-                binding.tvMixStatus.text = "○ DISCONNECTED"
-                binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
-            } else {
-                startConnect()
-            }
-        }
-
-        binding.btnModeUsb.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.etServerIp.setText("127.0.0.1")
-            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
-            startConnect()
-        }
-
-        binding.btnAutoDiscover.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.tvMixStatus.text = "Searching..."
-            val mode = ZeroLinkConfig.getConnectionMode(this)
-            discovery?.stopDiscovery()
-            discovery = NetworkDiscovery { ip, _ ->
-                runOnUiThread {
-                    binding.etServerIp.setText(ip)
-                    ZeroLinkConfig.setServerIp(this, ip)
-                    startConnect()
-                }
-            }
-            discovery?.startDiscovery(mode)
+            val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+            startConnect(host)
         }
 
         // Faders
@@ -285,14 +301,7 @@ class ZeroMixActivity : AppCompatActivity() {
     }
 
     private fun startAudioOnlyService(resultCode: Int, data: Intent) {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isEmpty()) {
-            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        ZeroLinkConfig.setServerIp(this, host)
-        NetworkDiscovery.wakeModule(host, "zerocast")
+        val host = connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
 
         val intent = Intent(this, StreamForegroundService::class.java).apply {
             action = StreamForegroundService.ACTION_START_AUDIO_ONLY
@@ -337,19 +346,10 @@ class ZeroMixActivity : AppCompatActivity() {
         }
     }
 
-    private fun startConnect() {
-        val host = binding.etServerIp.text.toString().trim()
-        if (host.isEmpty()) {
-            Toast.makeText(this, "Please enter PC IP or use USB mode", Toast.LENGTH_SHORT).show()
-            return
-        }
-        ZeroLinkConfig.setServerIp(this, host)
-        binding.btnConnect.text = "Connecting..."
-        binding.tvMixStatus.text = "● Waking ZeroMix..."
-        NetworkDiscovery.wakeModule(host, "zeromix") { _ ->
-            mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
-        }
-        NetworkDiscovery.wakeModule(host, "zerocast")
+    private fun startConnect(targetHost: String? = null) {
+        val host = targetHost ?: connMgr.targetHost.value.ifEmpty { "127.0.0.1" }
+        binding.tvMixStatus.text = "● Connecting..."
+        mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
     }
 
     private fun applyMixerState(state: ZeroMixState) {
