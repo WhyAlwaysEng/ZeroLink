@@ -255,6 +255,24 @@ class ZeroCastActivity : AppCompatActivity() {
         }
     }
 
+    private fun checkBatteryOptimization() {
+        try {
+            val ifilter = IntentFilter(Intent.ACTION_BATTERY_CHANGED)
+            val bStatus: Intent? = registerReceiver(null, ifilter)
+            val level = bStatus?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
+            val scale = bStatus?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
+            val status = bStatus?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
+            val isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
+            if (level > 0 && scale > 0) {
+                val pct = (level * 100) / scale
+                if (pct <= 20 && !isCharging) {
+                    binding.switchDimScreen.isChecked = true
+                    Toast.makeText(this, "🔋 Battery Saver (<$pct%): Auto-dimming screen to conserve power", Toast.LENGTH_LONG).show()
+                }
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun updateConnectionHint() {
         val ip = binding.etServerIp.text.toString().trim()
         val isUsb = ip == "127.0.0.1" || ip == "localhost"
@@ -262,15 +280,21 @@ class ZeroCastActivity : AppCompatActivity() {
 
         if (isUsb) {
             if (hasPhysicalCable) {
-                binding.tvConnectionHint.text = "⚡ Connection Mode: Physical USB Cable (High-Speed ADB 127.0.0.1)"
+                binding.tvConnectionHint.text = "⚡ Link Quality: Physical USB Cable (High-Speed ADB 127.0.0.1 • Latency < 1ms)"
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
             } else {
-                binding.tvConnectionHint.text = "⚠️ Connection Mode: Wireless ADB over Wi-Fi (No physical cable detected • Capped ~20 Mbps • Plug in USB cable for 50-80 Mbps)"
+                binding.tvConnectionHint.text = "⚠️ Link Quality: Wireless ADB over Wi-Fi (No physical cable • Plug in USB for <1ms latency)"
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
             }
         } else if (ip.isNotEmpty()) {
-            binding.tvConnectionHint.text = "📡 Connection Mode: Direct Wi-Fi LAN (Local Network: $ip)"
-            binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#059669"))
+            val isTether = ip.startsWith("10.") || ip.startsWith("192.168.42.") || ip.startsWith("192.168.43.")
+            if (isTether) {
+                binding.tvConnectionHint.text = "⚡ Link Quality: USB Tethering (Hardware Virtual LAN: $ip • Latency < 2ms)"
+                binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
+            } else {
+                binding.tvConnectionHint.text = "📡 Link Quality: Direct Wi-Fi LAN ($ip • Optimal for 5GHz Wi-Fi)"
+                binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#059669"))
+            }
         } else {
             binding.tvConnectionHint.text = "⚠️ Please enter PC IP or tap 'USB Cable'"
             binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
@@ -381,6 +405,7 @@ class ZeroCastActivity : AppCompatActivity() {
 
     private fun startStreamFlow() {
         saveSettings()
+        checkBatteryOptimization()
         if (binding.rbCameraBack.isChecked || binding.rbCameraFront.isChecked) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
                 permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))

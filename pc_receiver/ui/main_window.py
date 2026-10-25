@@ -157,7 +157,7 @@ class MainWindow(QMainWindow):
         self.local_ip = get_local_ip()
         self.start_minimized = start_minimized
 
-        self.setWindowTitle("ZeroLink Hub v1.0")
+        self.setWindowTitle(f"ZeroLink Hub v{CURRENT_VERSION}")
         icon_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
@@ -218,7 +218,7 @@ class MainWindow(QMainWindow):
         self.discovery_service.start()
 
         # Update Checker
-        self.latest_release_url = "https://github.com/WhyAlwaysEng/ZeroCast/releases"
+        self.latest_release_url = f"https://github.com/WhyAlwaysEng/ZeroLink/releases"
         self.latest_release_tag = ""
         self.latest_release_notes = ""
         QTimer.singleShot(2500, self._check_for_updates)
@@ -266,10 +266,13 @@ class MainWindow(QMainWindow):
         app_name.setStyleSheet("color: #111827; letter-spacing: 0.3px;")
         brand_text_col.addWidget(app_name)
 
-        hub_badge = QLabel("HUB v1.0")
-        hub_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
-        hub_badge.setStyleSheet("color: #6B7280; letter-spacing: 0.8px;")
-        brand_text_col.addWidget(hub_badge)
+        self.hub_badge = QLabel(f"HUB v{CURRENT_VERSION}")
+        self.hub_badge.setFont(QFont("Segoe UI", 8, QFont.Weight.DemiBold))
+        self.hub_badge.setStyleSheet("color: #6B7280; letter-spacing: 0.8px;")
+        self.hub_badge.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.hub_badge.setToolTip("Click to check for updates from GitHub")
+        self.hub_badge.mousePressEvent = lambda _: self._check_for_updates(is_manual=True)
+        brand_text_col.addWidget(self.hub_badge)
 
         brand_row.addLayout(brand_text_col)
         brand_row.addStretch()
@@ -587,25 +590,58 @@ class MainWindow(QMainWindow):
         else:
             super().keyPressEvent(event)
 
-    def _check_for_updates(self):
-        self.update_worker = UpdateCheckWorker(CURRENT_VERSION, self)
+    def _check_for_updates(self, is_manual: bool = False):
+        if is_manual:
+            self.hub_badge.setText("Checking...")
+        self.update_worker = UpdateCheckWorker(CURRENT_VERSION, is_manual=is_manual, parent=self)
         self.update_worker.update_available.connect(self._on_update_available)
+        self.update_worker.no_update.connect(self._on_no_update)
+        self.update_worker.check_failed.connect(self._on_update_failed)
         self.update_worker.start()
 
     def _on_update_available(self, tag_name: str, html_url: str, notes: str):
         self.latest_release_url = html_url
         self.latest_release_tag = tag_name
         self.latest_release_notes = notes
+        self.hub_badge.setText(f"NEW: {tag_name}")
+        self.hub_badge.setStyleSheet("color: #10B981; font-weight: bold; letter-spacing: 0.8px;")
         self.btn_update.setText(f"Update: {tag_name}")
         self.btn_update.setVisible(True)
+
+    def _on_no_update(self, is_manual: bool):
+        self.hub_badge.setText(f"HUB v{CURRENT_VERSION}")
+        self.hub_badge.setStyleSheet("color: #6B7280; letter-spacing: 0.8px;")
+        if is_manual:
+            box = QMessageBox(self)
+            box.setWindowTitle("ZeroLink Update")
+            box.setIcon(QMessageBox.Icon.Information)
+            box.setText(f"<h3>You're Up to Date!</h3><p>ZeroLink v{CURRENT_VERSION} is currently the latest version.</p>")
+            box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            box.exec()
+
+    def _on_update_failed(self, err: str, is_manual: bool):
+        self.hub_badge.setText(f"HUB v{CURRENT_VERSION}")
+        self.hub_badge.setStyleSheet("color: #6B7280; letter-spacing: 0.8px;")
+        if is_manual:
+            box = QMessageBox(self)
+            box.setWindowTitle("ZeroLink Update")
+            box.setIcon(QMessageBox.Icon.Warning)
+            box.setText(f"<h3>Update Check Failed</h3><p>Could not reach GitHub Releases.<br><small>{err}</small></p>")
+            box.setStandardButtons(QMessageBox.StandardButton.Ok)
+            box.exec()
 
     def _on_update_clicked(self):
         box = QMessageBox(self)
         box.setWindowTitle("ZeroLink Update")
+        snippet = self.latest_release_notes.strip()
+        if len(snippet) > 300:
+            snippet = snippet[:300] + "..."
+        notes_html = f"<pre style='background:#F3F4F6; padding:8px; border-radius:4px;'>{snippet}</pre>" if snippet else ""
         box.setText(f"<h3>New Release Available: {self.latest_release_tag}</h3>"
                     f"<p>Current: v{CURRENT_VERSION}</p>"
+                    f"{notes_html}"
                     f"<p>Open download page on GitHub?</p>")
-        download_btn = box.addButton("Open Page", QMessageBox.ButtonRole.AcceptRole)
+        download_btn = box.addButton("Download Release", QMessageBox.ButtonRole.AcceptRole)
         box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
         box.exec()
 
@@ -709,10 +745,34 @@ class MainWindow(QMainWindow):
         from PyQt6.QtWidgets import QApplication
         QApplication.quit()
 
+    def _extract_otp(self, text: str) -> Optional[str]:
+        """Detects 4-8 digit OTP verification codes from notification content."""
+        if not text:
+            return None
+        keywords = ["otp", "code", "verification", "รหัส", "password", "pin", "auth", "ยืนยัน", "passcode"]
+        text_lower = text.lower()
+        if not any(k in text_lower for k in keywords):
+            return None
+
+        # Look for 4 to 8 consecutive digits
+        matches = re.findall(r"\b\d{4,8}\b", text)
+        return matches[0] if matches else None
+
     def _on_phone_notification(self, app_name: str, title: str, text: str):
         if hasattr(self, "tray_icon") and self.tray_icon:
-            msg = f"{title}\n{text}" if title else text
-            self.tray_icon.showMessage(f"📱 {app_name}", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
+            full_msg = f"{title} {text}".strip()
+            otp = self._extract_otp(full_msg)
+            if otp:
+                # Feature 1: Smart OTP Auto-Copy to Windows Clipboard
+                from PyQt6.QtWidgets import QApplication
+                cb = QApplication.clipboard()
+                if cb:
+                    cb.setText(otp)
+                body = f"[OTP AUTO-COPIED: {otp}]\n{title}\n{text}" if title else f"[OTP AUTO-COPIED: {otp}]\n{text}"
+                self.tray_icon.showMessage(f"📋 OTP Copied • {app_name}", body, QSystemTrayIcon.MessageIcon.Information, 6000)
+            else:
+                msg = f"{title}\n{text}" if title else text
+                self.tray_icon.showMessage(f"📱 {app_name}", msg, QSystemTrayIcon.MessageIcon.Information, 4500)
 
     def _on_remote_wake_module(self, module_id: str):
         mod = self.module_manager.get_module(module_id)

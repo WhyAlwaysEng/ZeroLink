@@ -9,7 +9,7 @@
 *Next-Gen Video Codecs (H.264 • H.265/HEVC • AV1) • Studio Internal Audio • Virtual Camera • Multi-Module Pluggable Suite*
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Version-v1.1.1-000000?style=for-the-badge&logo=github&logoColor=white" alt="Version 1.1.1" />
+  <img src="https://img.shields.io/badge/Version-v1.1.2-000000?style=for-the-badge&logo=github&logoColor=white" alt="Version 1.1.2" />
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20Android-111827?style=for-the-badge&logo=android&logoColor=white" alt="Platform" />
   <img src="https://img.shields.io/badge/Design-Minimal%20Monochrome-F9FAFB?style=for-the-badge&labelColor=111827&color=E5E7EB" alt="Minimal Monochrome" />
   <img src="https://img.shields.io/badge/License-MIT-000000?style=for-the-badge" alt="License" />
@@ -554,7 +554,16 @@ The `ModuleManager` handles registration, on-demand activation, and lifecycle co
 
 ## 📝 Changelog
 
-### v1.1.1 (Latest)
+### v1.1.2 (Latest)
+- 📋 **Smart OTP Auto-Copy Engine** — Windows notification bridge automatically detects 4–8 digit verification codes / OTPs in mirrored mobile notifications and copies them directly to Windows clipboard with 1-click toast action.
+- 🌐 **Web Direct / ZeroShare Portal** — Phone gallery & storage server (`port 8896`) now serves a clean HTML5 web interface for any PC/Mac/iOS browser on the LAN to browse and download photos/files without installing an app.
+- 🔄 **Dynamic Versioning & Rebranding** — Unified branding to ZeroLink across all UI elements and Standby canvases; versions on PC and Mobile are bound dynamically to build metadata with zero hardcoding.
+- 🚀 **Interactive GitHub Update Checker** — Added manual 1-tap update check from the version header on mobile and PC sidebar badge; direct APK/ZIP download link integration.
+- 📶 **Link Quality & Latency HUD** — Real-time connection quality indicators across physical USB (<1ms), USB Tethering (<2ms), and Wi-Fi LAN modes.
+- 🔋 **Smart Battery Saver** — Automatic screen dimming and thermal optimization on mobile when battery drops below 20%.
+- 🖥️ **ZeroDisplay Virtual Monitor Shortcut** — 1-click access to Windows Display Settings to easily configure secondary virtual displays.
+
+### v1.1.1
 - ⚡ **USB Tethering Auto-Discovery Engine** — Automatically detects and routes USB Tethering (RNDIS / NCM) network adapters without requiring USB Debugging or manual IP entry.
 - 📡 **Multi-Interface Broadcast Beacon** — PC broadcasts discovery beacons across all active network adapters (Wi-Fi, USB Tether, Mobile Hotspot) with interface-matched IP payloads.
 - 📱 **Mobile Multi-Interface Discovery** — Android client sends discovery broadcasts out all network interfaces (`rndis0`, `usb0`, `wlan0`) and performs fast parallel tethering gateway probes.

@@ -103,6 +103,9 @@ class ExplorerServer(
                 val connHeader = headers["connection"]?.lowercase()
 
                 when {
+                    path == "/" || path == "/index.html" -> {
+                        handleWebPortal(output)
+                    }
                     path == "/api/storage" -> {
                         handleStorage(output)
                     }
@@ -158,6 +161,78 @@ class ExplorerServer(
         } finally {
             try { socket.close() } catch (e: Exception) {}
         }
+    }
+
+    private fun handleWebPortal(output: OutputStream) {
+        val html = """
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>ZeroLink Web Direct</title>
+                <style>
+                    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0F172A; color: #F8FAFC; margin: 0; padding: 24px; }
+                    .header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 24px; }
+                    .logo { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+                    .badge { background: #38BDF8; color: #0F172A; padding: 4px 10px; border-radius: 999px; font-weight: 700; font-size: 12px; }
+                    .section-title { font-size: 18px; font-weight: 700; margin-bottom: 16px; }
+                    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 16px; }
+                    .card { background: #1E293B; border-radius: 12px; overflow: hidden; border: 1px solid #334155; display: flex; flex-direction: column; transition: transform 0.2s; }
+                    .card:hover { transform: translateY(-4px); }
+                    .thumb { width: 100%; height: 160px; object-fit: cover; background: #0F172A; }
+                    .card-body { padding: 12px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
+                    .filename { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                    .btn-dl { background: #F8FAFC; color: #0F172A; text-decoration: none; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; text-align: center; margin-top: 10px; display: block; }
+                    .btn-dl:hover { background: #CBD5E1; }
+                </style>
+            </head>
+            <body>
+                <div class="header">
+                    <div class="logo">⚡ ZeroLink <span style="font-weight: 400; font-size: 16px; color: #94A3B8;">Web Direct</span></div>
+                    <div class="badge">LAN DIRECT</div>
+                </div>
+                <div class="section-title">📸 Recent Photos &amp; Videos</div>
+                <div id="gallery" class="grid"><p style="color:#94A3B8;">Loading gallery items...</p></div>
+                <script>
+                    fetch('/api/gallery/photos?limit=60')
+                        .then(r => r.json())
+                        .then(data => {
+                            const container = document.getElementById('gallery');
+                            container.innerHTML = '';
+                            const items = data.items || [];
+                            if (items.length === 0) {
+                                container.innerHTML = '<p style="color:#94A3B8;">No media found on device.</p>';
+                                return;
+                            }
+                            items.forEach(item => {
+                                const card = document.createElement('div');
+                                card.className = 'card';
+                                card.innerHTML = `
+                                    <img class="thumb" src="/api/media/thumb?id=${'$'}{item.id}&type=${'$'}{item.is_video ? 'video' : 'photo'}" loading="lazy" />
+                                    <div class="card-body">
+                                        <div class="filename" title="${'$'}{item.display_name}">${'$'}{item.display_name}</div>
+                                        <a class="btn-dl" href="/api/media/raw?id=${'$'}{item.id}&type=${'$'}{item.is_video ? 'video' : 'photo'}&download=true">Download</a>
+                                    </div>
+                                `;
+                                container.appendChild(card);
+                            });
+                        })
+                        .catch(e => {
+                            document.getElementById('gallery').innerHTML = '<p style="color:#EF4444;">Failed to load items: ' + e + '</p>';
+                        });
+                </script>
+            </body>
+            </html>
+        """.trimIndent()
+        val bytes = html.toByteArray(Charsets.UTF_8)
+        val header = "HTTP/1.1 200 OK\r\n" +
+                "Content-Type: text/html; charset=utf-8\r\n" +
+                "Content-Length: ${bytes.size}\r\n" +
+                "Connection: close\r\n" +
+                "\r\n"
+        output.write(header.toByteArray(Charsets.US_ASCII))
+        output.write(bytes)
     }
 
     private fun handleStorage(out: OutputStream) {

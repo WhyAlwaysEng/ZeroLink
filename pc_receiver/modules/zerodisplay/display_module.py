@@ -187,6 +187,13 @@ class ZeroDisplayModule(BaseModule):
         btn_refresh_mon.setStyleSheet("padding: 4px 10px; font-size: 11px;")
         btn_refresh_mon.clicked.connect(self._populate_monitors)
         mon_row.addWidget(btn_refresh_mon)
+
+        import os
+        btn_win_display = QPushButton("🖥️ Display Settings")
+        btn_win_display.setToolTip("Open Windows Display Settings to configure multiple monitors or virtual display adapters")
+        btn_win_display.setStyleSheet("padding: 4px 10px; font-size: 11px;")
+        btn_win_display.clicked.connect(lambda: os.system("start ms-settings:display"))
+        mon_row.addWidget(btn_win_display)
         cfg_layout.addLayout(mon_row)
 
         # Target Frame Rate Row (Up to 120 FPS)

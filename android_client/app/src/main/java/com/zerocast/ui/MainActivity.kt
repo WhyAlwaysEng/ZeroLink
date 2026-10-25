@@ -9,6 +9,7 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.zerocast.BuildConfig
 import com.zerocast.R
 import com.zerocast.databinding.ActivityMainBinding
 import com.zerocast.network.NetworkDiscovery
@@ -25,12 +26,20 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // Dynamic Version & GitHub Update Trigger
+        val currentVer = BuildConfig.VERSION_NAME
+        binding.tvHeaderSubtitle.text = "Ecosystem Hub v$currentVer • Windows & Android"
+        binding.tvHeaderSubtitle.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            UpdateChecker.checkForUpdates(this, isManualCheck = true)
+        }
+
         setupDiscoveryCard()
         setupNotificationMirrorCard()
         setupModuleCards()
 
-        // Asynchronously check for GitHub updates
-        UpdateChecker.checkForUpdates(this)
+        // Asynchronously check for GitHub updates in background
+        UpdateChecker.checkForUpdates(this, isManualCheck = false)
     }
 
     override fun onResume() {

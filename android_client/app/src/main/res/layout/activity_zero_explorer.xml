@@ -162,6 +162,18 @@
                             app:cornerRadius="8dp"
                             app:strokeColor="@color/surface_stroke" />
                     </LinearLayout>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnWebDirect"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="12dp"
+                        android:text="🌐 Web Direct: Open in Any Browser"
+                        android:textColor="@color/text_primary"
+                        android:textSize="12sp"
+                        app:cornerRadius="8dp"
+                        app:strokeColor="@color/surface_stroke" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

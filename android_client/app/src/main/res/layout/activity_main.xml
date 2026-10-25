@@ -46,12 +46,16 @@
                     android:letterSpacing="-0.02" />
 
                 <TextView
+                    android:id="@+id/tvHeaderSubtitle"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
-                    android:text="Ecosystem Hub v1.0 • Windows &amp; Android"
+                    android:text="Ecosystem Hub • Windows &amp; Android"
                     android:textColor="@color/text_secondary"
-                    android:textSize="12sp" />
+                    android:textSize="12sp"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp" />
             </LinearLayout>
 
             <TextView

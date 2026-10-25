@@ -36,6 +36,7 @@ from core.input_controller import InputController
 from core.virtual_cam import VirtualCameraManager
 from core.protocol import TYPE_VIDEO_MJPEG, TYPE_VIDEO_H264, TYPE_VIDEO_HEVC, TYPE_VIDEO_AV1
 from core.speedtest_server import SpeedTestServer, SPEEDTEST_PORT
+from core.updater import CURRENT_VERSION
 from ui.speedtest_dialog import SpeedTestDialog
 from ui.flow_layout import FlowLayout
 from modules.zerocast.manifest import (
@@ -208,7 +209,7 @@ class ModernVideoCanvas(QWidget):
 
         painter.setFont(QFont("Segoe UI", 8, QFont.Weight.ExtraBold))
         painter.setPen(QColor("#FFFFFF"))
-        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, "ZEROCAST v1.0")
+        painter.drawText(badge_rect, Qt.AlignmentFlag.AlignCenter, f"ZEROLINK v{CURRENT_VERSION}")
 
         painter.setFont(QFont("Segoe UI", 16, QFont.Weight.Bold))
         painter.setPen(QColor("#111827"))

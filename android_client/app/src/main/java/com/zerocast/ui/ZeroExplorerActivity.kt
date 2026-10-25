@@ -1,5 +1,6 @@
 package com.zerocast.ui
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -78,9 +79,54 @@ class ZeroExplorerActivity : AppCompatActivity() {
             Toast.makeText(this, "Session Log Cleared", Toast.LENGTH_SHORT).show()
         }
 
+        binding.btnWebDirect.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val ip = getDeviceIp()
+            val webUrl = "http://$ip:8896/"
+
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("🌐 ZeroLink Web Direct")
+                .setMessage("Open this address in any browser (Chrome, Edge, Safari) on your PC, Mac, or tablet:\n\n👉 $webUrl\n\nYou can view photos and download files directly without installing any program on your PC!")
+                .setPositiveButton("Open Browser") { _, _ ->
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webUrl))
+                        startActivity(intent)
+                    } catch (_: Exception) {}
+                }
+                .setNeutralButton("Copy Link") { _, _ ->
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                    val clip = android.content.ClipData.newPlainText("ZeroLink Web", webUrl)
+                    clipboard.setPrimaryClip(clip)
+                    Toast.makeText(this, "Copied: $webUrl", Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("Close", null)
+                .show()
+        }
+
         startServer()
         updateStorageSummary()
         updatePermissionStatus()
+    }
+
+    private fun getDeviceIp(): String {
+        try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                if (iface.isLoopback || !iface.isUp) continue
+                val addrs = iface.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    val addr = addrs.nextElement()
+                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
+                        val host = addr.hostAddress
+                        if (host != null && (host.startsWith("192.168.") || host.startsWith("10.") || host.startsWith("172."))) {
+                            return host
+                        }
+                    }
+                }
+            }
+        } catch (_: Exception) {}
+        return "127.0.0.1"
     }
 
     private fun startServer() {
