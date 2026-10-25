@@ -159,9 +159,7 @@ class MainWindow(QMainWindow):
         self.port = port
         self.local_ip = get_local_ip()
         self.app_settings = AppSettings()
-        if self.app_settings.start_minimized:
-            self.start_minimized = True
-        self.start_minimized = start_minimized or self.start_minimized
+        self.start_minimized = start_minimized or self.app_settings.start_minimized
 
         self.setWindowTitle(f"ZeroLink Hub v{CURRENT_VERSION}")
         icon_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
