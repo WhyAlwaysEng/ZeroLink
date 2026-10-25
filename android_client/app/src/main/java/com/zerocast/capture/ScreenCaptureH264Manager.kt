@@ -6,6 +6,7 @@ import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -86,6 +87,24 @@ class ScreenCaptureH264Manager(
                 // Baseline Profile for ZERO decoder buffer latency (no B-frames)
                 setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
                 setInteger(MediaFormat.KEY_BITRATE_MODE, bitrateMode)
+
+                // Low-Latency Realtime Priority & Speed optimization
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+                    } catch (_: Exception) {}
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        setInteger(MediaFormat.KEY_LATENCY, 0)
+                    } catch (_: Exception) {}
+                }
+                try {
+                    setInteger(MediaFormat.KEY_PRIORITY, 0) // Realtime priority
+                } catch (_: Exception) {}
+                try {
+                    setInteger(MediaFormat.KEY_COMPLEXITY, 0) // Fastest motion estimation
+                } catch (_: Exception) {}
 
                 // Idle refresh: set to 10 seconds so it doesn't pump redundant ghost frames every 100ms
                 setLong(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 10_000_000L)

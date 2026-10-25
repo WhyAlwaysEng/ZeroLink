@@ -22,11 +22,16 @@ class H264Decoder:
         if not HAS_AV:
             return
         try:
+            import os
             codec = av.CodecContext.create('h264', 'r')
             codec.flags |= av.codec.context.Flags.low_delay
+            try:
+                codec.flags2 |= av.codec.context.Flags2.fast
+            except Exception:
+                pass
             codec.options = {'tune': 'zerolatency'}
             codec.thread_type = 'SLICE'
-            codec.thread_count = 1
+            codec.thread_count = min(2, os.cpu_count() or 2)
             codec.open()
             self.codec = codec
         except Exception:

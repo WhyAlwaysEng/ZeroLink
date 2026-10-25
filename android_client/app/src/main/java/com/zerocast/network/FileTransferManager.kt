@@ -41,10 +41,14 @@ class FileTransferManager(private val context: Context) {
             try {
                 withContext(Dispatchers.Main) { onProgress(filename, 0, 0f) }
 
-                socket = Socket()
-                socket.connect(InetSocketAddress(host, port), 4000)
+                val s = Socket()
+                s.tcpNoDelay = true
+                s.sendBufferSize = 1024 * 1024
+                s.receiveBufferSize = 1024 * 1024
+                s.connect(InetSocketAddress(host, port), 4000)
+                socket = s
 
-                val out = socket.getOutputStream()
+                val out = java.io.BufferedOutputStream(s.getOutputStream(), 262144)
                 val header = JSONObject().apply {
                     put("action", "SEND_FILE")
                     put("filename", filename)
@@ -54,10 +58,11 @@ class FileTransferManager(private val context: Context) {
                 out.write(header.toByteArray(Charsets.UTF_8))
                 out.flush()
 
-                val inputStream = context.contentResolver.openInputStream(uri)
+                val rawInputStream = context.contentResolver.openInputStream(uri)
                     ?: throw Exception("Could not open input stream for $filename")
+                val inputStream = java.io.BufferedInputStream(rawInputStream, 262144)
 
-                val buffer = ByteArray(65536)
+                val buffer = ByteArray(262144)
                 var sent: Long = 0
                 val startTime = System.currentTimeMillis()
                 var lastUpdate = startTime
@@ -120,11 +125,14 @@ class FileTransferManager(private val context: Context) {
                     }
 
                     val s = Socket()
+                    s.tcpNoDelay = true
+                    s.receiveBufferSize = 1024 * 1024
+                    s.sendBufferSize = 1024 * 1024
                     s.connect(InetSocketAddress(host, port), 4000)
                     receiverSocket = s
 
-                    val out = s.getOutputStream()
-                    val inStream = s.getInputStream()
+                    val out = java.io.BufferedOutputStream(s.getOutputStream(), 262144)
+                    val inStream = java.io.BufferedInputStream(s.getInputStream(), 262144)
 
                     // Register as receiver
                     val regHeader = JSONObject().apply {
@@ -177,8 +185,8 @@ class FileTransferManager(private val context: Context) {
                                 onProgress(targetFile.name, 0, 0f)
                             }
 
-                            val fos = FileOutputStream(targetFile)
-                            val buf = ByteArray(65536)
+                            val fos = java.io.BufferedOutputStream(FileOutputStream(targetFile), 262144)
+                            val buf = ByteArray(262144)
                             var received: Long = 0
                             val startTime = System.currentTimeMillis()
                             var lastUpdate = startTime

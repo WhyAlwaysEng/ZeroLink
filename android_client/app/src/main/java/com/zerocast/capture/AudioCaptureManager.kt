@@ -77,8 +77,8 @@ class AudioCaptureManager(
             record.startRecording()
 
             recordThread = Thread({
-                // 4096 bytes matches Android Audio HAL buffer quantum (1024 stereo samples), perfectly aligned to 512/1024 frames
-                val buffer = ByteArray(4096)
+                // 2048 bytes matches low-latency Android Audio HAL buffer quantum (512 stereo samples = ~10.6ms @ 48kHz)
+                val buffer = ByteArray(2048)
                 while (isRecording.get() && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val read = record.read(buffer, 0, buffer.size)
                     if (read > 0) {
@@ -86,7 +86,7 @@ class AudioCaptureManager(
                         streamSender.enqueueFrame(PacketHeader.TYPE_AUDIO, 0, pcmChunk)
                     } else {
                         try {
-                            Thread.sleep(2)
+                            Thread.sleep(1)
                         } catch (_: InterruptedException) {
                             break
                         }

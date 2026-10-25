@@ -3,6 +3,7 @@ package com.zerocast.capture
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.camera.core.ImageProxy
@@ -50,6 +51,23 @@ class CameraH264Encoder(
                 setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1)
                 setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileBaseline)
                 setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR)
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    try {
+                        setInteger(MediaFormat.KEY_MAX_B_FRAMES, 0)
+                    } catch (_: Exception) {}
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    try {
+                        setInteger(MediaFormat.KEY_LATENCY, 0)
+                    } catch (_: Exception) {}
+                }
+                try {
+                    setInteger(MediaFormat.KEY_PRIORITY, 0)
+                } catch (_: Exception) {}
+                try {
+                    setInteger(MediaFormat.KEY_COMPLEXITY, 0)
+                } catch (_: Exception) {}
             }
 
             encoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)

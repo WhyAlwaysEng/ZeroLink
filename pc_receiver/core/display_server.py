@@ -163,6 +163,10 @@ class DisplayServer(QObject):
             try:
                 client_sock, addr = self._server_sock.accept()
                 client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                try:
+                    client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1048576)
+                except Exception:
+                    pass
                 ip = addr[0]
 
                 info = {
@@ -307,53 +311,65 @@ class DisplayServer(QObject):
             self._remove_client(target)
 
     def _capture_loop(self):
-        """Continuously captures monitor frames and sends them to connected clients."""
+        """Continuously captures monitor frames and sends them to connected clients with persistent capture context."""
         interval = 1.0 / max(1, self.target_fps)
+        sct = None
+        if HAS_MSS:
+            try:
+                sct = mss.mss()
+            except Exception as e:
+                print(f"[ZeroDisplay] Error initializing persistent mss: {e}")
 
-        while self.is_running:
-            t_start = time.time()
+        try:
+            while self.is_running:
+                t_start = time.time()
 
-            with self._lock:
-                has_clients = len(self._clients) > 0
+                with self._lock:
+                    has_clients = len(self._clients) > 0
 
-            if not has_clients:
-                time.sleep(0.1)
-                continue
+                if not has_clients or sct is None:
+                    time.sleep(0.05)
+                    continue
 
-            frame_bytes = self._grab_and_compress_frame()
-            if frame_bytes:
-                self._broadcast_frame(frame_bytes)
+                frame_bytes = self._grab_and_compress_frame(sct)
+                if frame_bytes:
+                    self._broadcast_frame(frame_bytes)
 
-            elapsed = time.time() - t_start
-            sleep_time = interval - elapsed
-            if sleep_time > 0:
-                time.sleep(sleep_time)
+                elapsed = time.time() - t_start
+                sleep_time = interval - elapsed
+                if sleep_time > 0:
+                    time.sleep(sleep_time)
 
-            # Update stats every 1 second
-            now = time.time()
-            if now - self._last_stat_time >= 1.0:
-                dt = now - self._last_stat_time
-                self.fps = self._frame_count / dt
-                self.bitrate_mbps = (self._bytes_sent * 8.0) / (dt * 1_000_000.0)
-                self.stats_updated.emit(self.fps, self.bitrate_mbps)
-                self._frame_count = 0
-                self._bytes_sent = 0
-                self._last_stat_time = now
+                # Update stats every 1 second
+                now = time.time()
+                if now - self._last_stat_time >= 1.0:
+                    dt = now - self._last_stat_time
+                    self.fps = self._frame_count / dt
+                    self.bitrate_mbps = (self._bytes_sent * 8.0) / (dt * 1_000_000.0)
+                    self.stats_updated.emit(self.fps, self.bitrate_mbps)
+                    self._frame_count = 0
+                    self._bytes_sent = 0
+                    self._last_stat_time = now
+        finally:
+            if sct is not None:
+                try:
+                    sct.close()
+                except Exception:
+                    pass
 
-    def _grab_and_compress_frame(self) -> Optional[bytes]:
+    def _grab_and_compress_frame(self, sct) -> Optional[bytes]:
         """Captures selected monitor screen and returns JPEG encoded byte payload."""
-        if not HAS_MSS:
+        if not HAS_MSS or sct is None:
             return None
 
         try:
-            with mss.mss() as sct:
-                idx = self.selected_monitor_idx
-                if idx < 0 or idx >= len(sct.monitors):
-                    idx = 1 if len(sct.monitors) > 1 else 0
-                monitor = sct.monitors[idx]
+            idx = self.selected_monitor_idx
+            if idx < 0 or idx >= len(sct.monitors):
+                idx = 1 if len(sct.monitors) > 1 else 0
+            monitor = sct.monitors[idx]
 
-                sct_img = sct.grab(monitor)
-                frame = np.array(sct_img)  # BGRA
+            sct_img = sct.grab(monitor)
+            frame = np.array(sct_img)  # BGRA
 
             # Downscale if requested
             if self.scale_factor < 0.99:

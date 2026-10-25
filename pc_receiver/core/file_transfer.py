@@ -86,6 +86,12 @@ class FileTransferService(QObject):
         while self.is_running and self._server_sock:
             try:
                 client_sock, addr = self._server_sock.accept()
+                try:
+                    client_sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+                    client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 1048576)
+                    client_sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1048576)
+                except Exception:
+                    pass
                 t = threading.Thread(target=self._handle_client, args=(client_sock,), daemon=True)
                 t.start()
             except Exception:
@@ -235,7 +241,7 @@ class FileTransferService(QObject):
                     f.write(initial_data)
 
                 while received < filesize and self.is_running:
-                    chunk = sock.recv(min(65536, filesize - received))
+                    chunk = sock.recv(min(262144, filesize - received))
                     if not chunk:
                         break
                     f.write(chunk)
@@ -303,7 +309,7 @@ class FileTransferService(QObject):
 
                         with open(path, "rb") as f:
                             while sent < filesize and self.is_running:
-                                buf = f.read(65536)
+                                buf = f.read(262144)
                                 if not buf:
                                     break
                                 sock.sendall(buf)
