@@ -177,6 +177,9 @@ class StreamForegroundService : LifecycleService() {
 
             override fun onDisconnected(reason: String?) {
                 Log.d(TAG, "Audio cast disconnected: $reason")
+                mainHandler.post {
+                    stopStreaming()
+                }
             }
 
             override fun onControlPacketReceived(payload: ByteArray) {
@@ -304,6 +307,9 @@ class StreamForegroundService : LifecycleService() {
 
             override fun onDisconnected(reason: String?) {
                 Log.d(TAG, "Disconnected: $reason")
+                mainHandler.post {
+                    stopStreaming()
+                }
             }
 
             override fun onControlPacketReceived(payload: ByteArray) {

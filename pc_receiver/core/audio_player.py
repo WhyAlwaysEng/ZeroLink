@@ -12,6 +12,7 @@ Features:
 import threading
 import time
 from typing import List, Tuple
+import numpy as np
 from PyQt6.QtCore import QIODevice
 from PyQt6.QtMultimedia import QAudioFormat, QAudioSink, QAudioDevice, QMediaDevices
 
@@ -64,9 +65,14 @@ class AudioPlayer:
         if not dev.isFormatSupported(audio_format):
             audio_format = dev.preferredFormat()
 
+        self.audio_format = audio_format
+        self.is_float_format = (audio_format.sampleFormat() == QAudioFormat.SampleFormat.Float)
+        self.sink_frame_bytes = audio_format.bytesPerFrame() if audio_format.bytesPerFrame() > 0 else (4 if not self.is_float_format else 8)
+
         self.sink = QAudioSink(dev, audio_format)
-        # 500ms hardware buffer in WASAPI (96KB) completely eliminates audio underruns
-        self.sink.setBufferSize(self.sample_rate * self.bytes_per_sample // 2)
+        # 500ms hardware buffer in WASAPI completely eliminates audio underruns
+        buf_size = max(4096, self.sample_rate * self.sink_frame_bytes // 2)
+        self.sink.setBufferSize(buf_size)
         self.sink.setVolume(self.current_volume)
         self.io_device = self.sink.start()
         self.is_active = True
@@ -132,7 +138,8 @@ class AudioPlayer:
                     continue
 
                 bytes_free = self.sink.bytesFree()
-                if bytes_free < self.bytes_per_sample:
+                sink_frame_bytes = getattr(self, "sink_frame_bytes", self.bytes_per_sample)
+                if bytes_free < sink_frame_bytes:
                     time.sleep(0.005)
                     continue
 
@@ -151,21 +158,34 @@ class AudioPlayer:
                             self._is_prebuffering = True
                             self._target_prebuffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.12)
                         else:
-                            # Write whatever fits into sink
-                            to_take = min(bytes_free, len(self._buffer))
-                            # Crucial: align to exact 4-byte frame boundary
-                            to_take = (to_take // self.bytes_per_sample) * self.bytes_per_sample
-                            if to_take > 0:
-                                chunk_to_write = bytes(self._buffer[:to_take])
-                                del self._buffer[:to_take]
+                            # Write whatever fits into sink, keeping exact frame alignment
+                            frames_free = bytes_free // sink_frame_bytes
+                            frames_available = len(self._buffer) // self.bytes_per_sample
+                            frames_to_take = min(frames_free, frames_available)
+                            bytes_to_take = frames_to_take * self.bytes_per_sample
+
+                            if bytes_to_take > 0:
+                                chunk_to_write = bytes(self._buffer[:bytes_to_take])
+                                del self._buffer[:bytes_to_take]
 
                 if chunk_to_write:
-                    written = self.io_device.write(chunk_to_write)
-                    if written > 0 and written < len(chunk_to_write):
-                        # Re-insert unwritten remainder back to the front of buffer
-                        remainder = chunk_to_write[written:]
-                        with self._lock:
-                            self._buffer = bytearray(remainder) + self._buffer
+                    # Convert to Float32 if required by hardware sink
+                    if getattr(self, "is_float_format", False):
+                        int16_arr = np.frombuffer(chunk_to_write, dtype=np.int16)
+                        bytes_to_write = (int16_arr.astype(np.float32) / 32768.0).tobytes()
+                    else:
+                        bytes_to_write = chunk_to_write
+
+                    written = self.io_device.write(bytes_to_write)
+                    if written > 0 and written < len(bytes_to_write):
+                        # Re-insert unwritten remainder back to the front of buffer (converting back to int16 if needed)
+                        unwritten_ratio = 1.0 - (written / len(bytes_to_write))
+                        unwritten_bytes = int(len(chunk_to_write) * unwritten_ratio)
+                        unwritten_bytes = (unwritten_bytes // self.bytes_per_sample) * self.bytes_per_sample
+                        if unwritten_bytes > 0:
+                            remainder = chunk_to_write[-unwritten_bytes:]
+                            with self._lock:
+                                self._buffer = bytearray(remainder) + self._buffer
 
                 time.sleep(0.004)
             except Exception:

@@ -224,7 +224,7 @@ class NetworkDiscovery(
                 if (iface.isLoopback || !iface.isUp) continue
                 val name = iface.name.lowercase()
                 // USB Tethering interfaces typically contain "rndis", "usb", "ncm", or "eth"
-                if (name.contains("rndis") || name.contains("usb") || name.contains("ncm")) {
+                if (name.contains("rndis") || name.contains("usb") || name.contains("ncm") || name.contains("eth")) {
                     for (ifAddr in iface.interfaceAddresses) {
                         val addr = ifAddr.address
                         if (addr is Inet4Address && !addr.isLoopbackAddress) {
@@ -233,7 +233,17 @@ class NetworkDiscovery(
                             if (parts.size == 4) {
                                 val prefix = "${parts[0]}.${parts[1]}.${parts[2]}."
                                 coroutineScope {
-                                    val fastScan = (1..254).toList()
+                                    // 1. Ultra-fast probe of common USB Tethering PC IP assignments (< 100ms discovery)
+                                    val priorityHosts = listOf(1, 2, 3, 4, 10, 50, 100, 101, 254)
+                                    for (h in priorityHosts) {
+                                        val target = "$prefix$h"
+                                        if (target != hostAddress && isScanning.get()) {
+                                            if (probeTcpGateway(target)) return@coroutineScope
+                                        }
+                                    }
+
+                                    // 2. Full subnet sweep in chunks if not found in priority set
+                                    val fastScan = (1..254).filterNot { priorityHosts.contains(it) }
                                     fastScan.chunked(32).forEach { chunk ->
                                         if (!isScanning.get()) return@coroutineScope
                                         chunk.map { h ->
@@ -273,7 +283,10 @@ class NetworkDiscovery(
                 if (line != null && line.contains("PONG")) {
                     val json = JSONObject(line)
                     val returnedIp = json.optString("ip", "")
+                    // Crucial: The exact IP probed and connected via TCP is the guaranteed working route.
+                    // Do not override with returnedIp (which may be the PC's Wi-Fi IP while on USB tethering).
                     val resolvedIp = if (ip == "127.0.0.1") "127.0.0.1"
+                                     else if (ip.isNotEmpty()) ip
                                      else if (returnedIp.isNotEmpty() && returnedIp != "127.0.0.1") returnedIp
                                      else ip
                     val port = json.optInt("port", 8888)

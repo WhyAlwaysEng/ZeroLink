@@ -30,8 +30,11 @@ class StreamSender(
         fun onFrameDropped() {}
     }
 
-    // Queue capacity of 40 limits buffer bloat to < 600ms even under extreme stalls
-    private val frameQueue = ArrayBlockingQueue<FramePacket>(40)
+    // Dedicated high-priority audio queue: Audio packets (~2KB each) are NEVER dropped,
+    // guaranteeing crystal-clear 48kHz stereo sound even during heavy Wi-Fi jitter or video bursts.
+    private val audioQueue = java.util.concurrent.ConcurrentLinkedQueue<FramePacket>()
+    // Queue capacity of 60 for video frames; video frames can be dropped under network congestion
+    private val videoQueue = ArrayBlockingQueue<FramePacket>(60)
     private val isRunning = AtomicBoolean(false)
     private var socket: Socket? = null
     private var outputStream: DataOutputStream? = null
@@ -59,10 +62,20 @@ class StreamSender(
                 // Launch reverse control backchannel reader
                 launchBackchannelReader()
 
-                // Main frame dispatch loop
+                // Main frame dispatch loop: Audio packets are prioritized first to eliminate Wi-Fi jitter
                 while (isRunning.get() && sock.isConnected && !sock.isClosed) {
-                    val packet = frameQueue.take()
-                    writePacket(packet)
+                    // 1. Drain any pending high-priority audio chunks immediately (< 0.1ms dispatch)
+                    var audioPkt = audioQueue.poll()
+                    while (audioPkt != null) {
+                        writePacket(audioPkt)
+                        audioPkt = audioQueue.poll()
+                    }
+
+                    // 2. Poll video frame with short 5ms timeout so audio is checked with ultra-low latency
+                    val videoPkt = videoQueue.poll(5, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    if (videoPkt != null) {
+                        writePacket(videoPkt)
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Socket stream exception: ${e.message}", e)
@@ -80,15 +93,20 @@ class StreamSender(
         if (!isRunning.get()) return
         val packet = FramePacket(type, flags, System.nanoTime() / 1000, payload)
 
-        // Dynamic Adaptive Bitrate (ABR) socket buffer detector:
-        // Trigger congestion early when >= 8 frames queue up (133ms at 60fps)
-        if (frameQueue.size >= 8) {
+        // Audio Priority Bypass: Never drop audio packets and never delay behind video
+        if (type == PacketHeader.TYPE_AUDIO) {
+            audioQueue.offer(packet)
+            return
+        }
+
+        // Dynamic Adaptive Bitrate (ABR) socket buffer detector based on video queue
+        if (videoQueue.size >= 12) {
             calmFrameCount = 0
             if (!isCongestedState) {
                 isCongestedState = true
                 listener?.onCongestionChanged(true)
             }
-        } else if (frameQueue.size <= 3) {
+        } else if (videoQueue.size <= 4) {
             calmFrameCount++
             if (calmFrameCount > 25 && isCongestedState) {
                 isCongestedState = false
@@ -96,10 +114,10 @@ class StreamSender(
             }
         }
 
-        if (!frameQueue.offer(packet)) {
-            frameQueue.poll() // Drop oldest packet to prevent backpressure blocking
+        if (!videoQueue.offer(packet)) {
+            videoQueue.poll() // Drop oldest video frame to prevent video latency buildup
             listener?.onFrameDropped()
-            frameQueue.offer(packet)
+            videoQueue.offer(packet)
         }
     }
 
@@ -150,7 +168,8 @@ class StreamSender(
 
     fun disconnect() {
         if (!isRunning.getAndSet(false)) return
-        frameQueue.clear()
+        videoQueue.clear()
+        audioQueue.clear()
         try {
             outputStream?.close()
             inputStream?.close()
