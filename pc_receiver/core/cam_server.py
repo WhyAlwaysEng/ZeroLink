@@ -193,6 +193,8 @@ class CamServer(QObject):
     def _handle_camera_stream(self, client_sock: socket.socket):
         """Reads incoming [ZCAM][Length][Timestamp][JPEG/Frame] packets."""
         magic_buf = bytearray(4)
+        if self._h264_decoder:
+            self._h264_decoder.reset()
 
         while self.is_running:
             try:
@@ -367,7 +369,8 @@ class CamServer(QObject):
 
         bgr_frames = self._h264_decoder.decode_to_bgr(nal_bytes)
         for bgr in bgr_frames:
-            self._post_process_and_emit(bgr, rotation_deg)
+            if bgr is not None and bgr.size > 0:
+                self._post_process_and_emit(bgr, rotation_deg)
 
     def send_control_command(self, cmd: Dict):
         """Sends command JSON (e.g. switch camera, toggle flash) to the phone."""

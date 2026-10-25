@@ -2,7 +2,9 @@ package com.zerocast.ui
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.graphics.Matrix
 import android.os.Build
 import android.os.Bundle
@@ -57,7 +59,7 @@ class ZeroCamActivity : AppCompatActivity() {
     private var jpegQuality = 82
 
     private var h264Encoder: CameraH264Encoder? = null
-    private var useH264Hardware = true // Hardware MediaCodec H.264 60 FPS Encoder
+    private var useH264Hardware = false // Default to Turbo JPEG Safe Mode (never green), toggleable to H.264
 
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
@@ -124,6 +126,23 @@ class ZeroCamActivity : AppCompatActivity() {
             switchResolution(1280, 720)
         }
         updateResolutionUI(targetWidth, targetHeight)
+
+        binding.btnCodecToggle.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            useH264Hardware = !useH264Hardware
+            updateCodecUI()
+            if (!useH264Hardware) {
+                h264Encoder?.stop()
+                h264Encoder = null
+                Toast.makeText(this, "📸 Switched to Turbo JPEG Safe Mode", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "⚡ Switched to Hardware H.264 Mode", Toast.LENGTH_SHORT).show()
+                if (isStreaming) {
+                    initH264Encoder(targetWidth, targetHeight)
+                }
+            }
+        }
+        updateCodecUI()
 
         binding.btnCamTorch.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -248,6 +267,54 @@ class ZeroCamActivity : AppCompatActivity() {
             binding.btnRes720p.setTextColor(textSecondary)
             binding.btnRes720p.strokeColor = strokeColor
             binding.btnRes720p.strokeWidth = 1
+        }
+    }
+
+    private fun updateCodecUI() {
+        if (useH264Hardware) {
+            binding.btnCodecToggle.text = "⚡ H.264 HW"
+            binding.btnCodecToggle.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#10B981"))
+            binding.btnCodecToggle.setTextColor(Color.WHITE)
+        } else {
+            binding.btnCodecToggle.text = "📸 JPEG Safe"
+            binding.btnCodecToggle.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#111827"))
+            binding.btnCodecToggle.setTextColor(Color.WHITE)
+        }
+    }
+
+    private fun initH264Encoder(w: Int, h: Int) {
+        h264Encoder?.stop()
+        val (fps, bitrate) = when {
+            w >= 3840 -> Pair(30, 24000)
+            w >= 1920 -> Pair(60, 12000)
+            else -> Pair(60, 6000)
+        }
+        val enc = CameraH264Encoder(w, h, targetFps = fps, bitrateKbps = bitrate) { nalBytes, isKeyframe, rotDeg ->
+            val payloadLen = nalBytes.size
+            val nowMs = System.currentTimeMillis()
+            val flags: Short = if (isKeyframe) 0x03 else 0x01
+
+            val packet = ByteArray(20 + payloadLen)
+            val buf = ByteBuffer.wrap(packet)
+            buf.put("ZCAM".toByteArray(Charsets.US_ASCII))
+            buf.putInt(payloadLen)
+            buf.putLong(nowMs)
+            buf.putShort(rotDeg.toShort())
+            buf.putShort(flags)
+            System.arraycopy(nalBytes, 0, packet, 20, payloadLen)
+
+            frameChannel.trySend(packet)
+
+            frameCount++
+            bytesThisSec += packet.size
+        }
+        val ok = enc.start()
+        if (ok) {
+            h264Encoder = enc
+            Log.i(TAG, "Hardware H.264 Encoder successfully started ($w x $h @ ${fps}fps)")
+        } else {
+            Log.w(TAG, "Hardware H.264 Encoder start failed; fallback to Turbo JPEG")
+            h264Encoder = null
         }
     }
 
@@ -410,39 +477,7 @@ class ZeroCamActivity : AppCompatActivity() {
 
                 // Initialize Hardware H.264 Encoder if enabled
                 if (useH264Hardware) {
-                    h264Encoder?.stop()
-                    val (fps, bitrate) = when {
-                        targetWidth >= 3840 -> Pair(30, 24000)
-                        targetWidth >= 1920 -> Pair(60, 12000)
-                        else -> Pair(60, 6000)
-                    }
-                    val enc = CameraH264Encoder(targetWidth, targetHeight, targetFps = fps, bitrateKbps = bitrate) { nalBytes, isKeyframe, rotDeg ->
-                        val payloadLen = nalBytes.size
-                        val nowMs = System.currentTimeMillis()
-                        val flags: Short = if (isKeyframe) 0x03 else 0x01
-
-                        val packet = ByteArray(20 + payloadLen)
-                        val buf = ByteBuffer.wrap(packet)
-                        buf.put("ZCAM".toByteArray(Charsets.US_ASCII))
-                        buf.putInt(payloadLen)
-                        buf.putLong(nowMs)
-                        buf.putShort(rotDeg.toShort())
-                        buf.putShort(flags)
-                        System.arraycopy(nalBytes, 0, packet, 20, payloadLen)
-
-                        frameChannel.trySend(packet)
-
-                        frameCount++
-                        bytesThisSec += packet.size
-                    }
-                    val ok = enc.start()
-                    if (ok) {
-                        h264Encoder = enc
-                        Log.i(TAG, "Hardware H.264 Encoder successfully started ($targetWidth x $targetHeight @ ${fps}fps)")
-                    } else {
-                        Log.w(TAG, "Hardware H.264 Encoder start failed; using high-speed dynamic JPEG stream")
-                        h264Encoder = null
-                    }
+                    initH264Encoder(targetWidth, targetHeight)
                 }
 
                 // Launch dedicated non-blocking network frame sender
@@ -526,15 +561,16 @@ class ZeroCamActivity : AppCompatActivity() {
         }
 
         // Hardware H.264 Path: GPU encoding directly from camera YUV buffer (< 1ms CPU)
-        val enc = h264Encoder
-        if (useH264Hardware && enc?.isAvailable() == true) {
-            try {
-                enc.encodeFrame(imageProxy)
-                if (enc.inputFramesCount >= 25 && enc.outputFramesCount == 0L) {
-                    Log.w(TAG, "Hardware encoder produced no output in 25 frames, switching to dynamic JPEG stream")
-                    enc.stop()
-                    h264Encoder = null
-                } else {
+        if (useH264Hardware) {
+            val w = imageProxy.width
+            val h = imageProxy.height
+            if (h264Encoder == null || h264Encoder?.width != w || h264Encoder?.height != h) {
+                initH264Encoder(w, h)
+            }
+            val enc = h264Encoder
+            if (enc?.isAvailable() == true) {
+                try {
+                    enc.encodeFrame(imageProxy)
                     val now = System.currentTimeMillis()
                     if (now - lastStatTime >= 1000) {
                         val dt = (now - lastStatTime) / 1000f
@@ -550,35 +586,18 @@ class ZeroCamActivity : AppCompatActivity() {
                     }
                     imageProxy.close()
                     return
+                } catch (e: Exception) {
+                    Log.e(TAG, "Hardware H.264 encode error, fallback to JPEG: ${e.message}")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Hardware H.264 encode error, fallback to JPEG: ${e.message}")
             }
         }
 
-        val t0 = System.currentTimeMillis()
+        // Turbo JPEG Safe Path: 100% Reliable, Zero Green Screen, Fast Compression
         try {
             val bitmap = imageProxy.toBitmap()
-            val t1 = System.currentTimeMillis()
-            val finalBitmap = if (bitmap.width > targetWidth || bitmap.height > targetHeight) {
-                val scale = minOf(targetWidth.toFloat() / bitmap.width, targetHeight.toFloat() / bitmap.height)
-                val sw = (bitmap.width * scale).toInt()
-                val sh = (bitmap.height * scale).toInt()
-                Bitmap.createScaledBitmap(bitmap, sw, sh, true).also {
-                    if (it != bitmap) bitmap.recycle()
-                }
-            } else {
-                bitmap
-            }
-            val t2 = System.currentTimeMillis()
-
             baos.reset()
-            finalBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
+            bitmap.compress(Bitmap.CompressFormat.JPEG, 75, baos)
             val jpegBytes = baos.toByteArray()
-            val t3 = System.currentTimeMillis()
-            if (finalBitmap != bitmap) {
-                finalBitmap.recycle()
-            }
             bitmap.recycle()
 
             // Construct [ZCAM][Length (4B)][Timestamp (8B)][Rotation (2B)][Flags (2B)][Bytes]
@@ -600,7 +619,6 @@ class ZeroCamActivity : AppCompatActivity() {
             frameCount++
             bytesThisSec += packet.size
             val now = System.currentTimeMillis()
-            Log.i("ZeroCamPerf", "w=${bitmap.width}x${bitmap.height} -> ${finalBitmap.width}x${finalBitmap.height} | toBmp=${t1-t0}ms scale=${t2-t1}ms comp=${t3-t2}ms | size=${jpegBytes.size/1024}KB")
             if (now - lastStatTime >= 1000) {
                 val dt = (now - lastStatTime) / 1000f
                 val fps = frameCount / dt
@@ -610,7 +628,7 @@ class ZeroCamActivity : AppCompatActivity() {
                 bytesThisSec = 0
                 lastStatTime = now
                 runOnUiThread {
-                    binding.tvCamFps.text = "${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
+                    binding.tvCamFps.text = "📸 JPEG ${fps.toInt()} FPS • ${avgKb}KB/f • ${String.format("%.1f", mbps)}M"
                 }
             }
 

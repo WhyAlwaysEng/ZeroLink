@@ -11,8 +11,8 @@ import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 
 class CameraH264Encoder(
-    private val width: Int,
-    private val height: Int,
+    val width: Int,
+    val height: Int,
     private val targetFps: Int = 30,
     private val bitrateKbps: Int = 4000,
     private val onNalPacket: (packet: ByteArray, isKeyframe: Boolean, rotationDeg: Int) -> Unit
@@ -135,18 +135,17 @@ class CameraH264Encoder(
         val uBuf = uPlane.buffer
         val vBuf = vPlane.buffer
 
-        val w = image.width
-        val h = image.height
+        val w = minOf(image.width, width)
+        val h = minOf(image.height, height)
 
         val yRowStride = yPlane.rowStride
         val yPixelStride = yPlane.pixelStride
 
-        // Fast Y copy: ensure exactly w * h bytes are written to prevent plane offset shift
-        val yLen = w * h
+        // Fast Y copy
         if (yRowStride == w && yPixelStride == 1) {
             val oldLimit = yBuf.limit()
             yBuf.position(0)
-            yBuf.limit(minOf(yBuf.capacity(), yLen))
+            yBuf.limit(minOf(yBuf.capacity(), w * h))
             out.put(yBuf)
             yBuf.limit(oldLimit)
         } else {
@@ -158,7 +157,7 @@ class CameraH264Encoder(
             }
         }
 
-        // UV copy
+        // Exact UV copy: Avoid buggy interleaved bulk reading which corrupts chroma offsets into green
         val uvW = w / 2
         val uvH = h / 2
         val uRowStride = uPlane.rowStride
@@ -169,25 +168,15 @@ class CameraH264Encoder(
         if (isSemiPlanar) {
             // NV12 format: U0, V0, U1, V1 ...
             val rowBytes = ByteArray(w)
-            val isInterleaved = (uPixelStride == 2 && vPixelStride == 2 && uRowStride == vRowStride)
-            if (isInterleaved) {
-                for (r in 0 until uvH) {
-                    uBuf.position(r * uRowStride)
-                    val toRead = minOf(uBuf.remaining(), w)
-                    uBuf.get(rowBytes, 0, toRead)
-                    out.put(rowBytes, 0, toRead)
+            for (r in 0 until uvH) {
+                var idx = 0
+                val uRowStart = r * uRowStride
+                val vRowStart = r * vRowStride
+                for (c in 0 until uvW) {
+                    rowBytes[idx++] = uBuf.get(uRowStart + c * uPixelStride)
+                    rowBytes[idx++] = vBuf.get(vRowStart + c * vPixelStride)
                 }
-            } else {
-                for (r in 0 until uvH) {
-                    var idx = 0
-                    val uRowStart = r * uRowStride
-                    val vRowStart = r * vRowStride
-                    for (c in 0 until uvW) {
-                        rowBytes[idx++] = uBuf.get(uRowStart + c * uPixelStride)
-                        rowBytes[idx++] = vBuf.get(vRowStart + c * vPixelStride)
-                    }
-                    out.put(rowBytes, 0, w)
-                }
+                out.put(rowBytes, 0, w)
             }
         } else {
             // Planar I420 format: all U, then all V
