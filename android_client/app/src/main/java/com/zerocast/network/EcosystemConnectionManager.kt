@@ -113,12 +113,14 @@ class EcosystemConnectionManager private constructor(private val appContext: Con
 
     /**
      * Atomically switch connection mode (e.g. Wi-Fi -> USB Tethering).
-     * Gracefully tears down old sockets and immediately connects with the new interface.
+     * If already connected, gracefully tears down old sockets and immediately connects with the new interface.
+     * If disconnected, updates mode configuration without forcing auto-connect.
      */
     fun switchMode(newMode: String, manualIp: String? = null) {
         scope.launch {
             mutex.withLock {
-                Log.i(TAG, "Atomic Mode Handover: ${_activeMode.value} -> $newMode")
+                val wasConnected = (_connectionState.value == ConnectionState.CONNECTED)
+                Log.i(TAG, "Mode switch: ${_activeMode.value} -> $newMode (wasConnected=$wasConnected)")
                 teardownCurrentSocket()
                 _activeMode.value = newMode
                 ZeroLinkConfig.setConnectionMode(appContext, newMode)
@@ -133,9 +135,15 @@ class EcosystemConnectionManager private constructor(private val appContext: Con
                 _targetHost.value = resolvedHost
                 ZeroLinkConfig.setServerIp(appContext, resolvedHost)
                 currentSessionId = UUID.randomUUID().toString()
-                isExplicitDisconnect = false
 
-                startGatewayLoop(resolvedHost)
+                if (wasConnected) {
+                    isExplicitDisconnect = false
+                    startGatewayLoop(resolvedHost)
+                } else {
+                    isExplicitDisconnect = true
+                    _connectionState.value = ConnectionState.DISCONNECTED
+                    _latencyMs.value = 0
+                }
             }
         }
     }

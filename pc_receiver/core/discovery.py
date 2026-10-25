@@ -210,114 +210,137 @@ class LanDiscoveryService(QObject):
                 continue
 
     def _handle_tcp_client(self, sock: socket.socket, addr):
+        client_ip = addr[0] if (addr and len(addr) > 0 and addr[0]) else "127.0.0.1"
+        self.last_client_ip = client_ip
+        device_model = "Android Device"
+        session_id = ""
+
+        if client_ip.startswith("127."):
+            link_mode = "USB (ADB)"
+        elif client_ip.startswith("10.") or client_ip.startswith("192.168.42.") or client_ip.startswith("192.168.43."):
+            link_mode = "USB Tethering"
+        else:
+            link_mode = "Wi-Fi LAN"
+
         try:
-            if addr and len(addr) > 0 and addr[0]:
-                self.last_client_ip = addr[0]
-            sock.settimeout(4.0)
-            data = sock.recv(4096)
-            if not data:
-                return
+            sock.settimeout(10.0)  # Heartbeat ping is every 2s, 10s timeout detects dead link gracefully
+            sock_file = sock.makefile("r", encoding="utf-8")
 
-            text = data.decode("utf-8", errors="ignore").strip()
-            response_dict = None
-            payload = {}
-            if text.startswith("{") and text.endswith("}"):
-                try:
-                    payload = json.loads(text)
-                except Exception:
-                    payload = {}
+            while self.is_running:
+                line = sock_file.readline()
+                if not line:
+                    # Remote client closed socket cleanly
+                    break
 
-            # Determine link mode & client metadata
-            client_ip = addr[0] if addr else "127.0.0.1"
-            device_model = payload.get("model") or payload.get("device_model", "Android Device")
-            session_id = payload.get("session_id", "")
-            if client_ip.startswith("127."):
-                link_mode = "USB (ADB)"
-            elif client_ip.startswith("10.") or client_ip.startswith("192.168.42.") or client_ip.startswith("192.168.43."):
-                link_mode = "USB Tethering"
-            else:
-                link_mode = "Wi-Fi LAN"
+                text = line.strip()
+                if not text:
+                    continue
 
-            action = payload.get("action", "").upper() if payload else ("PING" if "PING" in text.upper() else "")
+                response_dict = None
+                payload = {}
+                if text.startswith("{") and text.endswith("}"):
+                    try:
+                        payload = json.loads(text)
+                    except Exception:
+                        payload = {}
 
-            # 1. PING / Discovery Handshake / Keepalive
-            if "PING" in text.upper() or action == "PING" or action == "CONNECT":
-                connected_ip = sock.getsockname()[0]
-                if not connected_ip or connected_ip == "0.0.0.0":
-                    connected_ip = self._get_best_local_ip_for(addr[0] if addr else "")
+                if payload.get("model") or payload.get("device_model"):
+                    device_model = payload.get("model") or payload.get("device_model")
+                if payload.get("session_id"):
+                    session_id = payload.get("session_id")
 
-                response_dict = {
-                    "status": "PONG",
-                    "type": "ZEROLINK_GATEWAY",
-                    "name": f"ZeroLink PC ({self.hostname})",
-                    "session_id": session_id,
-                    "ip": connected_ip,
-                    "port": self.tcp_port
-                }
+                action = payload.get("action", "").upper() if payload else ("PING" if "PING" in text.upper() else "")
 
+                if action == "DISCONNECT":
+                    break
+
+                # 1. PING / Discovery Handshake / Keepalive
+                if "PING" in text.upper() or action == "PING" or action == "CONNECT":
+                    connected_ip = sock.getsockname()[0]
+                    if not connected_ip or connected_ip == "0.0.0.0":
+                        connected_ip = self._get_best_local_ip_for(client_ip)
+
+                    response_dict = {
+                        "status": "PONG",
+                        "type": "ZEROLINK_GATEWAY",
+                        "name": f"ZeroLink PC ({self.hostname})",
+                        "session_id": session_id,
+                        "ip": connected_ip,
+                        "port": self.tcp_port
+                    }
+
+                    self.gateway_client_updated.emit({
+                        "client_ip": client_ip,
+                        "model": device_model,
+                        "mode": link_mode,
+                        "session_id": session_id,
+                        "timestamp": time.time(),
+                        "status": "CONNECTED"
+                    })
+
+                # 2. Remote Module Wake-up (ZeroWake)
+                elif "WAKE" in text.upper():
+                    try:
+                        mod_id = payload.get("module", "").lower()
+                        if mod_id:
+                            self.module_wake_requested.emit(mod_id)
+                            if mod_id == "zeromix":
+                                self.module_wake_requested.emit("zerocast")
+                            response_dict = {
+                                "status": "READY",
+                                "module": mod_id,
+                                "name": f"ZeroLink PC ({self.hostname})"
+                            }
+                    except Exception:
+                        pass
+
+                # 2b. Remote Module Sleep / Deactivate (On Mobile Disconnect)
+                elif "SLEEP" in text.upper() or "CLOSE" in text.upper():
+                    try:
+                        mod_id = payload.get("module", "").lower()
+                        if mod_id:
+                            self.module_sleep_requested.emit(mod_id)
+                            if mod_id == "zeromix":
+                                self.module_sleep_requested.emit("zerocast")
+                            response_dict = {
+                                "status": "STOPPED",
+                                "module": mod_id,
+                                "name": f"ZeroLink PC ({self.hostname})"
+                            }
+                    except Exception:
+                        pass
+
+                # 3. Direct Notification over TCP
+                elif "NOTIFY" in text.upper():
+                    try:
+                        app = payload.get("app", "Phone Notification")
+                        title = payload.get("title", "")
+                        body = payload.get("text", "")
+                        if title or body:
+                            self.notification_received.emit(app, title, body)
+                        response_dict = {"status": "OK"}
+                    except Exception:
+                        pass
+
+                if response_dict:
+                    reply_bytes = (json.dumps(response_dict) + "\n").encode("utf-8")
+                    sock.sendall(reply_bytes)
+
+        except Exception:
+            pass
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
+            try:
                 self.gateway_client_updated.emit({
                     "client_ip": client_ip,
                     "model": device_model,
                     "mode": link_mode,
                     "session_id": session_id,
                     "timestamp": time.time(),
-                    "status": "CONNECTED"
+                    "status": "DISCONNECTED"
                 })
-
-            # 2. Remote Module Wake-up (ZeroWake)
-            elif "WAKE" in text.upper():
-                try:
-                    payload = json.loads(text)
-                    mod_id = payload.get("module", "").lower()
-                    if mod_id:
-                        self.module_wake_requested.emit(mod_id)
-                        if mod_id == "zeromix":
-                            self.module_wake_requested.emit("zerocast")
-                        response_dict = {
-                            "status": "READY",
-                            "module": mod_id,
-                            "name": f"ZeroLink PC ({self.hostname})"
-                        }
-                except Exception:
-                    pass
-
-            # 2b. Remote Module Sleep / Deactivate (On Mobile Disconnect)
-            elif "SLEEP" in text.upper() or "CLOSE" in text.upper():
-                try:
-                    payload = json.loads(text)
-                    mod_id = payload.get("module", "").lower()
-                    if mod_id:
-                        self.module_sleep_requested.emit(mod_id)
-                        if mod_id == "zeromix":
-                            self.module_sleep_requested.emit("zerocast")
-                        response_dict = {
-                            "status": "STOPPED",
-                            "module": mod_id,
-                            "name": f"ZeroLink PC ({self.hostname})"
-                        }
-                except Exception:
-                    pass
-
-            # 3. Direct Notification over TCP
-            elif "NOTIFY" in text.upper():
-                try:
-                    payload = json.loads(text)
-                    app = payload.get("app", "Phone Notification")
-                    title = payload.get("title", "")
-                    body = payload.get("text", "")
-                    if title or body:
-                        self.notification_received.emit(app, title, body)
-                    response_dict = {"status": "OK"}
-                except Exception:
-                    pass
-
-            if response_dict:
-                reply_bytes = (json.dumps(response_dict) + "\n").encode("utf-8")
-                sock.sendall(reply_bytes)
-        except Exception:
-            pass
-        finally:
-            try:
-                sock.close()
             except Exception:
                 pass

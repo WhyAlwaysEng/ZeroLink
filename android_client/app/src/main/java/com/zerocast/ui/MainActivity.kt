@@ -63,10 +63,7 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         updateNotificationUiState()
-        // If not already connected and not explicitly disconnected, attempt connection
-        if (connMgr.connectionState.value == ConnectionState.DISCONNECTED && connMgr.targetHost.value.isNotEmpty()) {
-            connMgr.connect()
-        }
+        // No auto-connect on resume: User retains full manual control via Discovery or Connect button
     }
 
     override fun onDestroy() {
@@ -112,7 +109,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Auto Discover Button
+        // Auto Discover Button - Pure Discovery without forcing auto-connect
         binding.btnAutoDiscoverGateway.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.tvGatewayHint.text = "🔍 Scanning network for ZeroLink PC..."
@@ -121,8 +118,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     binding.etGatewayIp.setText(ip)
                     binding.tvDiscoveryTitle.text = name
-                    binding.tvGatewayHint.text = "✅ Discovered: $name ($ip)"
-                    connMgr.connect(manualIp = ip)
+                    binding.tvGatewayHint.text = "✅ Found: $name ($ip) • Tap CONNECT to link"
+                    ZeroLinkConfig.setServerIp(this@MainActivity, ip)
                 }
             }
             val currentMode = connMgr.activeMode.value
@@ -187,8 +184,8 @@ class MainActivity : AppCompatActivity() {
                         binding.tvDiscoveryBadge.setTextColor(Color.parseColor("#F59E0B"))
                         binding.tvHubStatus.text = "○ CONNECTING"
 
-                        binding.btnMasterConnect.text = "⏳ CONNECTING..."
-                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
+                        binding.btnMasterConnect.text = "✕ CANCEL CONNECTING"
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
                         binding.tvDiscoverySubtitle.text = "Connecting to Master Gateway on Port 8886..."
                     }
                     ConnectionState.RECONNECTING -> {
@@ -196,8 +193,8 @@ class MainActivity : AppCompatActivity() {
                         binding.tvDiscoveryBadge.setTextColor(Color.parseColor("#F59E0B"))
                         binding.tvHubStatus.text = "○ RECONNECTING"
 
-                        binding.btnMasterConnect.text = "⏳ RECONNECTING..."
-                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#D97706"))
+                        binding.btnMasterConnect.text = "✕ CANCEL RECONNECT"
+                        binding.btnMasterConnect.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#DC2626"))
                         binding.tvDiscoverySubtitle.text = "Gateway heartbeat lost. Auto-reconnecting..."
                     }
                     ConnectionState.DISCONNECTED -> {
