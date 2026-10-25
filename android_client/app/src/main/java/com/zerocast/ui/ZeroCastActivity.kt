@@ -33,6 +33,8 @@ import android.widget.Button
 import android.view.View
 import android.content.IntentFilter
 import android.os.BatteryManager
+import android.content.res.ColorStateList
+import android.graphics.Color
 
 class ZeroCastActivity : AppCompatActivity() {
 
@@ -273,12 +275,47 @@ class ZeroCastActivity : AppCompatActivity() {
         } catch (_: Exception) {}
     }
 
+    private fun updateModeButtonsUI(activeMode: String) {
+        val primaryColor = ContextCompat.getColor(this, R.color.text_primary)
+        val secondaryColor = ContextCompat.getColor(this, R.color.text_secondary)
+        val activeBg = ColorStateList.valueOf(primaryColor)
+        val inactiveBg = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.surface_variant))
+
+        // ADB Mode Button
+        if (activeMode == "ADB") {
+            binding.btnModeUsb.backgroundTintList = activeBg
+            binding.btnModeUsb.setTextColor(Color.WHITE)
+        } else {
+            binding.btnModeUsb.backgroundTintList = inactiveBg
+            binding.btnModeUsb.setTextColor(secondaryColor)
+        }
+
+        // Tethering Mode Button
+        if (activeMode == "TETHER") {
+            binding.btnModeTether.backgroundTintList = activeBg
+            binding.btnModeTether.setTextColor(Color.WHITE)
+        } else {
+            binding.btnModeTether.backgroundTintList = inactiveBg
+            binding.btnModeTether.setTextColor(secondaryColor)
+        }
+
+        // Wi-Fi Mode Button
+        if (activeMode == "WIFI") {
+            binding.btnModeWifi.backgroundTintList = activeBg
+            binding.btnModeWifi.setTextColor(Color.WHITE)
+        } else {
+            binding.btnModeWifi.backgroundTintList = inactiveBg
+            binding.btnModeWifi.setTextColor(secondaryColor)
+        }
+    }
+
     private fun updateConnectionHint() {
         val ip = binding.etServerIp.text.toString().trim()
         val isUsb = ip == "127.0.0.1" || ip == "localhost"
         val hasPhysicalCable = isUsbCablePluggedIn()
 
         if (isUsb) {
+            updateModeButtonsUI("ADB")
             if (hasPhysicalCable) {
                 binding.tvConnectionHint.text = "⚡ Link Quality: Physical USB Cable (High-Speed ADB 127.0.0.1 • Latency < 1ms)"
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
@@ -287,16 +324,19 @@ class ZeroCastActivity : AppCompatActivity() {
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
             }
         } else if (ip.isNotEmpty()) {
-            val isTether = ip.startsWith("10.") || ip.startsWith("192.168.42.") || ip.startsWith("192.168.43.")
+            val isTether = NetworkDiscovery.isTetheringIp(ip)
             if (isTether) {
+                updateModeButtonsUI("TETHER")
                 binding.tvConnectionHint.text = "⚡ Link Quality: USB Tethering (Hardware Virtual LAN: $ip • Latency < 2ms)"
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#0284C7"))
             } else {
+                updateModeButtonsUI("WIFI")
                 binding.tvConnectionHint.text = "📡 Link Quality: Direct Wi-Fi LAN ($ip • Optimal for 5GHz Wi-Fi)"
                 binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#059669"))
             }
         } else {
-            binding.tvConnectionHint.text = "⚠️ Please enter PC IP or tap 'USB Cable'"
+            updateModeButtonsUI("")
+            binding.tvConnectionHint.text = "⚠️ Please select connection mode above or enter PC IP"
             binding.tvConnectionHint.setTextColor(android.graphics.Color.parseColor("#D97706"))
         }
     }
@@ -314,29 +354,82 @@ class ZeroCastActivity : AppCompatActivity() {
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
 
+        // Mode 1: USB ADB (127.0.0.1)
         binding.btnModeUsb.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            discovery?.stopDiscovery()
+            ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_USB)
+            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
             binding.etServerIp.setText("127.0.0.1")
             binding.etPort.setText("8888")
             updateConnectionHint()
         }
 
-        binding.btnModeWifi.setOnClickListener {
+        // Mode 2: USB Tethering (Virtual LAN / RNDIS)
+        binding.btnModeTether.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (binding.etServerIp.text.toString().trim() == "127.0.0.1") {
-                val lastWifi = ZeroLinkConfig.getServerIp(this)
-                if (lastWifi != "127.0.0.1" && lastWifi.isNotEmpty()) {
-                    binding.etServerIp.setText(lastWifi)
-                } else {
+            ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_TETHER)
+            val tetherCandidate = NetworkDiscovery.getTetheringHostCandidate()
+            if (tetherCandidate != null) {
+                ZeroLinkConfig.setServerIp(this, tetherCandidate)
+                binding.etServerIp.setText(tetherCandidate)
+            } else {
+                val lastIp = ZeroLinkConfig.getServerIp(this)
+                if (!NetworkDiscovery.isTetheringIp(lastIp)) {
+                    ZeroLinkConfig.setServerIp(this, "")
                     binding.etServerIp.setText("")
                 }
             }
+            binding.etPort.setText("8888")
             updateConnectionHint()
+            val msg = if (tetherCandidate != null) "⚡ USB Tethering mode: $tetherCandidate" else "⚡ USB Tethering mode"
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+            // Auto trigger scan on tethering interface to pinpoint PC
+            binding.tvConnectionHint.text = "🔍 Probing USB Tethering interface..."
+            discovery?.stopDiscovery()
+            discovery = NetworkDiscovery { ip, port ->
+                if (NetworkDiscovery.isTetheringIp(ip)) {
+                    ZeroLinkConfig.setServerIp(this, ip)
+                    binding.etServerIp.setText(ip)
+                    binding.etPort.setText(port.toString())
+                    updateConnectionHint()
+                }
+            }
+            discovery?.startDiscovery(ZeroLinkConfig.MODE_TETHER)
+        }
+
+        // Mode 3: Wi-Fi LAN
+        binding.btnModeWifi.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            ZeroLinkConfig.setConnectionMode(this, ZeroLinkConfig.MODE_WIFI)
+            val lastWifi = ZeroLinkConfig.getServerIp(this)
+            if (NetworkDiscovery.isWifiIp(lastWifi)) {
+                binding.etServerIp.setText(lastWifi)
+            } else {
+                binding.etServerIp.setText("")
+                ZeroLinkConfig.setServerIp(this, "")
+            }
+            binding.etPort.setText("8888")
+            updateConnectionHint()
+
+            // Trigger Wi-Fi auto-discover (strictly excluding USB ADB and USB Tethering)
+            binding.tvConnectionHint.text = "🔍 Scanning Wi-Fi LAN for ZeroLink Hub..."
+            discovery?.stopDiscovery()
+            discovery = NetworkDiscovery { ip, port ->
+                if (NetworkDiscovery.isWifiIp(ip)) {
+                    ZeroLinkConfig.setServerIp(this, ip)
+                    binding.etServerIp.setText(ip)
+                    binding.etPort.setText(port.toString())
+                    updateConnectionHint()
+                }
+            }
+            discovery?.startDiscovery(ZeroLinkConfig.MODE_WIFI)
         }
 
         binding.btnAutoDiscover.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            binding.tvConnectionHint.text = "🔍 Scanning LAN for ZeroLink Hub..."
+            binding.tvConnectionHint.text = "🔍 Scanning LAN & Tethering for ZeroLink Hub..."
             discovery = NetworkDiscovery { ip, port ->
                 binding.etServerIp.setText(ip)
                 binding.etPort.setText(port.toString())
@@ -430,6 +523,9 @@ class ZeroCastActivity : AppCompatActivity() {
     private fun startScreenStreamService(resultCode: Int, data: Intent) {
         val host = binding.etServerIp.text.toString().trim()
         val port = binding.etPort.text.toString().trim().toIntOrNull() ?: 8888
+        if (host.isNotEmpty()) {
+            NetworkDiscovery.wakeModule(host, "zerocast")
+        }
         val fps = if (binding.spinnerFps.selectedItemPosition == 0) 60 else 30
 
         val bitrateKbps = BITRATE_VALUES_KBPS.getOrElse(binding.spinnerBitrate.selectedItemPosition) { 18000 }

@@ -83,6 +83,22 @@ class AdbManager:
         except Exception:
             return []
 
+    ECOSYSTEM_REVERSE_PORTS = [8886, 8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895, 8897]
+
+    def reverse_ecosystem_ports(self) -> Tuple[bool, str]:
+        """Reverses all ports required by the ZeroLink ecosystem modules for seamless USB ADB mode."""
+        if not self.is_available():
+            return False, "ADB was not found."
+        devices = self.get_devices()
+        if not devices:
+            return False, "No device connected."
+        success_count = 0
+        for port in self.ECOSYSTEM_REVERSE_PORTS:
+            ok, _ = self.reverse_port(port)
+            if ok:
+                success_count += 1
+        return success_count > 0, f"Successfully reversed {success_count} ecosystem ports via ADB."
+
     def reverse_port(self, port: int = 8888) -> Tuple[bool, str]:
         """Runs 'adb reverse tcp:<port> tcp:<port>' to allow Android to connect via 127.0.0.1."""
         if not self.is_available():

@@ -10,7 +10,7 @@ import urllib.error
 from typing import Optional, Tuple
 from PyQt6.QtCore import QThread, pyqtSignal
 
-CURRENT_VERSION = "1.1.7"
+CURRENT_VERSION = "1.1.8"
 GITHUB_REPO = "WhyAlwaysEng/ZeroLink"
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 

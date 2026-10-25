@@ -65,7 +65,17 @@ class ZeroMixActivity : AppCompatActivity() {
         binding = ActivityZeroMixBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val savedIp = ZeroLinkConfig.getServerIp(this)
+        val mode = ZeroLinkConfig.getConnectionMode(this)
+        var savedIp = ZeroLinkConfig.getServerIp(this)
+        if (mode == ZeroLinkConfig.MODE_USB) {
+            savedIp = "127.0.0.1"
+            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
+        } else if (mode == ZeroLinkConfig.MODE_TETHER && (savedIp.isEmpty() || !NetworkDiscovery.isTetheringIp(savedIp))) {
+            NetworkDiscovery.getTetheringHostCandidate()?.let {
+                savedIp = it
+                ZeroLinkConfig.setServerIp(this, it)
+            }
+        }
         binding.etServerIp.setText(savedIp)
 
         setupListeners()
@@ -130,12 +140,16 @@ class ZeroMixActivity : AppCompatActivity() {
         binding.btnAutoDiscover.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.tvMixStatus.text = "Searching..."
+            val mode = ZeroLinkConfig.getConnectionMode(this)
+            discovery?.stopDiscovery()
             discovery = NetworkDiscovery { ip, _ ->
-                binding.etServerIp.setText(ip)
-                ZeroLinkConfig.setServerIp(this, ip)
-                startConnect()
+                runOnUiThread {
+                    binding.etServerIp.setText(ip)
+                    ZeroLinkConfig.setServerIp(this, ip)
+                    startConnect()
+                }
             }
-            discovery?.startDiscovery()
+            discovery?.startDiscovery(mode)
         }
 
         // Faders
@@ -330,10 +344,12 @@ class ZeroMixActivity : AppCompatActivity() {
             return
         }
         ZeroLinkConfig.setServerIp(this, host)
-        NetworkDiscovery.wakeModule(host, "zeromix")
-        NetworkDiscovery.wakeModule(host, "zerocast")
         binding.btnConnect.text = "Connecting..."
-        mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
+        binding.tvMixStatus.text = "● Waking ZeroMix..."
+        NetworkDiscovery.wakeModule(host, "zeromix") { _ ->
+            mixManager?.start(host, ZeroLinkConfig.DEFAULT_MIX_PORT)
+        }
+        NetworkDiscovery.wakeModule(host, "zerocast")
     }
 
     private fun applyMixerState(state: ZeroMixState) {

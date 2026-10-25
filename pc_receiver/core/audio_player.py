@@ -32,10 +32,11 @@ class AudioPlayer:
         self._lock = threading.Lock()
         self._buffer = bytearray()
         self._is_prebuffering = True
-        # ~200ms prebuffer (~38.4 KB) guarantees zero crackling / dropouts over Wi-Fi
-        self._target_prebuffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.20)
+        self._last_chunk_time = 0.0
+        # ~60ms initial prebuffer (~11.5 KB) absorbs network bursts smoothly on startup
+        self._target_prebuffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.06)
         # Max buffer backlog before gentle discard (prevents runaway latency)
-        self._max_buffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.75)
+        self._max_buffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.50)
 
         self._setup_sink()
 
@@ -120,6 +121,7 @@ class AudioPlayer:
         if not self.is_active or not pcm_data:
             return
         with self._lock:
+            self._last_chunk_time = time.time()
             # Drop older overflow data if network stalled for too long
             if len(self._buffer) > self._max_buffer_bytes:
                 excess = len(self._buffer) - self._max_buffer_bytes
@@ -140,33 +142,33 @@ class AudioPlayer:
                 bytes_free = self.sink.bytesFree()
                 sink_frame_bytes = getattr(self, "sink_frame_bytes", self.bytes_per_sample)
                 if bytes_free < sink_frame_bytes:
-                    time.sleep(0.005)
+                    time.sleep(0.003)
                     continue
 
                 chunk_to_write = None
                 with self._lock:
+                    now = time.time()
+                    # Only reset prebuffer if stream was completely idle/silent for > 400ms
+                    if now - self._last_chunk_time > 0.4:
+                        self._is_prebuffering = True
+
                     if self._is_prebuffering:
                         if len(self._buffer) >= self._target_prebuffer_bytes:
                             self._is_prebuffering = False
                         else:
-                            # Still filling prebuffer to absorb jitter
+                            # Still filling prebuffer to absorb initial startup burst
                             pass
 
-                    if not self._is_prebuffering:
-                        if len(self._buffer) == 0:
-                            # Underrun occurred; re-enable gentle prebuffering
-                            self._is_prebuffering = True
-                            self._target_prebuffer_bytes = int(self.sample_rate * self.bytes_per_sample * 0.12)
-                        else:
-                            # Write whatever fits into sink, keeping exact frame alignment
-                            frames_free = bytes_free // sink_frame_bytes
-                            frames_available = len(self._buffer) // self.bytes_per_sample
-                            frames_to_take = min(frames_free, frames_available)
-                            bytes_to_take = frames_to_take * self.bytes_per_sample
+                    # Once prebuffered, feed continuously without artificial starvation cycles!
+                    if not self._is_prebuffering and len(self._buffer) > 0:
+                        frames_free = bytes_free // sink_frame_bytes
+                        frames_available = len(self._buffer) // self.bytes_per_sample
+                        frames_to_take = min(frames_free, frames_available)
+                        bytes_to_take = frames_to_take * self.bytes_per_sample
 
-                            if bytes_to_take > 0:
-                                chunk_to_write = bytes(self._buffer[:bytes_to_take])
-                                del self._buffer[:bytes_to_take]
+                        if bytes_to_take > 0:
+                            chunk_to_write = bytes(self._buffer[:bytes_to_take])
+                            del self._buffer[:bytes_to_take]
 
                 if chunk_to_write:
                     # Convert to Float32 if required by hardware sink
@@ -187,7 +189,7 @@ class AudioPlayer:
                             with self._lock:
                                 self._buffer = bytearray(remainder) + self._buffer
 
-                time.sleep(0.004)
+                time.sleep(0.003)
             except Exception:
                 time.sleep(0.01)
 

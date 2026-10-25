@@ -10,7 +10,8 @@ from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QFont, QImage, QPixmap
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSlider, QCheckBox, QComboBox, QScrollArea, QFileDialog
+    QFrame, QSlider, QCheckBox, QComboBox, QScrollArea, QFileDialog,
+    QTabWidget, QSizePolicy
 )
 
 from core.base_module import BaseModule
@@ -160,15 +161,16 @@ class ZeroCamModule(BaseModule):
 
         self.preview_lbl = QLabel("◉ Waiting for Camera Stream...")
         self.preview_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.preview_lbl.setStyleSheet("color: #94A3B8; font-size: 14px; font-weight: bold;")
-        self.preview_lbl.setMinimumSize(640, 380)
+        self.preview_lbl.setStyleSheet("color: #94A3B8; font-size: 13px; font-weight: bold;")
+        self.preview_lbl.setMinimumSize(440, 248)
+        self.preview_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         p_layout.addWidget(self.preview_lbl)
         left_col.addWidget(preview_card, 1)
 
         # Snapshot & Quick actions below preview
         snap_row = QHBoxLayout()
         btn_snapshot = QPushButton("⧇ Photo Snapshot")
-        btn_snapshot.setStyleSheet("padding: 8px 16px; font-weight: bold; background: #FFFFFF; border: 1px solid #D1D5DB; border-radius: 6px;")
+        btn_snapshot.setStyleSheet("padding: 6px 14px; font-size: 11px; font-weight: bold; background: #FFFFFF; border: 1px solid #D1D5DB; border-radius: 6px;")
         btn_snapshot.clicked.connect(self._take_snapshot)
         snap_row.addWidget(btn_snapshot)
 
@@ -176,37 +178,67 @@ class ZeroCamModule(BaseModule):
         self.lbl_snap_status.setStyleSheet("color: #059669; font-size: 11px; font-weight: bold;")
         snap_row.addWidget(self.lbl_snap_status)
         snap_row.addStretch()
+
+        self.lbl_stat_fps = QLabel("0 FPS")
+        self.lbl_stat_fps.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.lbl_stat_fps.setStyleSheet("color: #111827; background: #E5E7EB; padding: 3px 8px; border-radius: 4px;")
+        snap_row.addWidget(self.lbl_stat_fps)
+
+        self.lbl_stat_bitrate = QLabel("0.0 Mbps")
+        self.lbl_stat_bitrate.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        self.lbl_stat_bitrate.setStyleSheet("color: #4B5563; background: #F3F4F6; padding: 3px 8px; border-radius: 4px;")
+        snap_row.addWidget(self.lbl_stat_bitrate)
+
         left_col.addLayout(snap_row)
 
         content_layout.addLayout(left_col, 3)
 
-        # Right Column: Controls & Virtual Webcam Setup
+        # Right Column: Tabbed Controls (Ultra-Compact, Fits on All Screens)
         right_col = QVBoxLayout()
-        right_col.setSpacing(16)
+        right_col.setSpacing(8)
 
-        # Card 1: Virtual Camera Feeder
-        vcam_card = QFrame()
-        vcam_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px;")
-        vc_layout = QVBoxLayout(vcam_card)
-        vc_layout.setSpacing(12)
+        tabs = QTabWidget()
+        tabs.setStyleSheet("""
+            QTabWidget::pane {
+                border: 1px solid #E5E7EB;
+                border-radius: 10px;
+                background-color: #FFFFFF;
+                padding: 10px;
+            }
+            QTabBar::tab {
+                background: #F3F4F6;
+                color: #4B5563;
+                padding: 6px 12px;
+                margin-right: 3px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+            QTabBar::tab:selected {
+                background: #111827;
+                color: #FFFFFF;
+            }
+        """)
 
-        vc_title = QLabel("◉ Virtual Webcam (Discord / OBS / Zoom)")
-        vc_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        vc_title.setStyleSheet("color: #111827;")
-        vc_layout.addWidget(vc_title)
+        # Tab 1: 4K Framing & Virtual Cam
+        tab1 = QWidget()
+        tab1_layout = QVBoxLayout(tab1)
+        tab1_layout.setContentsMargins(4, 4, 4, 4)
+        tab1_layout.setSpacing(10)
 
-        vc_desc = QLabel("Exposes your phone camera as a native Windows USB Webcam so any app can select it as video input.")
-        vc_desc.setFont(QFont("Segoe UI", 10))
-        vc_desc.setStyleSheet("color: #6B7280;")
-        vc_desc.setWordWrap(True)
-        vc_layout.addWidget(vc_desc)
+        # Virtual Cam Section
+        vc_box = QFrame()
+        vc_box.setStyleSheet("background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px;")
+        vc_layout = QVBoxLayout(vc_box)
+        vc_layout.setSpacing(6)
 
         self.btn_vcam_toggle = QPushButton("Start Virtual Webcam")
         self.btn_vcam_toggle.setCheckable(True)
         self.btn_vcam_toggle.setStyleSheet("""
             QPushButton {
                 background-color: #111827; color: #FFFFFF; border-radius: 6px;
-                padding: 8px 14px; font-size: 12px; font-weight: bold;
+                padding: 7px 12px; font-size: 11px; font-weight: bold;
             }
             QPushButton:hover { background-color: #374151; }
         """)
@@ -214,213 +246,242 @@ class ZeroCamModule(BaseModule):
         vc_layout.addWidget(self.btn_vcam_toggle)
 
         self.lbl_vcam_status = QLabel("○ Virtual Camera: Offline")
-        self.lbl_vcam_status.setStyleSheet("color: #6B7280; font-size: 11px;")
+        self.lbl_vcam_status.setStyleSheet("color: #6B7280; font-size: 10px;")
         vc_layout.addWidget(self.lbl_vcam_status)
-        right_col.addWidget(vcam_card)
 
-        # Card 2: Phone Camera Controls
-        ctrl_card = QFrame()
-        ctrl_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px;")
-        c_layout = QVBoxLayout(ctrl_card)
-        c_layout.setSpacing(12)
+        v_res_row = QHBoxLayout()
+        v_res_row.addWidget(QLabel("VCam Output Res:", styleSheet="font-size: 10px; font-weight: bold; min-width: 100px;"))
+        combo_vcam_res = QComboBox()
+        combo_vcam_res.addItem("1080p Full HD (Discord/Zoom Standard)", (1920, 1080))
+        combo_vcam_res.addItem("4K Ultra HD (Full Canvas)", (3840, 2160))
+        combo_vcam_res.addItem("720p HD (Low Bandwidth)", (1280, 720))
+        def _on_vcam_res_changed(idx):
+            data = combo_vcam_res.currentData()
+            if data:
+                self.server._vcam_w, self.server._vcam_h = data
+                if self.server.enable_virtual_cam:
+                    self.server.start_virtual_camera(self.server._vcam_w, self.server._vcam_h, 30)
+        combo_vcam_res.currentIndexChanged.connect(_on_vcam_res_changed)
+        v_res_row.addWidget(combo_vcam_res)
+        vc_layout.addLayout(v_res_row)
+        tab1_layout.addWidget(vc_box)
 
-        c_title = QLabel("◈ Mobile Camera Controls")
-        c_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        c_title.setStyleSheet("color: #111827;")
-        c_layout.addWidget(c_title)
+        # 4K Digital Framing & Crop Studio
+        cr_box = QFrame()
+        cr_box.setStyleSheet("background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 8px; padding: 10px;")
+        cr_layout = QVBoxLayout(cr_box)
+        cr_layout.setSpacing(6)
+
+        chk_crop = QCheckBox("✂️ Enable 4K Framing & Lossless Crop (ePTZ)")
+        chk_crop.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
+        chk_crop.setChecked(self.server.crop_enabled)
+        chk_crop.toggled.connect(lambda checked: setattr(self.server, "crop_enabled", checked))
+        cr_layout.addWidget(chk_crop)
+
+        # Zoom
+        zoom_row = QHBoxLayout()
+        lbl_zoom_val = QLabel("1.0x (Wide)")
+        lbl_zoom_val.setStyleSheet("font-size: 10px; font-weight: bold; min-width: 80px; color: #111827;")
+        zoom_row.addWidget(lbl_zoom_val)
+        slider_crop_zoom = QSlider(Qt.Orientation.Horizontal)
+        slider_crop_zoom.setRange(100, 350)
+        slider_crop_zoom.setValue(int(self.server.crop_zoom * 100))
+        def _on_zoom_changed(val):
+            z = val / 100.0
+            self.server.crop_zoom = z
+            lbl_zoom_val.setText(f"{z:.1f}x ({'Wide' if z <= 1.05 else 'Cropped'})")
+        slider_crop_zoom.valueChanged.connect(_on_zoom_changed)
+        zoom_row.addWidget(slider_crop_zoom)
+        cr_layout.addLayout(zoom_row)
+
+        # Pan
+        pan_row = QHBoxLayout()
+        pan_row.addWidget(QLabel("Pan (Left/Right):", styleSheet="font-size: 10px; font-weight: bold; min-width: 80px;"))
+        slider_crop_pan = QSlider(Qt.Orientation.Horizontal)
+        slider_crop_pan.setRange(-100, 100)
+        slider_crop_pan.setValue(int(self.server.crop_pan * 100))
+        slider_crop_pan.valueChanged.connect(lambda val: setattr(self.server, "crop_pan", val / 100.0))
+        pan_row.addWidget(slider_crop_pan)
+        cr_layout.addLayout(pan_row)
+
+        # Tilt
+        tilt_row = QHBoxLayout()
+        tilt_row.addWidget(QLabel("Tilt (Up/Down):", styleSheet="font-size: 10px; font-weight: bold; min-width: 80px;"))
+        slider_crop_tilt = QSlider(Qt.Orientation.Horizontal)
+        slider_crop_tilt.setRange(-100, 100)
+        slider_crop_tilt.setValue(int(self.server.crop_tilt * 100))
+        slider_crop_tilt.valueChanged.connect(lambda val: setattr(self.server, "crop_tilt", val / 100.0))
+        tilt_row.addWidget(slider_crop_tilt)
+        cr_layout.addLayout(tilt_row)
+
+        # Presets
+        preset_row = QHBoxLayout()
+        btn_preset_wide = QPushButton("Full Wide (1.0x)")
+        btn_preset_wide.setStyleSheet("padding: 3px 6px; font-size: 10px;")
+        def _apply_wide():
+            chk_crop.setChecked(False)
+            slider_crop_zoom.setValue(100)
+            slider_crop_pan.setValue(0)
+            slider_crop_tilt.setValue(0)
+        btn_preset_wide.clicked.connect(_apply_wide)
+        preset_row.addWidget(btn_preset_wide)
+
+        btn_preset_bust = QPushButton("Bust Shot (1.4x)")
+        btn_preset_bust.setStyleSheet("padding: 3px 6px; font-size: 10px;")
+        def _apply_bust():
+            chk_crop.setChecked(True)
+            slider_crop_zoom.setValue(140)
+            slider_crop_pan.setValue(0)
+            slider_crop_tilt.setValue(-10)
+        btn_preset_bust.clicked.connect(_apply_bust)
+        preset_row.addWidget(btn_preset_bust)
+
+        btn_preset_face = QPushButton("Face (2.0x)")
+        btn_preset_face.setStyleSheet("padding: 3px 6px; font-size: 10px;")
+        def _apply_face():
+            chk_crop.setChecked(True)
+            slider_crop_zoom.setValue(200)
+            slider_crop_pan.setValue(0)
+            slider_crop_tilt.setValue(-15)
+        btn_preset_face.clicked.connect(_apply_face)
+        preset_row.addWidget(btn_preset_face)
+
+        btn_reset_crop = QPushButton("↺ Reset")
+        btn_reset_crop.setStyleSheet("padding: 3px 6px; font-size: 10px;")
+        btn_reset_crop.clicked.connect(_apply_wide)
+        preset_row.addWidget(btn_reset_crop)
+        cr_layout.addLayout(preset_row)
+        tab1_layout.addWidget(cr_box)
+
+        tab1_layout.addStretch()
+        tabs.addTab(tab1, "✂️ 4K Studio & VCam")
+
+        # Tab 2: Mobile Camera Controls
+        tab2 = QWidget()
+        tab2_layout = QVBoxLayout(tab2)
+        tab2_layout.setContentsMargins(4, 4, 4, 4)
+        tab2_layout.setSpacing(8)
 
         btn_row = QHBoxLayout()
         btn_switch = QPushButton("↻ Switch Front / Back")
-        btn_switch.setStyleSheet("padding: 6px 12px; font-size: 11px; font-weight: 600;")
+        btn_switch.setStyleSheet("padding: 5px 10px; font-size: 11px; font-weight: 600;")
         btn_switch.clicked.connect(lambda: self.server.send_control_command({"action": "SWITCH_CAMERA"}))
         btn_row.addWidget(btn_switch)
 
         btn_torch = QPushButton("◈ Toggle Torch / Flash")
-        btn_torch.setStyleSheet("padding: 6px 12px; font-size: 11px; font-weight: 600;")
+        btn_torch.setStyleSheet("padding: 5px 10px; font-size: 11px; font-weight: 600;")
         btn_torch.clicked.connect(lambda: self.server.send_control_command({"action": "TOGGLE_TORCH"}))
         btn_row.addWidget(btn_torch)
-        c_layout.addLayout(btn_row)
+        tab2_layout.addLayout(btn_row)
 
-        # Resolution dropdown
         res_row = QHBoxLayout()
-        res_row.addWidget(QLabel("Stream Resolution:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        res_row.addWidget(QLabel("Stream Resolution:", styleSheet="font-size: 10px; font-weight: bold; min-width: 100px;"))
         combo_res = QComboBox()
-        combo_res.addItem("720p HD (1280x720 • Smooth 30-60 FPS Recommended)", (1280, 720))
-        combo_res.addItem("1080p Full HD (1920x1080 • High Detail)", (1920, 1080))
+        combo_res.addItem("1080p Full HD (1920x1080 • Smooth 60 FPS)", (1920, 1080))
         combo_res.addItem("4K Ultra HD (3840x2160 • Studio / USB Cable)", (3840, 2160))
+        combo_res.addItem("720p HD (1280x720 • Fast)", (1280, 720))
         combo_res.currentIndexChanged.connect(lambda idx: self._on_remote_res_changed(combo_res.currentData()))
         res_row.addWidget(combo_res)
-        c_layout.addLayout(res_row)
+        tab2_layout.addLayout(res_row)
 
-        # Quality dropdown
         q_row = QHBoxLayout()
-        q_row.addWidget(QLabel("JPEG Quality:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        q_row.addWidget(QLabel("Stream Quality:", styleSheet="font-size: 10px; font-weight: bold; min-width: 100px;"))
         combo_q = QComboBox()
-        combo_q.addItem("65% (Fast & Smooth 30-60 FPS • ~50KB/f Recommended)", 65)
-        combo_q.addItem("80% (High Clarity • ~120KB/f)", 80)
-        combo_q.addItem("95% (Maximum Crystal Clarity • ~800KB/f USB Cable)", 95)
+        combo_q.addItem("82% (True Color High Clarity • Recommended)", 82)
+        combo_q.addItem("95% (Maximum Studio Clarity)", 95)
+        combo_q.addItem("65% (Fast Low Bandwidth)", 65)
         combo_q.currentIndexChanged.connect(lambda idx: self.server.send_control_command({"action": "SET_QUALITY", "quality": combo_q.currentData()}))
         q_row.addWidget(combo_q)
-        c_layout.addLayout(q_row)
+        tab2_layout.addLayout(q_row)
 
-        # Zoom slider
         z_row = QHBoxLayout()
-        z_row.addWidget(QLabel("Camera Zoom:", styleSheet="font-size: 11px; font-weight: bold; min-width: 110px;"))
+        z_row.addWidget(QLabel("Camera Lens Zoom:", styleSheet="font-size: 10px; font-weight: bold; min-width: 100px;"))
         slider_zoom = QSlider(Qt.Orientation.Horizontal)
         slider_zoom.setRange(0, 100)
         slider_zoom.setValue(0)
         slider_zoom.valueChanged.connect(lambda val: self.server.send_control_command({"action": "SET_ZOOM", "zoom": val / 100.0}))
         z_row.addWidget(slider_zoom)
-        c_layout.addLayout(z_row)
+        tab2_layout.addLayout(z_row)
 
-        right_col.addWidget(ctrl_card)
+        tab2_layout.addStretch()
+        tabs.addTab(tab2, "📱 Mobile Camera")
 
-        # Card: USB Cable Direct Link (0ms Latency)
-        usb_card = QFrame()
-        usb_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px;")
-        u_layout = QVBoxLayout(usb_card)
-        u_layout.setSpacing(8)
-
-        u_title = QLabel("⌁ USB Cable High-Speed Mode")
-        u_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        u_title.setStyleSheet("color: #111827;")
-        u_layout.addWidget(u_title)
-
-        u_desc = QLabel("Plug phone via USB for rock-solid 60 FPS without Wi-Fi interference. Click button below to activate tunnel:")
-        u_desc.setFont(QFont("Segoe UI", 10))
-        u_desc.setStyleSheet("color: #6B7280;")
-        u_desc.setWordWrap(True)
-        u_layout.addWidget(u_desc)
-
-        btn_usb_tunnel = QPushButton("⌁ Activate USB Cable Tunnel (Port 8893)")
-        btn_usb_tunnel.setStyleSheet("""
-            QPushButton {
-                background-color: #111827; color: #FFFFFF; border-radius: 6px;
-                padding: 7px 12px; font-size: 11px; font-weight: bold;
-            }
-            QPushButton:hover { background-color: #374151; }
-        """)
-        lbl_usb_status = QLabel("Tip: After clicking, select '⌁ USB Cable (127.0.0.1)' on your phone.")
-        lbl_usb_status.setStyleSheet("color: #6B7280; font-size: 10px;")
-
-        def _on_usb_click():
-            if not self.adb_manager.is_available():
-                lbl_usb_status.setText("ADB not detected. Please enable USB Debugging.")
-                lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px; font-weight: bold;")
-                return
-            ok, msg = self.adb_manager.reverse_port(self.port)
-            if ok:
-                lbl_usb_status.setText("USB Tunnel Active! On your phone, connect to 127.0.0.1.")
-                lbl_usb_status.setStyleSheet("color: #111827; font-size: 10px; font-weight: bold;")
-            else:
-                lbl_usb_status.setText(f"{msg}")
-                lbl_usb_status.setStyleSheet("color: #DC2626; font-size: 10px;")
-
-        btn_usb_tunnel.clicked.connect(_on_usb_click)
-        u_layout.addWidget(btn_usb_tunnel)
-        u_layout.addWidget(lbl_usb_status)
-        right_col.addWidget(usb_card)
-
-        # Card 3: Image Adjustments & Mirroring
-        adj_card = QFrame()
-        adj_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 16px;")
-        a_layout = QVBoxLayout(adj_card)
-        a_layout.setSpacing(10)
-
-        a_title = QLabel("◈ Video Adjustments & Enhancer")
-        a_title.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
-        a_title.setStyleSheet("color: #111827;")
-        a_layout.addWidget(a_title)
+        # Tab 3: Adjustments & USB Link
+        tab3 = QWidget()
+        tab3_layout = QVBoxLayout(tab3)
+        tab3_layout.setContentsMargins(4, 4, 4, 4)
+        tab3_layout.setSpacing(6)
 
         chk_mirror = QCheckBox("Mirror Camera (Flip Horizontal)")
         chk_mirror.setChecked(self.server.flip_horizontal)
         chk_mirror.toggled.connect(lambda checked: setattr(self.server, "flip_horizontal", checked))
-        a_layout.addWidget(chk_mirror)
+        tab3_layout.addWidget(chk_mirror)
 
         chk_flip_v = QCheckBox("Flip Vertical")
         chk_flip_v.setChecked(self.server.flip_vertical)
         chk_flip_v.toggled.connect(lambda checked: setattr(self.server, "flip_vertical", checked))
-        a_layout.addWidget(chk_flip_v)
+        tab3_layout.addWidget(chk_flip_v)
 
-        # Orientation / Rotation Control
         rot_row = QHBoxLayout()
-        rot_row.addWidget(QLabel("Orientation:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        rot_row.addWidget(QLabel("Orientation:", styleSheet="font-size: 10px; font-weight: bold; min-width: 90px;"))
         btn_rotate = QPushButton("↻ Rotate +90°")
-        btn_rotate.setStyleSheet("padding: 5px 12px; font-size: 11px; font-weight: 600;")
+        btn_rotate.setStyleSheet("padding: 3px 8px; font-size: 10px;")
         lbl_rot_status = QLabel("Auto (0°)")
         lbl_rot_status.setStyleSheet("color: #6B7280; font-size: 10px;")
-
         def _cycle_rotation():
             self.server.manual_rotation = (self.server.manual_rotation + 90) % 360
-            lbl_rot_status.setText(f"Manual Offset: +{self.server.manual_rotation}°")
-
+            lbl_rot_status.setText(f"+{self.server.manual_rotation}°")
         btn_rotate.clicked.connect(_cycle_rotation)
         rot_row.addWidget(btn_rotate)
         rot_row.addWidget(lbl_rot_status)
         rot_row.addStretch()
-        a_layout.addLayout(rot_row)
+        tab3_layout.addLayout(rot_row)
 
-        # Detail Enhancer / Sharpness
         sh_row = QHBoxLayout()
-        sh_row.addWidget(QLabel("Detail Sharpness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        sh_row.addWidget(QLabel("Detail Sharpness:", styleSheet="font-size: 10px; font-weight: bold; min-width: 90px;"))
         slider_sharp = QSlider(Qt.Orientation.Horizontal)
         slider_sharp.setRange(0, 150)
         slider_sharp.setValue(int(self.server.sharpness * 100))
         slider_sharp.valueChanged.connect(lambda val: setattr(self.server, "sharpness", val / 100.0))
         sh_row.addWidget(slider_sharp)
-        a_layout.addLayout(sh_row)
+        tab3_layout.addLayout(sh_row)
 
-        # Saturation
         sat_row = QHBoxLayout()
-        sat_row.addWidget(QLabel("Color Vibrancy:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
+        sat_row.addWidget(QLabel("Color Vibrancy:", styleSheet="font-size: 10px; font-weight: bold; min-width: 90px;"))
         slider_sat = QSlider(Qt.Orientation.Horizontal)
         slider_sat.setRange(50, 200)
         slider_sat.setValue(int(self.server.saturation * 100))
         slider_sat.valueChanged.connect(lambda val: setattr(self.server, "saturation", val / 100.0))
         sat_row.addWidget(slider_sat)
-        a_layout.addLayout(sat_row)
+        tab3_layout.addLayout(sat_row)
 
-        # Brightness
-        b_row = QHBoxLayout()
-        b_row.addWidget(QLabel("Brightness:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
-        slider_bright = QSlider(Qt.Orientation.Horizontal)
-        slider_bright.setRange(-50, 50)
-        slider_bright.setValue(self.server.brightness)
-        slider_bright.valueChanged.connect(lambda val: setattr(self.server, "brightness", val))
-        b_row.addWidget(slider_bright)
-        a_layout.addLayout(b_row)
+        # USB Tunnel Box
+        usb_box = QFrame()
+        usb_box.setStyleSheet("background: #F3F4F6; border-radius: 6px; padding: 6px;")
+        u_box_layout = QVBoxLayout(usb_box)
+        u_box_layout.setSpacing(4)
+        btn_usb_tunnel = QPushButton("⌁ Activate USB Cable Tunnel (Port 8893)")
+        btn_usb_tunnel.setStyleSheet("background: #111827; color: #FFFFFF; font-size: 10px; font-weight: bold; padding: 5px 10px; border-radius: 4px;")
+        lbl_usb_status = QLabel("USB Mode: Connect phone to 127.0.0.1 for 0ms delay")
+        lbl_usb_status.setStyleSheet("color: #4B5563; font-size: 9px;")
+        def _on_usb_click():
+            if not self.adb_manager.is_available():
+                lbl_usb_status.setText("ADB not detected.")
+                return
+            ok, msg = self.adb_manager.reverse_port(self.port)
+            if ok:
+                lbl_usb_status.setText("USB Tunnel Active! Select 127.0.0.1 on phone.")
+            else:
+                lbl_usb_status.setText(f"{msg}")
+        btn_usb_tunnel.clicked.connect(_on_usb_click)
+        u_box_layout.addWidget(btn_usb_tunnel)
+        u_box_layout.addWidget(lbl_usb_status)
+        tab3_layout.addWidget(usb_box)
 
-        # Contrast
-        co_row = QHBoxLayout()
-        co_row.addWidget(QLabel("Contrast:", styleSheet="font-size: 11px; font-weight: bold; min-width: 100px;"))
-        slider_contrast = QSlider(Qt.Orientation.Horizontal)
-        slider_contrast.setRange(50, 150)
-        slider_contrast.setValue(int(self.server.contrast * 100))
-        slider_contrast.valueChanged.connect(lambda val: setattr(self.server, "contrast", val / 100.0))
-        co_row.addWidget(slider_contrast)
-        a_layout.addLayout(co_row)
+        tab3_layout.addStretch()
+        tabs.addTab(tab3, "🎨 Tuning & Link")
 
-        right_col.addWidget(adj_card)
-
-        # Card 4: Metrics
-        m_card = QFrame()
-        m_card.setStyleSheet("background-color: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 12px; padding: 14px;")
-        m_layout = QHBoxLayout(m_card)
-        m_layout.setSpacing(12)
-
-        self.lbl_stat_fps = QLabel("0 FPS")
-        self.lbl_stat_fps.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_fps.setStyleSheet("color: #111827;")
-        m_layout.addWidget(self.lbl_stat_fps)
-
-        self.lbl_stat_bitrate = QLabel("0.0 Mbps")
-        self.lbl_stat_bitrate.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self.lbl_stat_bitrate.setStyleSheet("color: #4B5563;")
-        m_layout.addWidget(self.lbl_stat_bitrate)
-        m_layout.addStretch()
-        right_col.addWidget(m_card)
-
-        right_col.addStretch()
+        right_col.addWidget(tabs)
         content_layout.addLayout(right_col, 2)
 
         scroll.setWidget(content_widget)
@@ -447,8 +508,6 @@ class ZeroCamModule(BaseModule):
         if not res_tuple:
             return
         w, h = res_tuple
-        self.server._vcam_w = w
-        self.server._vcam_h = h
         self.server.send_control_command({"action": "SET_RESOLUTION", "width": w, "height": h})
 
     def _on_vcam_toggled(self, checked: bool):

@@ -27,6 +27,7 @@ class CameraH264Encoder(
     private var drainThread: Thread? = null
     private var spsPpsBuffer: ByteArray? = null
     private var currentRotationDeg = 0
+    private var isSemiPlanar = true
     var outputFramesCount = 0L
     var inputFramesCount = 0L
 
@@ -43,6 +44,8 @@ class CameraH264Encoder(
                 it == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar ||
                 it == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Planar
             } ?: MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar
+
+            isSemiPlanar = (colorFormat == MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420SemiPlanar)
 
             val format = MediaFormat.createVideoFormat(MIME_TYPE, alignedWidth, alignedHeight).apply {
                 setInteger(MediaFormat.KEY_COLOR_FORMAT, colorFormat)
@@ -138,9 +141,14 @@ class CameraH264Encoder(
         val yRowStride = yPlane.rowStride
         val yPixelStride = yPlane.pixelStride
 
-        // Fast Y copy
+        // Fast Y copy: ensure exactly w * h bytes are written to prevent plane offset shift
+        val yLen = w * h
         if (yRowStride == w && yPixelStride == 1) {
+            val oldLimit = yBuf.limit()
+            yBuf.position(0)
+            yBuf.limit(minOf(yBuf.capacity(), yLen))
             out.put(yBuf)
+            yBuf.limit(oldLimit)
         } else {
             val rowBytes = ByteArray(w)
             for (r in 0 until h) {
@@ -150,7 +158,7 @@ class CameraH264Encoder(
             }
         }
 
-        // UV copy (Semiplanar NV12)
+        // UV copy
         val uvW = w / 2
         val uvH = h / 2
         val uRowStride = uPlane.rowStride
@@ -158,10 +166,46 @@ class CameraH264Encoder(
         val uPixelStride = uPlane.pixelStride
         val vPixelStride = vPlane.pixelStride
 
-        for (r in 0 until uvH) {
-            for (c in 0 until uvW) {
-                out.put(uBuf.get(r * uRowStride + c * uPixelStride))
-                out.put(vBuf.get(r * vRowStride + c * vPixelStride))
+        if (isSemiPlanar) {
+            // NV12 format: U0, V0, U1, V1 ...
+            val rowBytes = ByteArray(w)
+            val isInterleaved = (uPixelStride == 2 && vPixelStride == 2 && uRowStride == vRowStride)
+            if (isInterleaved) {
+                for (r in 0 until uvH) {
+                    uBuf.position(r * uRowStride)
+                    val toRead = minOf(uBuf.remaining(), w)
+                    uBuf.get(rowBytes, 0, toRead)
+                    out.put(rowBytes, 0, toRead)
+                }
+            } else {
+                for (r in 0 until uvH) {
+                    var idx = 0
+                    val uRowStart = r * uRowStride
+                    val vRowStart = r * vRowStride
+                    for (c in 0 until uvW) {
+                        rowBytes[idx++] = uBuf.get(uRowStart + c * uPixelStride)
+                        rowBytes[idx++] = vBuf.get(vRowStart + c * vPixelStride)
+                    }
+                    out.put(rowBytes, 0, w)
+                }
+            }
+        } else {
+            // Planar I420 format: all U, then all V
+            val uBytes = ByteArray(uvW)
+            for (r in 0 until uvH) {
+                val rowStart = r * uRowStride
+                for (c in 0 until uvW) {
+                    uBytes[c] = uBuf.get(rowStart + c * uPixelStride)
+                }
+                out.put(uBytes, 0, uvW)
+            }
+            val vBytes = ByteArray(uvW)
+            for (r in 0 until uvH) {
+                val rowStart = r * vRowStride
+                for (c in 0 until uvW) {
+                    vBytes[c] = vBuf.get(rowStart + c * vPixelStride)
+                }
+                out.put(vBytes, 0, uvW)
             }
         }
     }

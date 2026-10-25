@@ -47,10 +47,29 @@ class StreamSender(
         scope.launch {
             try {
                 Log.d(TAG, "Connecting to PC server at $host:$port...")
-                val sock = Socket()
-                sock.tcpNoDelay = true
-                sock.sendBufferSize = 1024 * 1024 // 1 MB high-throughput TCP send buffer
-                sock.connect(InetSocketAddress(host, port), 4000)
+                NetworkDiscovery.wakeModule(host, "zerocast")
+
+                var sock: Socket? = null
+                var lastErr: Exception? = null
+                for (attempt in 1..3) {
+                    try {
+                        val s = Socket()
+                        s.tcpNoDelay = true
+                        s.sendBufferSize = 1024 * 1024 // 1 MB high-throughput TCP send buffer
+                        s.connect(InetSocketAddress(host, port), 2500)
+                        sock = s
+                        break
+                    } catch (e: Exception) {
+                        lastErr = e
+                        if (attempt < 3) {
+                            NetworkDiscovery.wakeModule(host, "zerocast")
+                            delay(350)
+                        }
+                    }
+                }
+                if (sock == null) {
+                    throw lastErr ?: Exception("Unable to connect to PC ZeroCast server at $host:$port")
+                }
 
                 socket = sock
                 outputStream = DataOutputStream(java.io.BufferedOutputStream(sock.getOutputStream(), 64 * 1024))

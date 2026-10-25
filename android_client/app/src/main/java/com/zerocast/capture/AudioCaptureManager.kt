@@ -82,7 +82,9 @@ class AudioCaptureManager(
                 while (isRecording.get() && record.recordingState == AudioRecord.RECORDSTATE_RECORDING) {
                     val read = record.read(buffer, 0, buffer.size)
                     if (read > 0) {
-                        val pcmChunk = if (read == buffer.size) buffer else buffer.copyOf(read)
+                        // Crucial: Always pass an independent copy to prevent race conditions
+                        // where record.read mutates buffer while StreamSender is transmitting it over the network!
+                        val pcmChunk = buffer.copyOf(read)
                         streamSender.enqueueFrame(PacketHeader.TYPE_AUDIO, 0, pcmChunk)
                     } else {
                         try {

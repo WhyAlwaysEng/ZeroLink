@@ -14,6 +14,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.core.content.ContextCompat
+import com.zerocast.R
 import com.zerocast.databinding.ActivityZeroCamBinding
 import com.zerocast.network.NetworkDiscovery
 import com.zerocast.util.ZeroLinkConfig
@@ -45,12 +46,12 @@ class ZeroCamActivity : AppCompatActivity() {
     private var isTorchOn = false
     private var isStreaming = false
 
-    private var targetWidth = 1280
-    private var targetHeight = 720
-    private var jpegQuality = 65
+    private var targetWidth = 1920
+    private var targetHeight = 1080
+    private var jpegQuality = 82
 
     private var h264Encoder: CameraH264Encoder? = null
-    private var useH264Hardware = true // GPU Hardware Encoder for 60 FPS Crystal Clarity
+    private var useH264Hardware = true // Hardware MediaCodec H.264 60 FPS Encoder
 
     private var socket: Socket? = null
     private var outStream: OutputStream? = null
@@ -86,7 +87,7 @@ class ZeroCamActivity : AppCompatActivity() {
 
         // Pre-fill Host IP
         val lastIp = ZeroLinkConfig.getServerIp(this)
-        if (lastIp.isNotEmpty() && lastIp != "127.0.0.1") {
+        if (lastIp.isNotEmpty()) {
             binding.etCamHostIp.setText(lastIp)
         }
 
@@ -109,15 +110,46 @@ class ZeroCamActivity : AppCompatActivity() {
             bindCameraUseCases()
         }
 
+        binding.btnToggleControls.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            val isVis = binding.cardBottomControls.visibility == android.view.View.VISIBLE
+            binding.cardBottomControls.visibility = if (isVis) android.view.View.GONE else android.view.View.VISIBLE
+        }
+
+        // Resolution Chips
+        binding.btnRes4K.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            switchResolution(3840, 2160)
+        }
+        binding.btnRes1080p.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            switchResolution(1920, 1080)
+        }
+        binding.btnRes720p.setOnClickListener {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            switchResolution(1280, 720)
+        }
+        updateResolutionUI(targetWidth, targetHeight)
+
         binding.btnCamUsbMode.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             binding.etCamHostIp.setText("127.0.0.1")
+            ZeroLinkConfig.setServerIp(this, "127.0.0.1")
             Toast.makeText(this, "⌁ USB Cable Mode Selected (127.0.0.1)", Toast.LENGTH_SHORT).show()
         }
 
         binding.btnCamAutoWifi.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            discovery?.startDiscovery()
+            discovery?.stopDiscovery()
+            discovery = NetworkDiscovery { discoveredIp, _ ->
+                runOnUiThread {
+                    if (NetworkDiscovery.isWifiIp(discoveredIp)) {
+                        binding.etCamHostIp.setText(discoveredIp)
+                        ZeroLinkConfig.setServerIp(this, discoveredIp)
+                    }
+                }
+            }
+            discovery?.startDiscovery(ZeroLinkConfig.MODE_WIFI)
             Toast.makeText(this, "◫ Searching for PC on Wi-Fi...", Toast.LENGTH_SHORT).show()
         }
 
@@ -164,6 +196,66 @@ class ZeroCamActivity : AppCompatActivity() {
         checkPermissionAndStart()
     }
 
+    private fun updateResolutionUI(w: Int, h: Int) {
+        val activeBg = ContextCompat.getColorStateList(this, R.color.text_primary)
+        val inactiveBg = ContextCompat.getColorStateList(this, R.color.surface)
+        val textWhite = android.graphics.Color.WHITE
+        val textSecondary = ContextCompat.getColor(this, R.color.text_secondary)
+        val strokeColor = ContextCompat.getColorStateList(this, R.color.surface_stroke)
+
+        // 4K UHD
+        if (w >= 3840) {
+            binding.btnRes4K.backgroundTintList = activeBg
+            binding.btnRes4K.setTextColor(textWhite)
+            binding.btnRes4K.strokeWidth = 0
+        } else {
+            binding.btnRes4K.backgroundTintList = inactiveBg
+            binding.btnRes4K.setTextColor(textSecondary)
+            binding.btnRes4K.strokeColor = strokeColor
+            binding.btnRes4K.strokeWidth = 1
+        }
+
+        // 1080p
+        if (w == 1920) {
+            binding.btnRes1080p.backgroundTintList = activeBg
+            binding.btnRes1080p.setTextColor(textWhite)
+            binding.btnRes1080p.strokeWidth = 0
+        } else {
+            binding.btnRes1080p.backgroundTintList = inactiveBg
+            binding.btnRes1080p.setTextColor(textSecondary)
+            binding.btnRes1080p.strokeColor = strokeColor
+            binding.btnRes1080p.strokeWidth = 1
+        }
+
+        // 720p
+        if (w == 1280) {
+            binding.btnRes720p.backgroundTintList = activeBg
+            binding.btnRes720p.setTextColor(textWhite)
+            binding.btnRes720p.strokeWidth = 0
+        } else {
+            binding.btnRes720p.backgroundTintList = inactiveBg
+            binding.btnRes720p.setTextColor(textSecondary)
+            binding.btnRes720p.strokeColor = strokeColor
+            binding.btnRes720p.strokeWidth = 1
+        }
+    }
+
+    private fun switchResolution(w: Int, h: Int) {
+        if (targetWidth == w && targetHeight == h) return
+        targetWidth = w
+        targetHeight = h
+        updateResolutionUI(w, h)
+        bindCameraUseCases()
+        if (isStreaming) {
+            val ip = binding.etCamHostIp.text.toString().trim()
+            if (ip.isNotEmpty()) {
+                startStream(ip, DEFAULT_PORT)
+            }
+        }
+        val label = if (w >= 3840) "4K Ultra HD (3840x2160)" else if (w >= 1920) "Full HD 1080p" else "HD 720p"
+        Toast.makeText(this, "💎 Resolution: $label", Toast.LENGTH_SHORT).show()
+    }
+
     private fun checkPermissionAndStart() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
             setupCamera()
@@ -199,11 +291,12 @@ class ZeroCamActivity : AppCompatActivity() {
         val previewBuilder = Preview.Builder()
             .setTargetResolution(targetSize)
 
-        // Lock to 30 FPS Range to avoid HAL throttling down to 5-10 FPS in indoor lighting
+        // Adaptive FPS range: 30 FPS for 4K UHD, 60 FPS for 1080p & 720p
+        val fpsRange = if (targetWidth >= 3840) android.util.Range(30, 30) else android.util.Range(60, 60)
         val previewExt = androidx.camera.camera2.interop.Camera2Interop.Extender(previewBuilder)
         previewExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-            android.util.Range(30, 30)
+            fpsRange
         )
         previewExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE,
@@ -222,7 +315,7 @@ class ZeroCamActivity : AppCompatActivity() {
         val analysisExt = androidx.camera.camera2.interop.Camera2Interop.Extender(imageAnalysisBuilder)
         analysisExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
-            android.util.Range(30, 30)
+            fpsRange
         )
 
         val imageAnalysis = imageAnalysisBuilder.build()
@@ -257,9 +350,31 @@ class ZeroCamActivity : AppCompatActivity() {
 
         streamJob = scope.launch {
             try {
-                val s = Socket()
-                s.tcpNoDelay = true
-                s.connect(InetSocketAddress(hostIp, port), 4000)
+                // Remotely wake up ZeroCam module on PC if not active
+                NetworkDiscovery.wakeModule(hostIp, "zerocam")
+                delay(200)
+
+                var s: Socket? = null
+                var lastErr: Exception? = null
+                for (attempt in 1..3) {
+                    try {
+                        val sock = Socket()
+                        sock.tcpNoDelay = true
+                        sock.connect(InetSocketAddress(hostIp, port), 2500)
+                        s = sock
+                        break
+                    } catch (e: Exception) {
+                        lastErr = e
+                        if (attempt < 3) {
+                            NetworkDiscovery.wakeModule(hostIp, "zerocam")
+                            delay(350)
+                        }
+                    }
+                }
+                if (s == null) {
+                    throw lastErr ?: Exception("Unable to connect to PC ZeroCam server")
+                }
+
                 socket = s
                 outStream = s.getOutputStream()
 
@@ -268,21 +383,29 @@ class ZeroCamActivity : AppCompatActivity() {
                     put("action", "CONNECT")
                     put("model", Build.MODEL)
                     put("device_model", Build.MODEL)
+                    put("width", targetWidth)
+                    put("height", targetHeight)
                 }
                 outStream?.write((hs.toString() + "\n").toByteArray(Charsets.UTF_8))
                 outStream?.flush()
 
                 isStreaming = true
                 val isWired = hostIp == "127.0.0.1" || hostIp == "localhost"
+                val resTag = if (targetWidth >= 3840) "4K" else if (targetWidth >= 1920) "1080p" else "720p"
                 withContext(Dispatchers.Main) {
                     binding.btnCamStreamToggle.text = "Stop Webcam Stream"
-                    binding.tvCamStatus.text = if (isWired) "● LIVE (⚡ Wired USB Cable)" else "● LIVE (📡 Wi-Fi: $hostIp)"
+                    binding.tvCamStatus.text = if (isWired) "● LIVE $resTag (⚡ Wired USB)" else "● LIVE $resTag (📡 Wi-Fi)"
                 }
 
                 // Initialize Hardware H.264 Encoder if enabled
                 if (useH264Hardware) {
                     h264Encoder?.stop()
-                    val enc = CameraH264Encoder(targetWidth, targetHeight, targetFps = 30, bitrateKbps = 5000) { nalBytes, isKeyframe, rotDeg ->
+                    val (fps, bitrate) = when {
+                        targetWidth >= 3840 -> Pair(30, 24000)
+                        targetWidth >= 1920 -> Pair(60, 12000)
+                        else -> Pair(60, 6000)
+                    }
+                    val enc = CameraH264Encoder(targetWidth, targetHeight, targetFps = fps, bitrateKbps = bitrate) { nalBytes, isKeyframe, rotDeg ->
                         val payloadLen = nalBytes.size
                         val nowMs = System.currentTimeMillis()
                         val flags: Short = if (isKeyframe) 0x03 else 0x01
@@ -304,7 +427,7 @@ class ZeroCamActivity : AppCompatActivity() {
                     val ok = enc.start()
                     if (ok) {
                         h264Encoder = enc
-                        Log.i(TAG, "Hardware H.264 Encoder successfully started")
+                        Log.i(TAG, "Hardware H.264 Encoder successfully started ($targetWidth x $targetHeight @ ${fps}fps)")
                     } else {
                         Log.w(TAG, "Hardware H.264 Encoder start failed; using high-speed dynamic JPEG stream")
                         h264Encoder = null
@@ -364,9 +487,7 @@ class ZeroCamActivity : AppCompatActivity() {
                     val w = json.optInt("width", 1920)
                     val h = json.optInt("height", 1080)
                     runOnUiThread {
-                        targetWidth = w
-                        targetHeight = h
-                        bindCameraUseCases()
+                        switchResolution(w, h)
                     }
                 }
                 "SET_QUALITY" -> {

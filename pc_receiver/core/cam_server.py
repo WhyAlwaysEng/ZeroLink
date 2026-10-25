@@ -55,6 +55,12 @@ class CamServer(QObject):
         self.sharpness = 0.5            # 0.0 to 1.5 Detail enhancer / unsharp mask
         self.saturation = 1.15          # 0.5 to 2.0 Color vibrancy booster
 
+        # 4K Digital Framing / Lossless ePTZ (Pan-Tilt-Zoom)
+        self.crop_enabled = False
+        self.crop_zoom = 1.0            # 1.0x to 4.0x
+        self.crop_pan = 0.0             # -1.0 (left) to +1.0 (right)
+        self.crop_tilt = 0.0            # -1.0 (up) to +1.0 (down)
+
         # Hardware H.264 Decoder
         self._h264_decoder = None
 
@@ -305,10 +311,30 @@ class CamServer(QObject):
             hsv[:, :, 1] = np.clip(hsv[:, :, 1] * self.saturation, 0, 255)
             bgr = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
 
-        # Feed Virtual Camera (Discord / OBS)
+        # 4K Digital Framing / Lossless ePTZ (Pan-Tilt-Zoom Crop)
+        if self.crop_enabled and self.crop_zoom > 1.01:
+            orig_h, orig_w = bgr.shape[:2]
+            crop_w = int(orig_w / self.crop_zoom)
+            crop_h = int(orig_h / self.crop_zoom)
+
+            max_pan = (orig_w - crop_w) // 2
+            max_tilt = (orig_h - crop_h) // 2
+
+            offset_x = int(self.crop_pan * max_pan)
+            offset_y = int(self.crop_tilt * max_tilt)
+
+            center_x = (orig_w // 2) + offset_x
+            center_y = (orig_h // 2) + offset_y
+
+            x1 = max(0, min(orig_w - crop_w, center_x - (crop_w // 2)))
+            y1 = max(0, min(orig_h - crop_h, center_y - (crop_h // 2)))
+
+            bgr = bgr[y1:y1 + crop_h, x1:x1 + crop_w]
+
+        # Feed Virtual Camera (Discord / OBS / Zoom)
         if self.enable_virtual_cam and self._vcam:
             try:
-                # Resize to virtual cam dimensions if different
+                # Resize to target virtual cam dimensions with smooth anti-aliased interpolation
                 h, w = bgr.shape[:2]
                 if w != self._vcam_w or h != self._vcam_h:
                     v_frame = cv2.resize(bgr, (self._vcam_w, self._vcam_h), interpolation=cv2.INTER_LINEAR)

@@ -54,8 +54,25 @@ class ZeroMixManager(
             try {
                 withContext(Dispatchers.Main) { onStatusChanged(false, "Connecting...") }
 
-                val s = Socket()
-                s.connect(InetSocketAddress(host, port), 4000)
+                var s: Socket? = null
+                var lastErr: Exception? = null
+                for (attempt in 1..3) {
+                    try {
+                        val sock = Socket()
+                        sock.connect(InetSocketAddress(host, port), 2500)
+                        s = sock
+                        break
+                    } catch (e: Exception) {
+                        lastErr = e
+                        if (attempt < 3) {
+                            delay(350)
+                        }
+                    }
+                }
+                if (s == null) {
+                    throw lastErr ?: Exception("Unable to connect to PC ZeroMix service")
+                }
+
                 socket = s
                 writer = PrintWriter(OutputStreamWriter(s.getOutputStream(), "UTF-8"), true)
                 isConnected = true

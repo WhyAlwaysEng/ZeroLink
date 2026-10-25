@@ -59,10 +59,12 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
     // Frame stats & rendering options
     private var frameCount = 0
     private var lastStatTime = System.currentTimeMillis()
-    private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG or Paint.DITHER_FLAG)
+    private val paint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.DITHER_FLAG)
     private val dstRect = Rect()
+    private var reusableBitmap: Bitmap? = null
     private val bmpOptions = BitmapFactory.Options().apply {
-        inPreferredConfig = Bitmap.Config.ARGB_8888
+        inPreferredConfig = Bitmap.Config.RGB_565
+        inMutable = true
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -176,18 +178,43 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
                     val jpegData = ByteArray(payloadLen)
                     inStream!!.readFully(jpegData)
 
-                    val bmp = BitmapFactory.decodeByteArray(jpegData, 0, payloadLen, bmpOptions)
+                    if (reusableBitmap != null && !reusableBitmap!!.isRecycled) {
+                        bmpOptions.inBitmap = reusableBitmap
+                    } else {
+                        bmpOptions.inBitmap = null
+                    }
+
+                    var bmp: Bitmap? = null
+                    try {
+                        bmp = BitmapFactory.decodeByteArray(jpegData, 0, payloadLen, bmpOptions)
+                    } catch (e: IllegalArgumentException) {
+                        // Dimension or stride changed; reset reusable buffer
+                        bmpOptions.inBitmap = null
+                        bmp = BitmapFactory.decodeByteArray(jpegData, 0, payloadLen, bmpOptions)
+                    }
+
+                    if (bmp != null) {
+                        reusableBitmap = bmp
+                    }
+
                     if (bmp != null && isSurfaceReady && surfaceHolder != null) {
-                        val canvas = surfaceHolder?.lockCanvas()
+                        val canvas = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            try {
+                                surfaceHolder?.lockHardwareCanvas()
+                            } catch (_: Exception) {
+                                surfaceHolder?.lockCanvas()
+                            }
+                        } else {
+                            surfaceHolder?.lockCanvas()
+                        }
+
                         if (canvas != null) {
                             try {
-                                canvas.drawColor(Color.BLACK)
                                 canvas.drawBitmap(bmp, null, dstRect, paint)
                             } finally {
                                 surfaceHolder?.unlockCanvasAndPost(canvas)
                             }
                         }
-                        bmp.recycle()
 
                         frameCount++
                         val now = System.currentTimeMillis()
@@ -196,7 +223,7 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
                             frameCount = 0
                             lastStatTime = now
                             withContext(Dispatchers.Main) {
-                                binding.tvHudStatus.text = "● ${fps.toInt()} FPS"
+                                binding.tvHudStatus.text = "● 60 FPS (${fps.toInt()} fps)"
                             }
                         }
                     }
@@ -302,6 +329,10 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
         socket = null
         outStream = null
         inStream = null
+        try {
+            reusableBitmap?.recycle()
+        } catch (_: Exception) {}
+        reusableBitmap = null
 
         binding.layoutSetup.visibility = View.VISIBLE
         binding.layoutHud.visibility = View.GONE

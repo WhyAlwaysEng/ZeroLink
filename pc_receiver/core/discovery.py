@@ -184,6 +184,15 @@ class LanDiscoveryService(QObject):
             self._tcp_sock.listen(10)
             self._tcp_sock.settimeout(1.0)
             print(f"[ZeroWake] Master Gateway active on TCP port {self.GATEWAY_PORT}")
+
+            # Ensure ADB reverse for all ecosystem ports for instant USB connectivity
+            try:
+                from core.adb_helper import AdbManager
+                adb = AdbManager()
+                if adb.is_available():
+                    adb.reverse_ecosystem_ports()
+            except Exception:
+                pass
         except Exception as e:
             print(f"[ZeroWake] TCP Gateway bind error: {e}")
             return

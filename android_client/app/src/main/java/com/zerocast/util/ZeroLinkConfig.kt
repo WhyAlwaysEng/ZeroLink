@@ -16,7 +16,24 @@ object ZeroLinkConfig {
 
     private const val PREF_NAME = "zerolink_prefs"
     private const val KEY_SERVER_IP = "server_ip"
+    private const val KEY_CONNECTION_MODE = "connection_mode"
     private const val KEY_CAST_PORT = "cast_port"
+
+    const val MODE_AUTO = "AUTO"
+    const val MODE_USB = "USB"
+    const val MODE_TETHER = "TETHER"
+    const val MODE_WIFI = "WIFI"
+    const val MODE_MANUAL = "MANUAL"
+
+    fun getConnectionMode(context: Context): String {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getString(KEY_CONNECTION_MODE, MODE_AUTO) ?: MODE_AUTO
+    }
+
+    fun setConnectionMode(context: Context, mode: String) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putString(KEY_CONNECTION_MODE, mode).apply()
+    }
     private const val KEY_CAST_RES = "cast_res"
     private const val KEY_CAST_FPS = "cast_fps"
     private const val KEY_CAST_BITRATE = "cast_bitrate"

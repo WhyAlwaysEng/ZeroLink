@@ -173,9 +173,10 @@ class MainWindow(QMainWindow):
         # Module Manager
         self.module_manager = ModuleManager(self)
 
-        # Register Ecosystem Modules (On-Demand Activation: Services start only when used)
+        # Register Ecosystem Modules (ZeroCast active by default so port 8888 is always ready)
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
+        self.module_manager.toggle_module("zerocast", True)
 
         self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, download_dir=self.app_settings.download_dir, parent=self)
         self.module_manager.register_module(self.mod_zerodrop)
@@ -500,6 +501,7 @@ class MainWindow(QMainWindow):
             cast_mod = self.module_manager.get_module("zerocast")
             if cast_mod and not cast_mod.is_active:
                 self.module_manager.toggle_module("zerocast", True)
+        self._restore_from_tray()
         self._on_navigate_to_module(module_id)
 
     def _on_navigate_to_module(self, module_id: str):
@@ -739,8 +741,18 @@ class MainWindow(QMainWindow):
                 self.tray_icon.showMessage("Windows Startup", "Failed to update Windows startup settings.", QSystemTrayIcon.MessageIcon.Warning, 2500)
 
     def _restore_from_tray(self):
-        self.showNormal()
+        if self.isMinimized():
+            self.showNormal()
+        else:
+            self.show()
+        self.raise_()
         self.activateWindow()
+        if os.name == 'nt':
+            try:
+                import ctypes
+                ctypes.windll.user32.SetForegroundWindow(int(self.winId()))
+            except Exception:
+                pass
 
     def _on_tray_activated(self, reason):
         if reason in (QSystemTrayIcon.ActivationReason.Trigger, QSystemTrayIcon.ActivationReason.DoubleClick):
@@ -805,6 +817,7 @@ class MainWindow(QMainWindow):
             if client_ip and client_ip not in ("127.0.0.1", "0.0.0.0"):
                 if hasattr(self.mod_zeroexplorer, "set_phone_host"):
                     self.mod_zeroexplorer.set_phone_host(client_ip)
+        self._restore_from_tray()
         self._on_navigate_to_module(module_id)
 
     def _on_remote_sleep_module(self, module_id: str):

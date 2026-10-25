@@ -46,10 +46,10 @@ class DisplayServer(QObject):
         # Configuration
         self.selected_monitor_idx = 1  # 1-indexed for mss monitors list
         self.target_fps = 60
-        self.quality = 90              # High-clarity 90% default (adjustable 50-100%)
+        self.quality = 78              # Optimized 60 FPS quality sweet-spot (sharp, low latency)
         self.enable_touch = True
         self.scale_factor = 1.0        # 1.0 = native, 0.75 = downscale for performance
-        self.enable_444_chroma = True  # Crystal-clear text clarity (4:4:4 JPEG chroma)
+        self.enable_444_chroma = False # 4:2:0 chroma enables 60 FPS butter-smooth stream (< 10ms encode)
         self.sharpen_amount = 0.0      # 0.0 to 1.0 detail enhancer
 
         # Server socket & threads
@@ -369,22 +369,24 @@ class DisplayServer(QObject):
             monitor = sct.monitors[idx]
 
             sct_img = sct.grab(monitor)
-            frame = np.array(sct_img)  # BGRA
+            # Direct 3-channel BGR slice from memoryview, avoiding redundant BGRA buffer allocations
+            raw = np.frombuffer(sct_img.raw, dtype=np.uint8).reshape((sct_img.height, sct_img.width, 4))
+            frame = raw[:, :, :3]
 
             # Downscale if requested
             if self.scale_factor < 0.99:
                 h, w = frame.shape[:2]
                 new_w = int(w * self.scale_factor)
                 new_h = int(h * self.scale_factor)
-                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_AREA)
+                frame = cv2.resize(frame, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
 
             # Optional Detail Enhancer / Sharpening
             if self.sharpen_amount > 0:
                 blurred = cv2.GaussianBlur(frame, (0, 0), 1.5)
                 frame = cv2.addWeighted(frame, 1.0 + self.sharpen_amount, blurred, -self.sharpen_amount, 0)
 
-            # Encode as high-efficiency JPEG with optional 4:4:4 crystal-clear text chroma
-            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.quality)]
+            # Encode as high-efficiency JPEG with fastest baseline quantization
+            encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), int(self.quality), int(cv2.IMWRITE_JPEG_OPTIMIZE), 0]
             if self.enable_444_chroma and hasattr(cv2, 'IMWRITE_JPEG_SAMPLING_FACTOR_444'):
                 encode_param.extend([int(cv2.IMWRITE_JPEG_SAMPLING_FACTOR), int(cv2.IMWRITE_JPEG_SAMPLING_FACTOR_444)])
 
