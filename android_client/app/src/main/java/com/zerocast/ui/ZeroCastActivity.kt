@@ -519,6 +519,14 @@ class ZeroCastActivity : AppCompatActivity() {
         val isLoopback = host == "127.0.0.1" || host == "localhost"
         val hasPhysicalCable = isUsbCablePluggedIn()
 
+        if (streaming) {
+            if (ZeroLinkConfig.getKeepScreenAwake(this)) {
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
         if (isAudioOnlyService) {
             binding.btnToggleStream.isEnabled = false
             binding.btnToggleStream.text = "⛔ ZEROMIX AUDIO CAST ACTIVE"

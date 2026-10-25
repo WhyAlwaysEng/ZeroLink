@@ -109,8 +109,12 @@ class ZeroMixActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (mixManager?.isConnected == true) {
+            if (mixManager?.isConnected == true || binding.btnConnect.text == "Disconnect") {
                 mixManager?.stop()
+                binding.btnConnect.text = "Connect"
+                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
+                binding.tvMixStatus.text = "○ DISCONNECTED"
+                binding.tvMixStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
             } else {
                 startConnect()
             }

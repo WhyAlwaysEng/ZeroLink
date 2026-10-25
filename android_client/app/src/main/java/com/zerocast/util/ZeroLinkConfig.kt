@@ -24,6 +24,9 @@ object ZeroLinkConfig {
     private const val KEY_CAST_STRICT_CBR = "cast_strict_cbr"
     private const val KEY_CAST_CODEC = "cast_codec"
     private const val KEY_NOTIFY_MIRROR = "notify_mirror"
+    private const val KEY_KEEP_SCREEN_AWAKE = "keep_screen_awake"
+    private const val KEY_HAPTIC_FEEDBACK = "haptic_feedback"
+    private const val KEY_PRIVACY_FILTER_BANKING = "privacy_filter_banking"
 
     fun getServerIp(context: Context): String {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -123,5 +126,35 @@ object ZeroLinkConfig {
     fun setNotifyMirror(context: Context, enabled: Boolean) {
         val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
         sp.edit().putBoolean(KEY_NOTIFY_MIRROR, enabled).apply()
+    }
+
+    fun getKeepScreenAwake(context: Context): Boolean {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getBoolean(KEY_KEEP_SCREEN_AWAKE, true)
+    }
+
+    fun setKeepScreenAwake(context: Context, enabled: Boolean) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putBoolean(KEY_KEEP_SCREEN_AWAKE, enabled).apply()
+    }
+
+    fun getHapticFeedback(context: Context): Boolean {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getBoolean(KEY_HAPTIC_FEEDBACK, true)
+    }
+
+    fun setHapticFeedback(context: Context, enabled: Boolean) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putBoolean(KEY_HAPTIC_FEEDBACK, enabled).apply()
+    }
+
+    fun getPrivacyFilterBanking(context: Context): Boolean {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        return sp.getBoolean(KEY_PRIVACY_FILTER_BANKING, true)
+    }
+
+    fun setPrivacyFilterBanking(context: Context, enabled: Boolean) {
+        val sp = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        sp.edit().putBoolean(KEY_PRIVACY_FILTER_BANKING, enabled).apply()
     }
 }

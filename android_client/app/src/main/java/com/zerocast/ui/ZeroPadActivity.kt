@@ -62,7 +62,8 @@ class ZeroPadActivity : AppCompatActivity() {
         }
 
         binding.btnPadConnect.setOnClickListener {
-            if (isConnected) {
+            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            if (isConnected || binding.btnPadConnect.text == "Disconnect" || binding.btnPadConnect.text == "Connecting...") {
                 disconnect()
             } else {
                 val ip = binding.etPadHostIp.text.toString().trim()
@@ -177,8 +178,10 @@ class ZeroPadActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Connection failed: ${e.message}")
             } finally {
-                withContext(Dispatchers.Main) {
-                    disconnect()
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.Main) {
+                        disconnect()
+                    }
                 }
             }
         }

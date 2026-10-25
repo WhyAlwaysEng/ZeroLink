@@ -28,6 +28,8 @@ from modules.zeroexplorer.explorer_module import ZeroExplorerModule
 from modules.zerodev.dev_module import ZeroDevModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
+from ui.settings_view import SettingsView
+from core.settings import AppSettings
 from ui.theme import GLOBAL_APP_STYLESHEET
 
 
@@ -155,7 +157,10 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.port = port
         self.local_ip = get_local_ip()
-        self.start_minimized = start_minimized
+        self.app_settings = AppSettings()
+        if self.app_settings.start_minimized:
+            self.start_minimized = True
+        self.start_minimized = start_minimized or self.start_minimized
 
         self.setWindowTitle(f"ZeroLink Hub v{CURRENT_VERSION}")
         icon_path = os.path.join(os.path.dirname(__file__), "..", "icon.png")
@@ -173,7 +178,7 @@ class MainWindow(QMainWindow):
         self.mod_zerocast = ZeroCastModule(port=self.port, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zerocast)
 
-        self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, parent=self)
+        self.mod_zerodrop = ZeroDropModule(port=8890, local_ip=self.local_ip, download_dir=self.app_settings.download_dir, parent=self)
         self.module_manager.register_module(self.mod_zerodrop)
 
         self.mod_zeroclip = ZeroClipModule(port=8889, local_ip=self.local_ip, parent=self)
@@ -340,6 +345,11 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
+        self.btn_nav_settings = NavButton("Settings", "⚙")
+        self.btn_nav_settings.clicked.connect(lambda: self.stacked.setCurrentIndex(11))
+        self.nav_group.addButton(self.btn_nav_settings)
+        side_layout.addWidget(self.btn_nav_settings)
+
         side_layout.addStretch()
 
         # Update Pill
@@ -432,6 +442,11 @@ class MainWindow(QMainWindow):
             parent=self
         )
         self.stacked.addWidget(self.connections_view)
+
+        # Page 11: Settings
+        self.settings_view = SettingsView(parent=self)
+        self.settings_view.check_updates_requested.connect(lambda: self._check_for_updates(is_manual=True))
+        self.stacked.addWidget(self.settings_view)
 
         main_layout.addWidget(self.stacked, 1)
 
@@ -759,9 +774,11 @@ class MainWindow(QMainWindow):
         return matches[0] if matches else None
 
     def _on_phone_notification(self, app_name: str, title: str, text: str):
+        if not getattr(self.app_settings, "notify_popup", True):
+            return
         if hasattr(self, "tray_icon") and self.tray_icon:
             full_msg = f"{title} {text}".strip()
-            otp = self._extract_otp(full_msg)
+            otp = self._extract_otp(full_msg) if getattr(self.app_settings, "auto_copy_otp", True) else None
             if otp:
                 # Feature 1: Smart OTP Auto-Copy to Windows Clipboard
                 from PyQt6.QtWidgets import QApplication
@@ -796,8 +813,8 @@ class MainWindow(QMainWindow):
         pass
 
     def closeEvent(self, event):
-        if getattr(self, "_is_quitting", False):
-            self.module_manager.stop_all()
+        if getattr(self, "_is_quitting", False) or not getattr(self.app_settings, "close_to_tray", True):
+            self._really_quit()
             super().closeEvent(event)
         else:
             event.ignore()

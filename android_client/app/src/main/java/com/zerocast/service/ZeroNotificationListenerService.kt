@@ -30,6 +30,19 @@ class ZeroNotificationListenerService : NotificationListenerService() {
         // Skip our own notifications to prevent feedback loops
         if (sbn.packageName == packageName) return
 
+        // Privacy filter for banking & financial applications
+        if (ZeroLinkConfig.getPrivacyFilterBanking(this)) {
+            val pkg = sbn.packageName.lowercase()
+            val isBankingApp = pkg.contains("bank") || pkg.contains("kplus") || pkg.contains("scb") ||
+                    pkg.contains("ktb") || pkg.contains("krungsri") || pkg.contains("ttbbank") ||
+                    pkg.contains("gsb") || pkg.contains("cimb") || pkg.contains("uob") ||
+                    pkg.contains("truemoney") || pkg.contains("wallet")
+            if (isBankingApp) {
+                Log.d(TAG, "Suppressed sensitive banking notification: $pkg")
+                return
+            }
+        }
+
         // Skip ongoing persistent notifications (media players, foreground services, downloads)
         if (sbn.isOngoing) return
 

@@ -188,12 +188,12 @@ class TransferItemCard(QFrame):
 class ZeroDropModule(BaseModule):
     """Minimalist ZeroDrop Module for fast LAN/USB file transfers."""
 
-    def __init__(self, port: int = DEFAULT_PORT, local_ip: str = "127.0.0.1", parent=None):
+    def __init__(self, port: int = DEFAULT_PORT, local_ip: str = "127.0.0.1", download_dir: Optional[str] = None, parent=None):
         super().__init__(parent)
         self.port = port
         self.local_ip = local_ip
 
-        self.service = FileTransferService(port=self.port, parent=self)
+        self.service = FileTransferService(port=self.port, download_dir=download_dir, parent=self)
         self.service.transfer_progress.connect(self._on_transfer_progress)
         self.service.transfer_completed.connect(self._on_transfer_completed)
         self.service.transfer_failed.connect(self._on_transfer_failed)

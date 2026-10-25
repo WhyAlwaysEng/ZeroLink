@@ -99,8 +99,11 @@ class ZeroMixManager(
             } catch (e: Exception) {
                 Log.d(TAG, "Connection failed: ${e.message}")
             } finally {
-                withContext(Dispatchers.Main) {
-                    onStatusChanged(false, "○ DISCONNECTED")
+                isConnected = false
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.Main) {
+                        onStatusChanged(false, "○ DISCONNECTED")
+                    }
                 }
                 stop()
             }
@@ -205,5 +208,8 @@ class ZeroMixManager(
         writer = null
         connectionJob?.cancel()
         connectionJob = null
+        mainHandler.post {
+            onStatusChanged(false, "○ DISCONNECTED")
+        }
     }
 }

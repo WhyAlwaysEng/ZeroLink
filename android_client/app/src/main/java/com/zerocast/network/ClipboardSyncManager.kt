@@ -28,7 +28,8 @@ class ClipboardSyncManager(
     private var socket: Socket? = null
     private var writer: PrintWriter? = null
     private var syncJob: Job? = null
-    private var isConnected = false
+    var isConnected = false
+        private set
 
     private var lastSyncedText: String = ""
     private var lastSyncedTimestamp: Long = 0

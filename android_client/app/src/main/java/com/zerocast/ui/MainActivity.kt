@@ -34,6 +34,13 @@ class MainActivity : AppCompatActivity() {
             UpdateChecker.checkForUpdates(this, isManualCheck = true)
         }
 
+        binding.btnSettings.setOnClickListener {
+            if (ZeroLinkConfig.getHapticFeedback(this)) {
+                it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+            }
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
         setupDiscoveryCard()
         setupNotificationMirrorCard()
         setupModuleCards()

@@ -23,6 +23,7 @@ import com.zerocast.util.ZeroLinkConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -203,8 +204,10 @@ class ZeroDisplayActivity : AppCompatActivity(), SurfaceHolder.Callback {
             } catch (e: Exception) {
                 Log.e(TAG, "Stream error: ${e.message}")
             } finally {
-                withContext(Dispatchers.Main) {
-                    disconnectStream()
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.Main) {
+                        disconnectStream()
+                    }
                 }
             }
         }

@@ -65,8 +65,12 @@ class ZeroClipActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (binding.btnConnect.text == "Disconnect") {
+            if (clipManager?.isConnected == true || binding.btnConnect.text == "Disconnect" || binding.btnConnect.text == "Connecting...") {
                 clipManager?.stop()
+                binding.btnConnect.text = "Sync"
+                binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
+                binding.tvClipStatus.text = "○ DISCONNECTED"
+                binding.tvClipStatus.setTextColor(ContextCompat.getColor(this, R.color.text_secondary))
             } else {
                 startSync()
             }

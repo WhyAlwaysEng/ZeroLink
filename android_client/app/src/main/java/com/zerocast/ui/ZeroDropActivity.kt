@@ -60,7 +60,7 @@ class ZeroDropActivity : AppCompatActivity() {
 
         binding.btnConnect.setOnClickListener {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            if (transferManager.isReceiverRunning) {
+            if (transferManager.isReceiverRunning || transferManager.isReceiverConnected || binding.btnConnect.text == "Disconnect" || binding.btnConnect.text == "Connecting...") {
                 transferManager.stopReceiveWorker()
                 binding.btnConnect.text = "Connect"
                 binding.btnConnect.backgroundTintList = ColorStateList.valueOf(ContextCompat.getColor(this, R.color.text_primary))
