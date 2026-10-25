@@ -90,17 +90,23 @@ class EcosystemConnectionManager private constructor(private val appContext: Con
         scope.launch {
             mutex.withLock {
                 isExplicitDisconnect = false
-                val targetMode = mode ?: _activeMode.value
-                _activeMode.value = targetMode
-                ZeroLinkConfig.setConnectionMode(appContext, targetMode)
-
-                // Resolve host IP for selected mode
-                val resolvedHost = when (targetMode) {
-                    ZeroLinkConfig.MODE_USB -> "127.0.0.1"
-                    ZeroLinkConfig.MODE_TETHER -> manualIp ?: NetworkDiscovery.getTetheringHostCandidate() ?: "10.242.214.162"
-                    ZeroLinkConfig.MODE_WIFI -> manualIp ?: ZeroLinkConfig.getServerIp(appContext).ifEmpty { "192.168.101.107" }
-                    else -> manualIp ?: ZeroLinkConfig.getServerIp(appContext).ifEmpty { "127.0.0.1" }
+                val resolvedHost = if (!manualIp.isNullOrBlank()) {
+                    manualIp.trim()
+                } else {
+                    when (_activeMode.value) {
+                        ZeroLinkConfig.MODE_USB -> "127.0.0.1"
+                        ZeroLinkConfig.MODE_TETHER -> NetworkDiscovery.getTetheringHostCandidate() ?: "10.242.214.162"
+                        else -> ZeroLinkConfig.getServerIp(appContext).ifEmpty { "192.168.1.100" }
+                    }
                 }
+
+                val detectedMode = when {
+                    resolvedHost == "127.0.0.1" || resolvedHost == "localhost" -> ZeroLinkConfig.MODE_USB
+                    resolvedHost.startsWith("10.") || resolvedHost.startsWith("192.168.42.") || resolvedHost.startsWith("192.168.43.") -> ZeroLinkConfig.MODE_TETHER
+                    else -> ZeroLinkConfig.MODE_WIFI
+                }
+                _activeMode.value = mode ?: detectedMode
+                ZeroLinkConfig.setConnectionMode(appContext, _activeMode.value)
 
                 _targetHost.value = resolvedHost
                 ZeroLinkConfig.setServerIp(appContext, resolvedHost)

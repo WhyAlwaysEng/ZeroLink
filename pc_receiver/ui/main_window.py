@@ -485,22 +485,43 @@ class MainWindow(QMainWindow):
         return page
 
     def _bind_events(self):
-        # Auto-Focus on Connect: When mobile connects to a tool, auto-activate and focus that module.
+        # Auto-Focus and Realtime Dashboard Sync on Connect:
         # All modules support simultaneous multi-tasking in the background.
         if hasattr(self.mod_zerocast, "server"):
-            self.mod_zerocast.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocast"))
+            self.mod_zerocast.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerocast", ip, model))
+            self.mod_zerocast.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerocast", ip))
 
         if hasattr(self.mod_zerocam, "server"):
-            self.mod_zerocam.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerocam"))
+            self.mod_zerocam.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerocam", ip, model))
+            self.mod_zerocam.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerocam", ip))
 
         if hasattr(self.mod_zerodisplay, "server"):
-            self.mod_zerodisplay.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zerodisplay"))
+            self.mod_zerodisplay.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zerodisplay", ip, model))
+            self.mod_zerodisplay.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zerodisplay", ip))
 
         if hasattr(self.mod_zeropad, "server"):
-            self.mod_zeropad.server.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeropad"))
+            self.mod_zeropad.server.client_connected.connect(lambda ip, model: self._on_module_client_connected("zeropad", ip, model))
+            self.mod_zeropad.server.client_disconnected.connect(lambda ip: self._on_module_client_disconnected("zeropad", ip))
 
         if hasattr(self.mod_zeromix, "service"):
-            self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_client_connected_lifecycle("zeromix"))
+            self.mod_zeromix.service.client_connected.connect(lambda *_: self._on_module_client_connected("zeromix", "127.0.0.1", "ZeroMix Client"))
+
+    def _on_module_client_connected(self, module_id: str, ip: str = "", model: str = ""):
+        print(f"[MultiTask] Mobile client linked to '{module_id}' from {ip} ({model})")
+        self.dashboard_view.set_module_streaming(module_id, True)
+        if ip:
+            link_mode = "USB (ADB)" if ip.startswith("127.") else ("USB Tethering" if ip.startswith("10.") or ip.startswith("192.168.42.") or ip.startswith("192.168.43.") else "Wi-Fi LAN")
+            self.dashboard_view.update_client_connection({
+                "client_ip": ip,
+                "model": model or "Android Device",
+                "mode": link_mode,
+                "status": "CONNECTED"
+            })
+        self._on_client_connected_lifecycle(module_id)
+
+    def _on_module_client_disconnected(self, module_id: str, ip: str = ""):
+        print(f"[MultiTask] Mobile client disconnected from '{module_id}'")
+        self.dashboard_view.set_module_streaming(module_id, False)
 
     def _on_client_connected_lifecycle(self, module_id: str):
         print(f"[MultiTask] Mobile client linked to '{module_id}' -> activating & switching view.")

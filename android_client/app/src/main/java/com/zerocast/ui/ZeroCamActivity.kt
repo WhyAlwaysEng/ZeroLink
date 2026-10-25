@@ -369,12 +369,24 @@ class ZeroCamActivity : AppCompatActivity() {
         val previewBuilder = Preview.Builder()
             .setTargetResolution(targetSize)
 
-        // Adaptive FPS range: 30 FPS for 4K UHD, 60 FPS for 1080p & 720p
-        val fpsRange = if (targetWidth >= 3840) android.util.Range(30, 30) else android.util.Range(60, 60)
+        // Dynamic Auto-Exposure FPS range: allows sensor shutter to open up to 1/15s in low-light, and up to 60 FPS in good light
+        val fpsRange = if (targetWidth >= 3840) android.util.Range(15, 30) else android.util.Range(15, 60)
         val previewExt = androidx.camera.camera2.interop.Camera2Interop.Extender(previewBuilder)
         previewExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
             fpsRange
+        )
+        previewExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE,
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE_ON
+        )
+        previewExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_LOCK,
+            false
+        )
+        previewExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE,
+            android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO
         )
         previewExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AF_MODE,
@@ -394,6 +406,18 @@ class ZeroCamActivity : AppCompatActivity() {
         analysisExt.setCaptureRequestOption(
             android.hardware.camera2.CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE,
             fpsRange
+        )
+        analysisExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE,
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_MODE_ON
+        )
+        analysisExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AE_LOCK,
+            false
+        )
+        analysisExt.setCaptureRequestOption(
+            android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE,
+            android.hardware.camera2.CaptureRequest.CONTROL_AWB_MODE_AUTO
         )
 
         val imageAnalysis = imageAnalysisBuilder.build()
