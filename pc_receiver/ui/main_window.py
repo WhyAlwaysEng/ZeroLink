@@ -4,6 +4,7 @@ Ultra-clean black & white design with hairline borders, generous spacing, and mo
 
 import os
 import sys
+import re
 from typing import Optional
 
 from PyQt6.QtCore import Qt, QSize, QTimer, pyqtSignal, QUrl

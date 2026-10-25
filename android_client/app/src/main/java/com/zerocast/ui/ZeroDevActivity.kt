@@ -46,6 +46,7 @@ class ZeroDevActivity : AppCompatActivity() {
         PortDefinition(8892, "ZeroDisplay", "▣"),
         PortDefinition(8893, "ZeroCam", "◎"),
         PortDefinition(8894, "ZeroPad", "▦"),
+        PortDefinition(8895, "SpeedTest", "⚡"),
         PortDefinition(8896, "ZeroExplorer", "▤"),
         PortDefinition(8897, "ZeroDev", "</>")
     )

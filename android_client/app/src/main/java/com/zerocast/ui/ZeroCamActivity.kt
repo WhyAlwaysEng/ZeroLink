@@ -335,8 +335,10 @@ class ZeroCamActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Stream error: ${e.message}")
             } finally {
-                withContext(Dispatchers.Main) {
-                    stopStream()
+                withContext(NonCancellable) {
+                    withContext(Dispatchers.Main) {
+                        stopStream()
+                    }
                 }
             }
         }
@@ -501,8 +503,10 @@ class ZeroCamActivity : AppCompatActivity() {
         socket = null
         outStream = null
 
-        binding.btnCamStreamToggle.text = "Start Webcam Stream"
-        binding.tvCamStatus.text = "○ Camera Ready"
+        runOnUiThread {
+            binding.btnCamStreamToggle.text = "Start Webcam Stream"
+            binding.tvCamStatus.text = "○ Camera Ready"
+        }
     }
 
     override fun onDestroy() {

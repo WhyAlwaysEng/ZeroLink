@@ -13,7 +13,7 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from core.adb_helper import AdbManager
 
-SPEEDTEST_PORT = 8890
+SPEEDTEST_PORT = 8895
 CHUNK_SIZE = 64 * 1024  # 64 KB buffer chunks
 
 

@@ -14,7 +14,7 @@ import kotlin.concurrent.thread
 
 class SpeedTestManager(
     private val host: String = "127.0.0.1",
-    private val port: Int = 8890,
+    private val port: Int = com.zerocast.util.ZeroLinkConfig.DEFAULT_SPEEDTEST_PORT,
     private val listener: SpeedTestListener
 ) {
     interface SpeedTestListener {

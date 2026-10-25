@@ -618,6 +618,7 @@ class ZeroPadActivity : AppCompatActivity() {
             isDragging = false
             sendMouseUp("left")
         }
+        unregisterGyro()
         disconnect()
         discovery?.stopDiscovery()
     }

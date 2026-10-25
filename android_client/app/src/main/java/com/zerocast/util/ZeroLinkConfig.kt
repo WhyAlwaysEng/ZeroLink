@@ -12,6 +12,7 @@ object ZeroLinkConfig {
     const val DEFAULT_DROP_PORT = 8890
     const val DEFAULT_EXPLORER_PORT = 8896
     const val DEFAULT_DEV_PORT = 8897
+    const val DEFAULT_SPEEDTEST_PORT = 8895
 
     private const val PREF_NAME = "zerolink_prefs"
     private const val KEY_SERVER_IP = "server_ip"

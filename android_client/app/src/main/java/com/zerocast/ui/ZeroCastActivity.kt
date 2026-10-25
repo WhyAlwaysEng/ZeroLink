@@ -626,7 +626,7 @@ class ZeroCastActivity : AppCompatActivity() {
             tvJitterVal.text = "..."
             tvRecommendation.text = "Measuring real-time latency and raw TCP throughput..."
 
-            testManager = SpeedTestManager(host, 8890, object : SpeedTestManager.SpeedTestListener {
+            testManager = SpeedTestManager(host, ZeroLinkConfig.DEFAULT_SPEEDTEST_PORT, object : SpeedTestManager.SpeedTestListener {
                 override fun onPingCompleted(avgPingMs: Float, jitterMs: Float) {
                     tvPingVal.text = String.format("%.1f ms", avgPingMs)
                     tvJitterVal.text = String.format("%.1f ms", jitterMs)

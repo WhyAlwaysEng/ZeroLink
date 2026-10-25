@@ -434,7 +434,7 @@ class {class_name}(BaseModule):
         threading.Thread(target=self._server_loop, daemon=True).start()
 
         self.state_changed.emit(self.module_id, True)
-        self.status_changed.emit(self.module_id, f"Listening on port {{self.port}}")
+        self.status_changed.emit(self.module_id, f"Listening on port {self.port}")
         return True
 
     def stop_service(self) -> bool:
@@ -464,9 +464,16 @@ class {class_name}(BaseModule):
 
     def _handle_client(self, client: socket.socket, addr):
         try:
-            client.sendall(b"HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\n\\r\\n{{\\"status\\":\\"ok\\",\\"module\\":\\"{m_id}\\"}}\\r\\n")
+            resp = json.dumps({"status": "ok", "module": self.module_id})
+            http_resp = f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(resp)}\r\nConnection: close\r\n\r\n{resp}".encode("utf-8")
+            client.sendall(http_resp)
+        except Exception:
+            pass
         finally:
-            client.close()
+            try:
+                client.close()
+            except Exception:
+                pass
 
     def get_widget(self) -> QWidget:
         if self._widget is None:
