@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import android.widget.LinearLayout
 import android.widget.ProgressBar
@@ -248,7 +249,8 @@ object UpdateChecker {
         dialog.show()
 
         downloadJob = CoroutineScope(Dispatchers.IO).launch {
-            val destinationFile = File(activity.cacheDir, "ZeroLink_update.apk")
+            val downloadDir = activity.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: activity.cacheDir
+            val destinationFile = File(downloadDir, "ZeroLink_update.apk")
             try {
                 if (destinationFile.exists()) {
                     destinationFile.delete()

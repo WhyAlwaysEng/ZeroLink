@@ -27,7 +27,6 @@ from modules.zerodisplay.display_module import ZeroDisplayModule
 from modules.zerocam.cam_module import ZeroCamModule
 from modules.zeropad.pad_module import ZeroPadModule
 from modules.zeroexplorer.explorer_module import ZeroExplorerModule
-from modules.zerodev.dev_module import ZeroDevModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.settings_view import SettingsView
@@ -206,11 +205,8 @@ class MainWindow(QMainWindow):
         self.mod_zeroexplorer = ZeroExplorerModule(port=8896, local_ip=self.local_ip, parent=self)
         self.module_manager.register_module(self.mod_zeroexplorer)
 
-        self.mod_zerodev = ZeroDevModule(port=8897, local_ip=self.local_ip, parent=self)
-        self.module_manager.register_module(self.mod_zerodev)
-
         # Boot and listen on ALL module services simultaneously
-        for mod_id in ["zerocast", "zerodrop", "zeroclip", "zeromix", "zerodisplay", "zerocam", "zeropad", "zeroexplorer", "zerodev"]:
+        for mod_id in ["zerocast", "zerodrop", "zeroclip", "zeromix", "zerodisplay", "zerocam", "zeropad", "zeroexplorer"]:
             self.module_manager.toggle_module(mod_id, True)
 
         # Bridge ZeroCast phone audio stream into ZeroMix mixer engine
@@ -347,18 +343,13 @@ class MainWindow(QMainWindow):
         self.nav_group.addButton(self.btn_nav_explorer)
         side_layout.addWidget(self.btn_nav_explorer)
 
-        self.btn_nav_dev = NavButton("ZeroDev", "</>", badge="DEV")
-        self.btn_nav_dev.clicked.connect(lambda: self.stacked.setCurrentIndex(9))
-        self.nav_group.addButton(self.btn_nav_dev)
-        side_layout.addWidget(self.btn_nav_dev)
-
         self.btn_nav_connections = NavButton("Connections", "◈")
-        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(10))
+        self.btn_nav_connections.clicked.connect(lambda: self.stacked.setCurrentIndex(9))
         self.nav_group.addButton(self.btn_nav_connections)
         side_layout.addWidget(self.btn_nav_connections)
 
         self.btn_nav_settings = NavButton("Settings", icon_pixmap=create_gear_pixmap(18, "#374151"))
-        self.btn_nav_settings.clicked.connect(lambda: self.stacked.setCurrentIndex(11))
+        self.btn_nav_settings.clicked.connect(lambda: self.stacked.setCurrentIndex(10))
         self.nav_group.addButton(self.btn_nav_settings)
         side_layout.addWidget(self.btn_nav_settings)
 
@@ -436,11 +427,7 @@ class MainWindow(QMainWindow):
         self.explorer_widget = self.mod_zeroexplorer.get_widget()
         self.stacked.addWidget(self.explorer_widget)
 
-        # Page 9: ZeroDev Viewport
-        self.dev_widget = self.mod_zerodev.get_widget()
-        self.stacked.addWidget(self.dev_widget)
-
-        # Page 10: Connections / Device Bridge
+        # Page 9: Connections / Device Bridge
         self.connections_view = ConnectionsView(
             self.mod_zerocast,
             self.mod_zerodrop,
@@ -606,11 +593,8 @@ class MainWindow(QMainWindow):
         elif module_id == "zeroexplorer":
             self.stacked.setCurrentIndex(8)
             self.btn_nav_explorer.setChecked(True)
-        elif module_id == "zerodev":
-            self.stacked.setCurrentIndex(9)
-            self.btn_nav_dev.setChecked(True)
         elif module_id == "connections":
-            self.stacked.setCurrentIndex(10)
+            self.stacked.setCurrentIndex(9)
             self.btn_nav_connections.setChecked(True)
         else:
             self.stacked.setCurrentIndex(0)

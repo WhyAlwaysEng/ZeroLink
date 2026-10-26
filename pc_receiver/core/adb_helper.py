@@ -83,7 +83,7 @@ class AdbManager:
         except Exception:
             return []
 
-    ECOSYSTEM_REVERSE_PORTS = [8886, 8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895, 8897]
+    ECOSYSTEM_REVERSE_PORTS = [8886, 8888, 8889, 8890, 8891, 8892, 8893, 8894, 8895]
 
     def reverse_ecosystem_ports(self) -> Tuple[bool, str]:
         """Reverses all ports required by the ZeroLink ecosystem modules for seamless USB ADB mode."""

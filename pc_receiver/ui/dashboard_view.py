@@ -406,8 +406,7 @@ class DashboardView(QWidget):
             ("zerodrop", "ZeroDrop", "⇄", "High-speed bidirectional LAN & USB file sharing between Windows PC and Android.", "Port 8890 (TCP)"),
             ("zeroclip", "ZeroClip", "⎘", "Instant bidirectional shared clipboard between PC and Android in real-time.", "Port 8889 (TCP)"),
             ("zeropad", "ZeroPad", "▦", "Wireless PC Media & Macro Remote Controller / Stream Deck for Windows audio and shortcuts.", "Port 8894 (TCP)"),
-            ("zeroexplorer", "ZeroExplorer", "▤", "Wireless Android file manager, gallery previewer, 4K video streamer, and APK installer.", "Port 8896 (HTTP)"),
-            ("zerodev", "ZeroDev Console", "</>", "Developer workshop, cross-platform code scaffolder, and real-time network port probe.", "Port 8897 (Probe)")
+            ("zeroexplorer", "ZeroExplorer", "▤", "Wireless Android file manager, gallery previewer, 4K video streamer, and APK installer.", "Port 8896 (HTTP)")
         ]
 
         row = 0

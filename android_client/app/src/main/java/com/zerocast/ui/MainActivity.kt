@@ -356,11 +356,5 @@ class MainActivity : AppCompatActivity() {
             it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
             openModule(ZeroExplorerActivity::class.java)
         }
-
-        // Module 9: ZeroDev (Module Workshop & Latency Probe)
-        binding.cardModuleZeroDev.setOnClickListener {
-            it.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-            openModule(ZeroDevActivity::class.java)
-        }
     }
 }
