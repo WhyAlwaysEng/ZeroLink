@@ -21,9 +21,24 @@ class H264Decoder:
     def _init_decoder(self):
         if not HAS_AV:
             return
+
+        hwaccel = None
+        try:
+            from av.codec.hwaccel import HWAccel, hwdevices_available
+            avail = hwdevices_available()
+            for dev in ('d3d11va', 'dxva2', 'cuda', 'qsv'):
+                if dev in avail:
+                    try:
+                        hwaccel = HWAccel(dev, allow_software_fallback=True)
+                        break
+                    except Exception:
+                        pass
+        except Exception:
+            hwaccel = None
+
         try:
             import os
-            codec = av.CodecContext.create('h264', 'r')
+            codec = av.CodecContext.create('h264', 'r', hwaccel=hwaccel) if hwaccel else av.CodecContext.create('h264', 'r')
             codec.flags |= av.codec.context.Flags.low_delay
             try:
                 codec.flags2 |= av.codec.context.Flags2.fast
@@ -34,9 +49,13 @@ class H264Decoder:
             codec.thread_count = min(2, os.cpu_count() or 2)
             codec.open()
             self.codec = codec
+            if getattr(codec, "is_hwaccel", False):
+                print(f"[H264Decoder] D3D11VA / GPU Hardware Acceleration Active")
         except Exception:
             try:
                 codec = av.CodecContext.create('h264', 'r')
+                codec.flags |= av.codec.context.Flags.low_delay
+                codec.options = {'tune': 'zerolatency'}
                 codec.open()
                 self.codec = codec
             except Exception:
@@ -44,6 +63,9 @@ class H264Decoder:
 
     def is_available(self) -> bool:
         return self.codec is not None
+
+    def is_hw_accelerated(self) -> bool:
+        return bool(self.codec and getattr(self.codec, "is_hwaccel", False))
 
     def reset(self):
         """Flushes and reinitializes the codec context for a new stream session."""

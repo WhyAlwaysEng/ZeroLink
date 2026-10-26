@@ -31,6 +31,7 @@ from modules.zerodev.dev_module import ZeroDevModule
 from ui.dashboard_view import DashboardView
 from ui.connections_view import ConnectionsView
 from ui.settings_view import SettingsView
+from ui.update_dialog import UpdateDialog
 from core.settings import AppSettings
 from ui.theme import GLOBAL_APP_STYLESHEET, create_gear_pixmap
 
@@ -672,19 +673,34 @@ class MainWindow(QMainWindow):
         if is_manual:
             self.hub_badge.setText("Checking...")
         self.update_worker = UpdateCheckWorker(CURRENT_VERSION, is_manual=is_manual, parent=self)
-        self.update_worker.update_available.connect(self._on_update_available)
+        self.update_worker.update_available.connect(lambda *args: self._on_update_available(*args, is_manual=is_manual))
         self.update_worker.no_update.connect(self._on_no_update)
         self.update_worker.check_failed.connect(self._on_update_failed)
         self.update_worker.start()
 
-    def _on_update_available(self, tag_name: str, html_url: str, notes: str):
-        self.latest_release_url = html_url
-        self.latest_release_tag = tag_name
-        self.latest_release_notes = notes
-        self.hub_badge.setText(f"NEW: {tag_name}")
-        self.hub_badge.setStyleSheet("color: #10B981; font-weight: bold; letter-spacing: 0.8px;")
-        self.btn_update.setText(f"Update: {tag_name}")
-        self.btn_update.setVisible(True)
+    def _on_update_available(self, *args, is_manual: bool = False):
+        try:
+            tag_name = str(args[0]) if len(args) > 0 else ""
+            html_url = str(args[1]) if len(args) > 1 else ""
+            notes = str(args[2]) if len(args) > 2 else ""
+            zip_url = str(args[3]) if len(args) > 3 else ""
+            zip_size = int(args[4]) if len(args) > 4 and isinstance(args[4], (int, float)) else 0
+
+            self.latest_release_url = html_url
+            self.latest_release_tag = tag_name
+            self.latest_release_notes = notes
+            self.latest_zip_url = zip_url
+            self.latest_zip_size = zip_size
+
+            self.hub_badge.setText(f"NEW: {tag_name}")
+            self.hub_badge.setStyleSheet("color: #10B981; font-weight: bold; letter-spacing: 0.8px;")
+            self.btn_update.setText(f"Update: {tag_name}")
+            self.btn_update.setVisible(True)
+
+            if is_manual:
+                self._on_update_clicked()
+        except Exception as e:
+            print(f"[AutoUpdate] Error handling available update: {e}")
 
     def _on_no_update(self, is_manual: bool):
         self.hub_badge.setText(f"HUB v{CURRENT_VERSION}")
@@ -709,22 +725,20 @@ class MainWindow(QMainWindow):
             box.exec()
 
     def _on_update_clicked(self):
-        box = QMessageBox(self)
-        box.setWindowTitle("ZeroLink Update")
-        snippet = self.latest_release_notes.strip()
-        if len(snippet) > 300:
-            snippet = snippet[:300] + "..."
-        notes_html = f"<pre style='background:#F3F4F6; padding:8px; border-radius:4px;'>{snippet}</pre>" if snippet else ""
-        box.setText(f"<h3>New Release Available: {self.latest_release_tag}</h3>"
-                    f"<p>Current: v{CURRENT_VERSION}</p>"
-                    f"{notes_html}"
-                    f"<p>Open download page on GitHub?</p>")
-        download_btn = box.addButton("Download Release", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-
-        if box.clickedButton() == download_btn:
-            QDesktopServices.openUrl(QUrl(self.latest_release_url))
+        try:
+            dialog = UpdateDialog(
+                tag_name=getattr(self, "latest_release_tag", f"v{CURRENT_VERSION}"),
+                html_url=getattr(self, "latest_release_url", "https://github.com/WhyAlwaysEng/ZeroLink/releases"),
+                release_notes=getattr(self, "latest_release_notes", ""),
+                zip_url=getattr(self, "latest_zip_url", ""),
+                zip_size=getattr(self, "latest_zip_size", 0),
+                parent=self
+            )
+            dialog.exec()
+        except Exception as e:
+            print(f"[AutoUpdate] Error displaying update dialog: {e}")
+            if hasattr(self, "latest_release_url") and self.latest_release_url:
+                QDesktopServices.openUrl(QUrl(self.latest_release_url))
 
     def _setup_tray_icon(self):
         """Sets up Windows System Tray icon with quick actions and minimize-to-tray."""
