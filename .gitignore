@@ -49,6 +49,8 @@ Captures/
 output.json
 *.apk
 *.zip
+dist_setup/
+ZeroLink-Setup-*.exe
 *.aab
 *.ap_
 *.dex

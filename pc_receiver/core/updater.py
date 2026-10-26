@@ -62,20 +62,30 @@ class UpdateCheckWorker(QThread):
                 html_url = data.get("html_url", f"https://github.com/{GITHUB_REPO}/releases")
                 body = data.get("body", "No release notes provided.")
 
+                setup_url = ""
+                setup_size = 0
                 zip_url = ""
                 zip_size = 0
                 for asset in data.get("assets", []):
                     name = asset.get("name", "").lower()
-                    if name.endswith(".zip") and ("windows" in name or "zerolink" in name):
-                        zip_url = asset.get("browser_download_url", "")
-                        zip_size = asset.get("size", 0)
-                        break
+                    url = asset.get("browser_download_url", "")
+                    size = asset.get("size", 0)
+                    if name.endswith(".exe") and "setup" in name:
+                        setup_url = url
+                        setup_size = size
+                    elif name.endswith(".zip") and ("windows" in name or "zerolink" in name):
+                        zip_url = url
+                        zip_size = size
+
+                # Prefer modern Inno Setup installer over manual zip
+                primary_url = setup_url or zip_url
+                primary_size = setup_size or zip_size
 
                 remote_v = parse_version(tag_name)
                 local_v = parse_version(self.current_version)
 
                 if remote_v > local_v:
-                    self.update_available.emit(tag_name, html_url, body, zip_url, zip_size)
+                    self.update_available.emit(tag_name, html_url, body, primary_url, primary_size)
                 else:
                     self.no_update.emit(self.is_manual)
 
@@ -104,7 +114,9 @@ class UpdateDownloadWorker(QThread):
         try:
             temp_dir = os.path.join(tempfile.gettempdir(), "ZeroLink_Update")
             os.makedirs(temp_dir, exist_ok=True)
-            save_path = os.path.join(temp_dir, "ZeroLink_Latest.zip")
+            is_exe = self.download_url.lower().split("?")[0].endswith(".exe")
+            file_name = "ZeroLink_Setup.exe" if is_exe else "ZeroLink_Latest.zip"
+            save_path = os.path.join(temp_dir, file_name)
 
             req = urllib.request.Request(
                 self.download_url,
@@ -141,19 +153,33 @@ class UpdateDownloadWorker(QThread):
             self.failed.emit(str(e))
 
 
-def apply_update_and_restart(zip_path: str) -> bool:
-    """Generates an elevated/safe batch script that waits for ZeroLink to terminate,
-    extracts the update over the application directory, and restarts ZeroLink.exe.
+def apply_update_and_restart(file_path: str) -> bool:
+    """Applies update in-place:
+    - If file is an Inno Setup installer (.exe), executes it with /SILENT.
+    - If file is a zip archive (.zip), extracts it over target directory.
     """
     is_frozen = getattr(sys, "frozen", False)
     target_dir = os.path.dirname(os.path.abspath(sys.executable if is_frozen else sys.argv[0]))
 
     if not is_frozen:
-        # In developer source mode, do not overwrite the git repository
-        print(f"[AutoUpdate] Development source mode: zip downloaded to {zip_path}")
+        print(f"[AutoUpdate] Development source mode: file downloaded to {file_path}")
         return False
 
-    update_dir = os.path.dirname(zip_path)
+    flags = 0x00000008 | 0x00000200  # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
+
+    # 1. Native Inno Setup Installer upgrade
+    if file_path.lower().endswith(".exe"):
+        try:
+            # /SILENT /SP- runs quietly, /CLOSEAPPLICATIONS closes old process cleanly
+            cmd = f'"{file_path}" /SILENT /SP- /CLOSEAPPLICATIONS'
+            subprocess.Popen(cmd, shell=True, creationflags=flags)
+            return True
+        except Exception as e:
+            print(f"[AutoUpdate] Failed to run installer: {e}")
+            return False
+
+    # 2. Portable Zip fallback
+    update_dir = os.path.dirname(file_path)
     bat_path = os.path.join(update_dir, "apply_update.bat")
 
     bat_content = f"""@echo off
@@ -168,10 +194,10 @@ timeout /t 2 /nobreak >nul
 taskkill /f /im ZeroLink.exe >nul 2>&1
 
 echo [2/3] Extracting new package...
-tar -xf "{zip_path}" -C "{target_dir}"
+tar -xf "{file_path}" -C "{target_dir}"
 if %errorlevel% neq 0 (
     echo Extraction failed with tar. Retrying with PowerShell...
-    powershell -Command "Expand-Archive -Path '{zip_path}' -DestinationPath '{target_dir}' -Force"
+    powershell -Command "Expand-Archive -Path '{file_path}' -DestinationPath '{target_dir}' -Force"
 )
 
 echo [3/3] Relaunching ZeroLink...
@@ -179,15 +205,12 @@ start "" "{os.path.join(target_dir, 'ZeroLink.exe')}"
 
 echo Update complete! Cleaning up...
 ping 127.0.0.1 -n 3 >nul
-del "{zip_path}" >nul 2>&1
+del "{file_path}" >nul 2>&1
 (goto) 2>nul & del "%~f0"
 """
 
     with open(bat_path, "w", encoding="utf-8") as f:
         f.write(bat_content)
 
-    # Launch batch script in independent detached process
-    # 0x00000008 = DETACHED_PROCESS, 0x00000200 = CREATE_NEW_PROCESS_GROUP
-    flags = 0x00000008 | 0x00000200
     subprocess.Popen(["cmd.exe", "/c", bat_path], creationflags=flags)
     return True
